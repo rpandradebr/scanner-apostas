@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scanner de Apostas — Grade, Sinais e Conferência</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --pitch:#0F2418; --pitch-2:#16311F; --card:#1C3A28; --card-2:#234731;
+    --chalk:#EDEAE0; --chalk-dim:#B9C4B4;
+    --amber:#FFC53D; --amber-deep:#E5A414;
+    --green:#4CC470; --red:#FF6B57; --yellow:#FFC53D;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:repeating-linear-gradient(90deg,var(--pitch) 0 120px,var(--pitch-2) 120px 240px);
+    color:var(--chalk);font-family:'IBM Plex Sans',system-ui,sans-serif;
+    min-height:100vh;padding:22px 14px 60px;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+  h1{font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:clamp(30px,5vw,44px);
+     line-height:.95;text-transform:uppercase}
+  h1 span{color:var(--amber)}
+  .versao{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--amber);
+    letter-spacing:.18em;text-transform:uppercase}
+
+  /* Abas */
+  nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  nav button{
+    font-family:'Saira Condensed',sans-serif;font-weight:600;font-size:17px;
+    text-transform:uppercase;letter-spacing:.05em;
+    background:var(--card);color:var(--chalk-dim);border:1px solid rgba(237,234,224,.15);
+    border-radius:10px;padding:9px 16px;cursor:pointer;transition:all .15s;
+  }
+  nav button.on{background:var(--amber);color:var(--pitch);border-color:var(--amber)}
+  nav button:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  section{display:none;background:var(--card);border:1px solid rgba(237,234,224,.14);
+    border-radius:var(--radius);padding:20px}
+  section.on{display:block}
+  h2{font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:24px;
+     text-transform:uppercase;color:var(--amber);margin-bottom:14px}
+  h3{font-family:'Saira Condensed',sans-serif;font-weight:600;font-size:19px;
+     text-transform:uppercase;margin:16px 0 8px}
+  label{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--chalk-dim);margin-bottom:5px}
+  input,select,textarea{
+    width:100%;background:var(--pitch);color:var(--chalk);
+    border:1px solid rgba(237,234,224,.18);border-radius:9px;
+    padding:10px 12px;font-size:15px;font-family:inherit;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--amber)}
+  .linha{display:grid;gap:12px;margin-bottom:12px}
+  .c2{grid-template-columns:1fr 1fr} .c3{grid-template-columns:1fr 1fr 1fr}
+  .c4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:680px){.c2,.c3,.c4{grid-template-columns:1fr}}
+  button.acao{
+    font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:18px;
+    text-transform:uppercase;letter-spacing:.05em;
+    background:var(--amber);color:var(--pitch);border:none;cursor:pointer;
+    border-radius:9px;padding:11px 22px;transition:background .15s;
+  }
+  button.acao:hover{background:var(--amber-deep)}
+  button.acao:disabled{opacity:.55;cursor:wait}
+  button.mini{background:transparent;border:1px solid rgba(237,234,224,.3);color:var(--chalk-dim);
+    border-radius:8px;padding:5px 10px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  button.mini:hover{border-color:var(--amber);color:var(--amber)}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:12px}
+  th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;
+     text-transform:uppercase;color:var(--chalk-dim);text-align:left;
+     padding:8px 8px;border-bottom:1px solid rgba(237,234,224,.25)}
+  td{padding:8px;border-bottom:1px solid rgba(237,234,224,.09);vertical-align:top}
+  tr.clicavel{cursor:pointer} tr.clicavel:hover td{background:var(--card-2)}
+  .tabela-scroll{overflow-x:auto}
+
+  .aviso{background:rgba(255,197,61,.1);border:1px solid var(--amber);border-radius:9px;
+    padding:10px 14px;font-size:13.5px;margin:10px 0;color:var(--chalk)}
+  .erro{background:rgba(255,107,87,.1);border-color:var(--red)}
+  .msg-vazia{color:var(--chalk-dim);font-size:14px;padding:14px 0}
+
+  /* Semáforo de mercados — o coração do scanner */
+  .semaforo{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:14px}
+  .mercado{background:var(--pitch);border-radius:10px;padding:14px;border-left:5px solid var(--chalk-dim)}
+  .mercado.verde{border-left-color:var(--green)}
+  .mercado.amarelo{border-left-color:var(--yellow)}
+  .mercado.vermelho{border-left-color:var(--red)}
+  .mercado .nome{font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:19px;text-transform:uppercase}
+  .mercado .sinal{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.1em;margin:4px 0 8px}
+  .mercado.verde .sinal{color:var(--green)} .mercado.amarelo .sinal{color:var(--yellow)}
+  .mercado.vermelho .sinal{color:var(--red)}
+  .mercado .porque{font-size:13px;color:var(--chalk-dim);line-height:1.5}
+
+  .pill{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;
+    padding:2px 8px;border-radius:20px;letter-spacing:.06em}
+  .pill.g{background:rgba(76,196,112,.15);color:var(--green)}
+  .pill.r{background:rgba(255,107,87,.15);color:var(--red)}
+  .pill.n{background:rgba(185,196,180,.12);color:var(--chalk-dim)}
+
+  .placar-box{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+  .stat{background:var(--pitch);border-radius:9px;padding:10px 12px}
+  .stat b{font-family:'Saira Condensed',sans-serif;font-size:24px;color:var(--amber);display:block}
+  .stat span{font-size:11.5px;color:var(--chalk-dim);text-transform:uppercase;
+    font-family:'IBM Plex Mono',monospace;letter-spacing:.08em}
+
+  footer{margin-top:26px;font-size:12px;color:var(--chalk-dim);max-width:75ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Scanner <span>de Apostas</span></h1>
+    <div class="versao" id="versao"></div>
+  </header>
+
+  <nav>
+    <button data-aba="grade" class="on">📅 Grade do dia</button>
+    <button data-aba="scanner">🎯 Scanner de mercados</button>
+    <button data-aba="historico">📊 Histórico 10 jogos</button>
+    <button data-aba="analises">💾 Minhas análises</button>
+  </nav>
+
+  <!-- ================= GRADE ================= -->
+  <section id="aba-grade" class="on">
+    <h2>Grade de jogos do dia</h2>
+    <div class="linha c3">
+      <div><label for="grade-data">Data</label><input type="date" id="grade-data"></div>
+      <div><label for="grade-liga">Filtrar campeonato</label><select id="grade-liga"><option value="">Todos</option></select></div>
+      <div><label for="grade-time">Buscar time</label><input id="grade-time" placeholder="Digite parte do nome…"></div>
+    </div>
+    <button class="acao" id="btn-grade">Carregar grade</button>
+    <div id="grade-aviso"></div>
+    <div class="tabela-scroll"><table id="grade-tabela"></table></div>
+    <p class="msg-vazia" id="grade-vazia">Escolha uma data e carregue a grade. Clique em qualquer jogo para mandá-lo direto ao Scanner.</p>
+  </section>
+
+  <!-- ================= SCANNER ================= -->
+  <section id="aba-scanner">
+    <h2>Scanner de mercados</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Cruza os últimos 10 jogos das duas equipes e acende o semáforo dos seus 4 mercados.
+      O sinal é estatístico — contexto (técnico novo, desfalques, crise) continua sendo trabalho da análise completa.
+    </p>
+    <div class="linha c2">
+      <div><label for="sc-mandante">Mandante</label><input id="sc-mandante" placeholder="Ex.: Fortaleza"></div>
+      <div><label for="sc-visitante">Visitante</label><input id="sc-visitante" placeholder="Ex.: Botafogo SP"></div>
+    </div>
+    <button class="acao" id="btn-scanner">Escanear confronto</button>
+    <div id="sc-aviso"></div>
+    <div id="sc-resultado"></div>
+  </section>
+
+  <!-- ================= HISTÓRICO ================= -->
+  <section id="aba-historico">
+    <h2>Últimos 10 jogos de um time</h2>
+    <div class="linha c2">
+      <div><label for="h-time">Nome do time</label><input id="h-time" placeholder="Ex.: Cerro Porteño"></div>
+      <div style="align-self:end"><button class="acao" id="btn-historico">Buscar histórico</button></div>
+    </div>
+    <div id="h-aviso"></div>
+    <div id="h-resumo"></div>
+    <div class="tabela-scroll"><table id="h-tabela"></table></div>
+  </section>
+
+  <!-- ================= ANÁLISES ================= -->
+  <section id="aba-analises">
+    <h2>Registrar análise</h2>
+    <div class="linha c4">
+      <div><label for="a-data">Data do jogo</label><input type="date" id="a-data"></div>
+      <div><label for="a-campeonato">Campeonato</label><input id="a-campeonato" placeholder="Ex.: Série B"></div>
+      <div><label for="a-mandante">Mandante</label><input id="a-mandante"></div>
+      <div><label for="a-visitante">Visitante</label><input id="a-visitante"></div>
+    </div>
+    <div class="linha c4">
+      <div><label for="a-lay10">Lay 1x0</label>
+        <select id="a-lay10"><option>FORA</option><option>VIAVEL</option><option>EVITAR</option></select></div>
+      <div><label for="a-lay01">Lay 0x1</label>
+        <select id="a-lay01"><option>FORA</option><option>VIAVEL</option><option>EVITAR</option></select></div>
+      <div><label for="a-ou">Over / Under</label>
+        <select id="a-ou"><option>FORA</option><option>OVER 2.5</option><option>UNDER 2.5</option></select></div>
+      <div><label for="a-zebra-mercado">Lay zebra</label>
+        <select id="a-zebra-mercado"><option>FORA</option><option>VIAVEL</option><option>EVITAR</option></select></div>
+    </div>
+    <div class="linha c3">
+      <div><label for="a-zebra">Quem é a zebra?</label>
+        <select id="a-zebra"><option value="nenhuma">Nenhuma clara</option><option value="mandante">Mandante</option><option value="visitante">Visitante</option></select></div>
+      <div><label for="a-confianca">Confiança (0 a 10)</label><input type="number" id="a-confianca" min="0" max="10" step="0.5"></div>
+      <div style="align-self:end"><button class="acao" id="btn-salvar">Salvar análise</button></div>
+    </div>
+    <div class="linha"><div><label for="a-obs">Observações</label><textarea id="a-obs" rows="2" placeholder="Ex.: técnico estreante no mandante — variância alta"></textarea></div></div>
+    <div id="a-aviso"></div>
+
+    <h3>Taxa de acerto por mercado</h3>
+    <div class="placar-box" id="painel-acertos"></div>
+
+    <h3>Histórico de análises</h3>
+    <p style="font-size:13px;color:var(--chalk-dim)">Depois do jogo, preencha o placar (ex.: 2x1) e tecle Enter — a conferência de green/red é automática, só para mercados marcados como VIÁVEL ou com linha de gols.</p>
+    <div class="tabela-scroll"><table id="a-tabela"></table></div>
+  </section>
+
+  <footer>
+    Ferramenta pessoal de apoio à decisão — os sinais são estatísticos e não substituem a análise de contexto (13 pontos) nem garantem resultado.
+    Confira odds e escalações no momento da entrada. Jogue com responsabilidade.
+  </footer>
+</div>
+
+<script>
+// ==========================================================
+// CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
+// ==========================================================
+const APP_VERSAO = "v1.2";
+const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
+const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
+
+document.getElementById('versao').textContent = "Painel de Mercados — " + APP_VERSAO;
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ---------- utilidades ----------
+const $ = id => document.getElementById(id);
+const hojeISO = () => new Date().toISOString().slice(0,10);
+$('grade-data').value = hojeISO();
+$('a-data').value = hojeISO();
+
+function aviso(el, texto, tipo){
+  el.innerHTML = texto ? `<div class="aviso ${tipo==='erro'?'erro':''}">${texto}</div>` : '';
+}
+async function chamarEdge(params){
+  const url = EDGE_URL + '?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }});
+  if (!res.ok) throw new Error('Edge Function respondeu ' + res.status);
+  return res.json();
+}
+
+// ---------- navegação por abas ----------
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  $('aba-' + b.dataset.aba).classList.add('on');
+}));
+function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
+
+// ==========================================================
+// ABA 1 — GRADE DO DIA
+// ==========================================================
+let gradeJogos = [];
+$('btn-grade').addEventListener('click', carregarGrade);
+$('grade-liga').addEventListener('change', desenharGrade);
+$('grade-time').addEventListener('input', desenharGrade);
+
+async function carregarGrade(){
+  const botao = $('btn-grade'); botao.disabled = true;
+  aviso($('grade-aviso'), '');
+  try{
+    const r = await chamarEdge({ acao:'grade', data: $('grade-data').value });
+    gradeJogos = r.jogos || [];
+    if (r.aviso) aviso($('grade-aviso'), r.aviso, 'erro');
+    const ligas = [...new Set(gradeJogos.map(j => j.liga))].sort();
+    $('grade-liga').innerHTML = '<option value="">Todos</option>' +
+      ligas.map(l => `<option>${l}</option>`).join('');
+    desenharGrade();
+    $('grade-vazia').style.display = gradeJogos.length ? 'none' : 'block';
+    if (!gradeJogos.length) $('grade-vazia').textContent = 'Nenhum jogo retornado para esta data.';
+  } catch(e){ aviso($('grade-aviso'), 'Não consegui carregar a grade: ' + e.message, 'erro'); }
+  finally{ botao.disabled = false; }
+}
+function desenharGrade(){
+  const liga = $('grade-liga').value;
+  const busca = $('grade-time').value.trim().toLowerCase();
+  const lista = gradeJogos.filter(j =>
+    (!liga || j.liga === liga) &&
+    (!busca || j.mandante.toLowerCase().includes(busca) || j.visitante.toLowerCase().includes(busca))
+  );
+  $('grade-tabela').innerHTML =
+    '<tr><th>Hora</th><th>País</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>Status</th></tr>' +
+    lista.map(j => `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}">
+      <td>${j.hora||''}</td><td>${j.pais||''}</td><td>${j.liga||''}</td>
+      <td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td><td>${j.status||''}</td>
+    </tr>`).join('');
+  document.querySelectorAll('#grade-tabela tr.clicavel').forEach(tr =>
+    tr.addEventListener('click', () => {
+      $('sc-mandante').value = tr.dataset.m;
+      $('sc-visitante').value = tr.dataset.v;
+      irParaAba('scanner');
+    }));
+}
+
+// ==========================================================
+// ABA 2 — SCANNER (semáforo dos 4 mercados)
+// ==========================================================
+$('btn-scanner').addEventListener('click', escanear);
+
+function estatisticas(jogos, comoMandante){
+  // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
+  const encerrados = jogos.filter(j => j.gols_mandante !== null);
+  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0;
+  encerrados.forEach(j => {
+    const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
+    const contra = j.time_era_mandante ? j.gols_visitante : j.gols_mandante;
+    if (pro > 0) marcou++;
+    if (contra > 0) sofreu++;
+    golsPro += pro; golsContra += contra;
+    if (pro + contra >= 3) over25++;
+    if (pro > 0 && contra > 0) btts++;
+  });
+  const n = encerrados.length || 1;
+  return {
+    n: encerrados.length,
+    pctMarcou: Math.round(marcou/n*100),
+    pctSofreu: Math.round(sofreu/n*100),
+    mediaPro: (golsPro/n).toFixed(2),
+    mediaContra: (golsContra/n).toFixed(2),
+    pctOver: Math.round(over25/n*100),
+    pctBtts: Math.round(btts/n*100),
+  };
+}
+function cartaoMercado(nome, cor, sinal, porque){
+  return `<div class="mercado ${cor}">
+    <div class="nome">${nome}</div><div class="sinal">${sinal}</div>
+    <div class="porque">${porque}</div></div>`;
+}
+async function escanear(){
+  const m = $('sc-mandante').value.trim(), v = $('sc-visitante').value.trim();
+  if (!m || !v){ aviso($('sc-aviso'), 'Preencha mandante e visitante.', 'erro'); return; }
+  const botao = $('btn-scanner'); botao.disabled = true;
+  aviso($('sc-aviso'), ''); $('sc-resultado').innerHTML = '';
+  try{
+    const [rm, rv] = await Promise.all([
+      chamarEdge({ acao:'historico', time:m }),
+      chamarEdge({ acao:'historico', time:v }),
+    ]);
+    if (rm.aviso) aviso($('sc-aviso'), rm.aviso, 'erro');
+    if (rv.aviso) aviso($('sc-aviso'), rv.aviso, 'erro');
+    if (!rm.jogos?.length || !rv.jogos?.length){ botao.disabled = false; return; }
+
+    const em = estatisticas(rm.jogos), ev = estatisticas(rv.jogos);
+    const overCombinado = Math.round((em.pctOver + ev.pctOver)/2);
+    const bttsCombinado = Math.round((em.pctBtts + ev.pctBtts)/2);
+    const mediaGolsJogo = (parseFloat(em.mediaPro)+parseFloat(em.mediaContra)
+                          +parseFloat(ev.mediaPro)+parseFloat(ev.mediaContra)).toFixed(2)/2;
+
+    // ----- regras do semáforo -----
+    let cartoes = '';
+
+    // LAY 0x1: precisa do mandante marcando quase sempre + visitante levando gol
+    let cor01, s01, p01;
+    if (em.pctMarcou >= 80 && ev.pctSofreu >= 70){ cor01='verde'; s01='● ENTRADA ESTRUTURAL';
+      p01 = `${rm.time} marcou em ${em.pctMarcou}% dos últimos ${em.n} e ${rv.time} sofreu gol em ${ev.pctSofreu}% — o 0x1 exige duas improbabilidades juntas.`; }
+    else if (em.pctMarcou >= 60){ cor01='amarelo'; s01='● NEUTRO';
+      p01 = `${rm.time} marca em ${em.pctMarcou}% dos jogos — bom, mas sem folga estatística.`; }
+    else { cor01='vermelho'; s01='● EVITAR';
+      p01 = `${rm.time} passou em branco em ${100-em.pctMarcou}% dos últimos jogos — o 0x1 está vivo.`; }
+    cartoes += cartaoMercado('Lay 0x1', cor01, s01, p01);
+
+    // LAY 1x0: quer jogo de gols dos dois lados
+    let cor10, s10, p10;
+    if (bttsCombinado >= 65 && mediaGolsJogo >= 2.8){ cor10='verde'; s10='● ENTRADA ESTRUTURAL';
+      p10 = `Ambas marcam em ${bttsCombinado}% dos jogos das duas e a média projetada é ${mediaGolsJogo} gols — 1x0 seco é minoria.`; }
+    else if (bttsCombinado >= 50){ cor10='amarelo'; s10='● NEUTRO';
+      p10 = `BTTS combinado em ${bttsCombinado}% — o lay ganha mais vezes do que perde, mas sem margem gorda.`; }
+    else { cor10='vermelho'; s10='● EVITAR';
+      p10 = `Jogos das duas equipes têm pouco gol (BTTS ${bttsCombinado}%) — placar magro do mandante é cenário central.`; }
+    cartoes += cartaoMercado('Lay 1x0', cor10, s10, p10);
+
+    // OVER/UNDER
+    let corOU, sOU, pOU;
+    if (overCombinado >= 60){ corOU='verde'; sOU='● TENDÊNCIA: OVER 2.5';
+      pOU = `Over 2.5 bateu em ${em.pctOver}% dos jogos do mandante e ${ev.pctOver}% do visitante.`; }
+    else if (overCombinado <= 40){ corOU='verde'; sOU='● TENDÊNCIA: UNDER 2.5';
+      pOU = `Só ${overCombinado}% dos jogos recentes das duas passaram de 2.5 gols.`; }
+    else { corOU='amarelo'; sOU='● SEM TENDÊNCIA CLARA';
+      pOU = `Over combinado em ${overCombinado}% — zona cinzenta; deixe o preço decidir ou pule.`; }
+    cartoes += cartaoMercado('Over / Under', corOU, sOU, pOU);
+
+    // LAY ZEBRA: exige odds + contexto → sinal sempre manual
+    cartoes += cartaoMercado('Lay zebra', 'amarelo', '● ANÁLISE MANUAL',
+      'Depende de quem o mercado precifica como azarão e da motivação real do favorito (copas, poupança, crise). Use a análise completa dos 13 pontos.');
+
+    $('sc-resultado').innerHTML = `
+      <h3>${rm.time} x ${rv.time}</h3>
+      <div class="placar-box">
+        <div class="stat"><b>${em.pctMarcou}%</b><span>${rm.time} marcou</span></div>
+        <div class="stat"><b>${em.mediaPro}</b><span>gols pró/jogo (mandante)</span></div>
+        <div class="stat"><b>${ev.pctSofreu}%</b><span>${rv.time} sofreu gol</span></div>
+        <div class="stat"><b>${overCombinado}%</b><span>over 2.5 combinado</span></div>
+        <div class="stat"><b>${bttsCombinado}%</b><span>ambas marcam combinado</span></div>
+      </div>
+      <div class="semaforo">${cartoes}</div>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">
+        Base: últimos ${em.n} jogos de ${rm.time} e ${ev.n} de ${rv.time} (todas as competições, todos os mandos).
+        Sinal verde ≠ entrada garantida: valide desfalques, troca de técnico e odds antes de operar.
+      </p>`;
+  } catch(e){ aviso($('sc-aviso'), 'Falha no scanner: ' + e.message, 'erro'); }
+  finally{ botao.disabled = false; }
+}
+
+// ==========================================================
+// ABA 3 — HISTÓRICO
+// ==========================================================
+$('btn-historico').addEventListener('click', async () => {
+  const time = $('h-time').value.trim();
+  if (!time) return;
+  const botao = $('btn-historico'); botao.disabled = true;
+  aviso($('h-aviso'), ''); $('h-resumo').innerHTML=''; $('h-tabela').innerHTML='';
+  try{
+    const r = await chamarEdge({ acao:'historico', time });
+    if (r.aviso) aviso($('h-aviso'), r.aviso, 'erro');
+    if (!r.jogos?.length){ botao.disabled=false; return; }
+    const e = estatisticas(r.jogos);
+    $('h-resumo').innerHTML = `<div class="placar-box">
+      <div class="stat"><b>${e.pctMarcou}%</b><span>jogos em que marcou</span></div>
+      <div class="stat"><b>${e.pctSofreu}%</b><span>jogos em que sofreu</span></div>
+      <div class="stat"><b>${e.mediaPro}</b><span>gols pró / jogo</span></div>
+      <div class="stat"><b>${e.mediaContra}</b><span>gols contra / jogo</span></div>
+      <div class="stat"><b>${e.pctOver}%</b><span>over 2.5</span></div>
+      <div class="stat"><b>${e.pctBtts}%</b><span>ambas marcam</span></div>
+    </div>`;
+    $('h-tabela').innerHTML =
+      '<tr><th>Data</th><th>Competição</th><th>Mandante</th><th>Placar</th><th>Visitante</th></tr>' +
+      r.jogos.map(j => `<tr><td>${j.data}</td><td>${j.liga}</td>
+        <td>${j.mandante}</td><td><b>${j.gols_mandante} x ${j.gols_visitante}</b></td><td>${j.visitante}</td></tr>`).join('');
+  } catch(e){ aviso($('h-aviso'), 'Falha na busca: ' + e.message, 'erro'); }
+  finally{ botao.disabled = false; }
+});
+
+// ==========================================================
+// ABA 4 — ANÁLISES + CONFERÊNCIA AUTOMÁTICA
+// ==========================================================
+$('btn-salvar').addEventListener('click', salvarAnalise);
+
+async function salvarAnalise(){
+  const reg = {
+    data_jogo: $('a-data').value || null,
+    campeonato: $('a-campeonato').value.trim(),
+    mandante: $('a-mandante').value.trim(),
+    visitante: $('a-visitante').value.trim(),
+    zebra: $('a-zebra').value,
+    lay_1x0: $('a-lay10').value,
+    lay_0x1: $('a-lay01').value,
+    over_under: $('a-ou').value,
+    lay_zebra: $('a-zebra-mercado').value,
+    confianca: parseFloat($('a-confianca').value) || null,
+    observacoes: $('a-obs').value.trim(),
+  };
+  if (!reg.mandante || !reg.visitante){ aviso($('a-aviso'), 'Preencha mandante e visitante.', 'erro'); return; }
+  const { error } = await db.from('analises').insert(reg);
+  aviso($('a-aviso'), error ? 'Erro ao salvar: ' + error.message : 'Análise salva.', error ? 'erro' : '');
+  if (!error){ $('a-mandante').value=''; $('a-visitante').value=''; $('a-obs').value=''; listarAnalises(); }
+}
+
+function normalizarPlacar(p){
+  const m = String(p||'').toLowerCase().replace(/\s/g,'').match(/^(\d+)x(\d+)$/);
+  return m ? { gm:+m[1], gv:+m[2] } : null;
+}
+// devolve 'g' (green), 'r' (red) ou null (sem entrada / sem placar)
+function conferir(a, mercado){
+  const pl = normalizarPlacar(a.placar_final);
+  if (!pl) return null;
+  const total = pl.gm + pl.gv;
+  if (mercado==='lay_1x0') return a.lay_1x0!=='VIAVEL' ? null : (pl.gm===1&&pl.gv===0 ? 'r':'g');
+  if (mercado==='lay_0x1') return a.lay_0x1!=='VIAVEL' ? null : (pl.gm===0&&pl.gv===1 ? 'r':'g');
+  if (mercado==='over_under'){
+    if (a.over_under==='OVER 2.5') return total>=3 ? 'g':'r';
+    if (a.over_under==='UNDER 2.5') return total<=2 ? 'g':'r';
+    return null;
+  }
+  if (mercado==='lay_zebra'){
+    if (a.lay_zebra!=='VIAVEL' || a.zebra==='nenhuma') return null;
+    const zebraVenceu = (a.zebra==='mandante' && pl.gm>pl.gv) || (a.zebra==='visitante' && pl.gv>pl.gm);
+    return zebraVenceu ? 'r':'g';
+  }
+  return null;
+}
+function pill(res){
+  if (res==='g') return '<span class="pill g">GREEN</span>';
+  if (res==='r') return '<span class="pill r">RED</span>';
+  return '<span class="pill n">—</span>';
+}
+
+async function listarAnalises(){
+  const { data, error } = await db.from('analises').select('*').order('criado_em',{ascending:false}).limit(100);
+  if (error){ aviso($('a-aviso'), 'Erro ao listar: ' + error.message, 'erro'); return; }
+
+  // painel de taxa de acerto por mercado
+  const mercados = { lay_1x0:'Lay 1x0', lay_0x1:'Lay 0x1', over_under:'Over/Under', lay_zebra:'Lay zebra' };
+  let painel = '';
+  for (const [chave, nome] of Object.entries(mercados)){
+    let g=0, r=0;
+    data.forEach(a => { const res = conferir(a, chave); if (res==='g') g++; if (res==='r') r++; });
+    const total = g+r;
+    painel += `<div class="stat"><b>${total ? Math.round(g/total*100)+'%' : '—'}</b>
+      <span>${nome} · ${g}G / ${r}R</span></div>`;
+  }
+  $('painel-acertos').innerHTML = painel;
+
+  $('a-tabela').innerHTML =
+    '<tr><th>Data</th><th>Jogo</th><th>1x0</th><th>0x1</th><th>O/U</th><th>Zebra</th><th>Conf.</th><th>Placar final</th><th></th></tr>' +
+    data.map(a => `<tr>
+      <td>${a.data_jogo ?? ''}</td>
+      <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
+      <td>${a.lay_1x0} ${pill(conferir(a,'lay_1x0'))}</td>
+      <td>${a.lay_0x1} ${pill(conferir(a,'lay_0x1'))}</td>
+      <td>${a.over_under} ${pill(conferir(a,'over_under'))}</td>
+      <td>${a.lay_zebra} ${pill(conferir(a,'lay_zebra'))}</td>
+      <td>${a.confianca ?? ''}</td>
+      <td><input style="max-width:90px" placeholder="2x1" value="${a.placar_final ?? ''}"
+           onkeydown="if(event.key==='Enter') salvarPlacar(${a.id}, this.value)"></td>
+      <td><button class="mini" onclick="excluirAnalise(${a.id})">excluir</button></td>
+    </tr>`).join('');
+}
+async function salvarPlacar(id, placar){
+  if (placar && !normalizarPlacar(placar)){ aviso($('a-aviso'), 'Placar inválido — use o formato 2x1.', 'erro'); return; }
+  const { error } = await db.from('analises').update({ placar_final: placar || null }).eq('id', id);
+  aviso($('a-aviso'), error ? 'Erro: ' + error.message : 'Placar salvo — conferência atualizada.', error ? 'erro' : '');
+  listarAnalises();
+}
+async function excluirAnalise(id){
+  if (!confirm('Excluir esta análise?')) return;
+  await db.from('analises').delete().eq('id', id);
+  listarAnalises();
+}
+window.salvarPlacar = salvarPlacar;
+window.excluirAnalise = excluirAnalise;
+
+listarAnalises();
+</script>
+</body>
+</html>
