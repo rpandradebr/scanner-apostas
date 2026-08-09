@@ -213,7 +213,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v1.2";
+const APP_VERSAO = "v1.3";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -335,8 +335,10 @@ async function escanear(){
       chamarEdge({ acao:'historico', time:m }),
       chamarEdge({ acao:'historico', time:v }),
     ]);
-    if (rm.aviso) aviso($('sc-aviso'), rm.aviso, 'erro');
-    if (rv.aviso) aviso($('sc-aviso'), rv.aviso, 'erro');
+    const problemas = [rm.aviso, rv.aviso].filter(Boolean);
+    if (!rm.jogos?.length) problemas.push(`Sem histórico retornado para "${m}".`);
+    if (!rv.jogos?.length) problemas.push(`Sem histórico retornado para "${v}".`);
+    if (problemas.length) aviso($('sc-aviso'), problemas.join('<br>'), 'erro');
     if (!rm.jogos?.length || !rv.jogos?.length){ botao.disabled = false; return; }
 
     const em = estatisticas(rm.jogos), ev = estatisticas(rv.jogos);
@@ -411,6 +413,7 @@ $('btn-historico').addEventListener('click', async () => {
   try{
     const r = await chamarEdge({ acao:'historico', time });
     if (r.aviso) aviso($('h-aviso'), r.aviso, 'erro');
+    else if (!r.jogos?.length) aviso($('h-aviso'), `Sem histórico retornado para "${time}".`, 'erro');
     if (!r.jogos?.length){ botao.disabled=false; return; }
     const e = estatisticas(r.jogos);
     $('h-resumo').innerHTML = `<div class="placar-box">
