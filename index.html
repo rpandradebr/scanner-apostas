@@ -213,7 +213,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v1.3";
+const APP_VERSAO = "v1.4";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -279,14 +279,14 @@ function desenharGrade(){
   );
   $('grade-tabela').innerHTML =
     '<tr><th>Hora</th><th>País</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>Status</th></tr>' +
-    lista.map(j => `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}">
+    lista.map(j => `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}" data-mid="${j.mandante_id ?? ''}" data-vid="${j.visitante_id ?? ''}">
       <td>${j.hora||''}</td><td>${j.pais||''}</td><td>${j.liga||''}</td>
       <td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td><td>${j.status||''}</td>
     </tr>`).join('');
   document.querySelectorAll('#grade-tabela tr.clicavel').forEach(tr =>
     tr.addEventListener('click', () => {
-      $('sc-mandante').value = tr.dataset.m;
-      $('sc-visitante').value = tr.dataset.v;
+      $('sc-mandante').value = tr.dataset.m;  $('sc-mandante').dataset.tid = tr.dataset.mid || '';
+      $('sc-visitante').value = tr.dataset.v; $('sc-visitante').dataset.tid = tr.dataset.vid || '';
       irParaAba('scanner');
     }));
 }
@@ -295,6 +295,15 @@ function desenharGrade(){
 // ABA 2 — SCANNER (semáforo dos 4 mercados)
 // ==========================================================
 $('btn-scanner').addEventListener('click', escanear);
+// digitar manualmente invalida o ID herdado da grade
+['sc-mandante','sc-visitante'].forEach(id =>
+  $(id).addEventListener('input', () => { $(id).dataset.tid = ''; }));
+
+function paramsHistorico(inputEl){
+  const p = { acao:'historico', time: inputEl.value.trim() };
+  if (inputEl.dataset.tid) p.id = inputEl.dataset.tid;
+  return p;
+}
 
 function estatisticas(jogos, comoMandante){
   // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
@@ -332,8 +341,8 @@ async function escanear(){
   aviso($('sc-aviso'), ''); $('sc-resultado').innerHTML = '';
   try{
     const [rm, rv] = await Promise.all([
-      chamarEdge({ acao:'historico', time:m }),
-      chamarEdge({ acao:'historico', time:v }),
+      chamarEdge(paramsHistorico($('sc-mandante'))),
+      chamarEdge(paramsHistorico($('sc-visitante'))),
     ]);
     const problemas = [rm.aviso, rv.aviso].filter(Boolean);
     if (!rm.jogos?.length) problemas.push(`Sem histórico retornado para "${m}".`);
