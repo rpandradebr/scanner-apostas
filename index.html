@@ -160,7 +160,10 @@
     <h2>Últimos 10 jogos de um time</h2>
     <div class="linha c2">
       <div><label for="h-time">Nome do time</label><input id="h-time" placeholder="Ex.: Cerro Porteño"></div>
-      <div style="align-self:end"><button class="acao" id="btn-historico">Buscar histórico</button></div>
+      <div style="align-self:end;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="acao" id="btn-historico">Buscar histórico</button>
+        <button class="mini" id="btn-backfill" title="Baixa as grades dos últimos 30 dias para o banco (fazer 1x; leva ~1 minuto)">⏬ Baixar últimos 30 dias</button>
+      </div>
     </div>
     <div id="h-aviso"></div>
     <div id="h-resumo"></div>
@@ -213,7 +216,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v1.4";
+const APP_VERSAO = "v1.5";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -414,6 +417,16 @@ async function escanear(){
 // ==========================================================
 // ABA 3 — HISTÓRICO
 // ==========================================================
+$('btn-backfill').addEventListener('click', async () => {
+  const b = $('btn-backfill'); b.disabled = true; b.textContent = '⏳ Baixando (até 1 min)…';
+  aviso($('h-aviso'), 'Baixando as grades dos últimos 30 dias para o banco — não feche a página.');
+  try{
+    const r = await chamarEdge({ acao:'backfill', dias:30 });
+    aviso($('h-aviso'), `Backfill concluído: ${r.jogos_gravados ?? 0} jogos gravados em ${r.chamadas_api ?? 0} chamadas. Agora o histórico de qualquer time do mundo sai do seu banco.`);
+  } catch(e){ aviso($('h-aviso'), 'Falha no backfill: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; b.textContent = '⏬ Baixar últimos 30 dias'; }
+});
+
 $('btn-historico').addEventListener('click', async () => {
   const time = $('h-time').value.trim();
   if (!time) return;
