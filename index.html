@@ -124,6 +124,7 @@
     <button data-aba="rodada">🏆 Análise da rodada</button>
     <button data-aba="historico">📊 Histórico 10 jogos</button>
     <button data-aba="analises">💾 Minhas análises</button>
+    <button data-aba="importar">📥 Importar CSV</button>
   </nav>
 
   <!-- ================= GRADE ================= -->
@@ -224,6 +225,28 @@
     <div class="tabela-scroll"><table id="a-tabela"></table></div>
   </section>
 
+  <!-- ================= IMPORTAR CSV ================= -->
+  <section id="aba-importar">
+    <h2>Importar histórico via CSV</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Aceita os CSVs do football-data.co.uk nos dois formatos: ligas principais (E0, SP1, I1…) e
+      "Extra Leagues" (Brasil, Argentina, Suécia…). Reimportar o mesmo arquivo nunca duplica —
+      jogos repetidos são apenas atualizados.
+    </p>
+    <div class="linha c3">
+      <div><label for="imp-arquivo">Arquivo CSV</label><input type="file" id="imp-arquivo" accept=".csv,text/csv"></div>
+      <div><label for="imp-janela">Importar período</label>
+        <select id="imp-janela">
+          <option value="12">Últimos 12 meses (recomendado)</option>
+          <option value="24">Últimos 24 meses</option>
+          <option value="999">Arquivo inteiro (backtesting)</option>
+        </select></div>
+      <div style="align-self:end"><button class="acao" id="btn-importar">Importar para o banco</button></div>
+    </div>
+    <div id="imp-aviso"></div>
+    <div id="imp-preview"></div>
+  </section>
+
   <footer>
     Ferramenta pessoal de apoio à decisão — os sinais são estatísticos e não substituem a análise de contexto (13 pontos) nem garantem resultado.
     Confira odds e escalações no momento da entrada. Jogue com responsabilidade.
@@ -234,7 +257,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v1.8";
+const APP_VERSAO = "v1.9";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -714,6 +737,117 @@ async function analisarRodada(idx){
   }
 }
 window.analisarRodada = analisarRodada;
+
+// ==========================================================
+// ABA IMPORTAR CSV — football-data.co.uk (2 formatos)
+// ==========================================================
+const MAPA_DIV = {
+  E0:['England','Premier League'], E1:['England','Championship'], E2:['England','League One'], E3:['England','League Two'], EC:['England','National League'],
+  SC0:['Scotland','Premiership'], SC1:['Scotland','Championship'],
+  D1:['Germany','Bundesliga'], D2:['Germany','2. Bundesliga'],
+  SP1:['Spain','La Liga'], SP2:['Spain','La Liga 2'],
+  I1:['Italy','Serie A'], I2:['Italy','Serie B'],
+  F1:['France','Ligue 1'], F2:['France','Ligue 2'],
+  N1:['Netherlands','Eredivisie'], B1:['Belgium','Pro League'],
+  P1:['Portugal','Primeira Liga'], T1:['Turkey','Super Lig'], G1:['Greece','Super League'],
+};
+// hash determinístico (cyrb53) para fixture_id negativo
+function hash53(str){
+  let h1=0xdeadbeef, h2=0x41c6ce57;
+  for (let i=0; i<str.length; i++){
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1>>>16), 2246822507) ^ Math.imul(h2 ^ (h2>>>13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2>>>16), 2246822507) ^ Math.imul(h1 ^ (h1>>>13), 3266489909);
+  return 4294967296*(2097151 & h2) + (h1>>>0);
+}
+function parseCSVLinha(linha, sep){
+  // parser simples com suporte a aspas
+  const out=[]; let cur='', dentro=false;
+  for (const c of linha){
+    if (c === '"'){ dentro = !dentro; continue; }
+    if (c === sep && !dentro){ out.push(cur); cur=''; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+$('btn-importar').addEventListener('click', async () => {
+  const arquivo = $('imp-arquivo').files[0];
+  if (!arquivo){ aviso($('imp-aviso'), 'Escolha um arquivo CSV primeiro.', 'erro'); return; }
+  const b = $('btn-importar'); b.disabled = true;
+  aviso($('imp-aviso'), '⏳ Lendo o arquivo…'); $('imp-preview').innerHTML='';
+  try{
+    const texto = (await arquivo.text()).replace(/^\uFEFF/, '');
+    const linhas = texto.split(/\r?\n/).filter(l => l.trim());
+    const sep = (linhas[0].match(/\t/g)||[]).length > (linhas[0].match(/,/g)||[]).length ? '\t' : ',';
+    const cab = parseCSVLinha(linhas[0], sep);
+    const idx = nome => cab.indexOf(nome);
+
+    // detecta o formato
+    const extra = idx('Country') >= 0 && idx('Home') >= 0;      // Extra Leagues
+    const principal = idx('Div') >= 0 && idx('HomeTeam') >= 0;  // ligas principais
+    if (!extra && !principal) throw new Error('Formato não reconhecido — esperado CSV do football-data.co.uk.');
+
+    const meses = Number($('imp-janela').value);
+    const corte = new Date(); corte.setMonth(corte.getMonth() - meses);
+    const agora = new Date().toISOString();
+    const registros = []; const ligasVistas = new Set();
+    let ignoradosData = 0, ignoradosSemPlacar = 0;
+
+    for (let i=1; i<linhas.length; i++){
+      const c = parseCSVLinha(linhas[i], sep);
+      let pais, liga, dataBr, hora, mand, vis, gm, gv;
+      if (extra){
+        pais = c[idx('Country')]; liga = (c[idx('League')]||'').trim();
+        dataBr = c[idx('Date')]; hora = idx('Time')>=0 ? c[idx('Time')] : '';
+        mand = c[idx('Home')]; vis = c[idx('Away')];
+        gm = c[idx('HG')]; gv = c[idx('AG')];
+      } else {
+        const div = c[idx('Div')]; const m = MAPA_DIV[div] || ['?', div];
+        pais = m[0]; liga = m[1];
+        dataBr = c[idx('Date')]; hora = idx('Time')>=0 ? c[idx('Time')] : '';
+        mand = c[idx('HomeTeam')]; vis = c[idx('AwayTeam')];
+        gm = c[idx('FTHG')]; gv = c[idx('FTAG')];
+      }
+      if (!mand || !vis || gm==='' || gv==='' || gm==null || gv==null){ ignoradosSemPlacar++; continue; }
+      const [dd, mm, aa] = (dataBr||'').split('/');
+      if (!aa){ ignoradosSemPlacar++; continue; }
+      const ano = aa.length===2 ? '20'+aa : aa;
+      const dataISO = `${ano}-${mm}-${dd}`;
+      if (new Date(dataISO) < corte){ ignoradosData++; continue; }
+      ligasVistas.add(`${pais} — ${liga}`);
+      registros.push({
+        fixture_id: -hash53(`${dataISO}|${mand}|${vis}`),
+        data_jogo: dataISO, hora: hora||'', pais, liga,
+        mandante: mand, mandante_id: null, visitante: vis, visitante_id: null,
+        placar: `${parseInt(gm)}x${parseInt(gv)}`, status: 'FT', atualizado_em: agora,
+      });
+    }
+    if (!registros.length) throw new Error('Nenhum jogo dentro do período escolhido.');
+
+    // grava em lotes de 500 com progresso
+    let gravados = 0;
+    for (let i=0; i<registros.length; i+=500){
+      const lote = registros.slice(i, i+500);
+      const { error } = await db.from('jogos_dia')
+        .upsert(lote, { onConflict: 'data_jogo,mandante,visitante' });
+      if (error) throw new Error(error.message + ' (rodou a migração v1.9 no SQL Editor?)');
+      gravados += lote.length;
+      aviso($('imp-aviso'), `⏳ Gravando… ${gravados} de ${registros.length} jogos.`);
+    }
+    aviso($('imp-aviso'), `✅ Importação concluída: ${gravados} jogos gravados/atualizados.`);
+    $('imp-preview').innerHTML = `<div class="placar-box">
+      <div class="stat"><b>${gravados}</b><span>jogos importados</span></div>
+      <div class="stat"><b>${ligasVistas.size}</b><span>ligas no arquivo</span></div>
+      <div class="stat"><b>${ignoradosData}</b><span>fora do período (pulados)</span></div>
+      <div class="stat"><b>${ignoradosSemPlacar}</b><span>sem placar (pulados)</span></div>
+    </div>
+    <p style="font-size:13px;color:var(--chalk-dim)">Ligas: ${[...ligasVistas].join(' · ')}</p>`;
+  } catch(e){ aviso($('imp-aviso'), 'Falha na importação: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+});
 
 listarAnalises();
 </script>
