@@ -162,7 +162,7 @@
       <div><label for="h-time">Nome do time</label><input id="h-time" placeholder="Ex.: Cerro Porteño"></div>
       <div style="align-self:end;display:flex;gap:10px;flex-wrap:wrap">
         <button class="acao" id="btn-historico">Buscar histórico</button>
-        <button class="mini" id="btn-backfill" title="Baixa as grades dos últimos 30 dias para o banco (fazer 1x; leva ~1 minuto)">⏬ Baixar últimos 30 dias</button>
+        <button class="mini" id="btn-backfill" title="Baixa as grades dos últimos 90 dias para o banco, em lotes (fazer 1x)">⏬ Baixar últimos 90 dias</button>
       </div>
     </div>
     <div id="h-aviso"></div>
@@ -216,7 +216,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v1.5";
+const APP_VERSAO = "v1.7";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -418,13 +418,28 @@ async function escanear(){
 // ABA 3 — HISTÓRICO
 // ==========================================================
 $('btn-backfill').addEventListener('click', async () => {
-  const b = $('btn-backfill'); b.disabled = true; b.textContent = '⏳ Baixando (até 1 min)…';
-  aviso($('h-aviso'), 'Baixando as grades dos últimos 30 dias para o banco — não feche a página.');
+  const b = $('btn-backfill'); b.disabled = true;
+  let totalJogos = 0, totalChamadas = 0, rodada = 0;
   try{
-    const r = await chamarEdge({ acao:'backfill', dias:30 });
-    aviso($('h-aviso'), `Backfill concluído: ${r.jogos_gravados ?? 0} jogos gravados em ${r.chamadas_api ?? 0} chamadas. Agora o histórico de qualquer time do mundo sai do seu banco.`);
+    while (rodada < 8){ // até 8 lotes de 15 dias = 120 de margem
+      rodada++;
+      b.textContent = `⏳ Baixando lote ${rodada}…`;
+      aviso($('h-aviso'), `Baixando resultados (lote ${rodada}) — já gravados ${totalJogos} jogos. Não feche a página.`);
+      const r = await chamarEdge({ acao:'backfill', dias:90, lote:15 });
+      totalJogos += r.jogos_gravados ?? 0;
+      totalChamadas += r.chamadas_api ?? 0;
+      const parou = Object.values(r.resumo ?? {}).some(v => String(v).startsWith('PAROU'));
+      if (parou){
+        aviso($('h-aviso'), `A API interrompeu (provável cota do dia). Gravados ${totalJogos} jogos em ${totalChamadas} chamadas — clique de novo amanhã para completar o restante.`, 'erro');
+        break;
+      }
+      if (!r.dias_pendentes){
+        aviso($('h-aviso'), `Backfill de 90 dias completo: ${totalJogos} jogos gravados em ${totalChamadas} chamadas. O histórico de qualquer time do mundo agora sai do seu banco.`);
+        break;
+      }
+    }
   } catch(e){ aviso($('h-aviso'), 'Falha no backfill: ' + e.message, 'erro'); }
-  finally{ b.disabled = false; b.textContent = '⏬ Baixar últimos 30 dias'; }
+  finally{ b.disabled = false; b.textContent = '⏬ Baixar últimos 90 dias'; }
 });
 
 $('btn-historico').addEventListener('click', async () => {
