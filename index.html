@@ -121,6 +121,7 @@
   <nav>
     <button data-aba="grade" class="on">📅 Grade do dia</button>
     <button data-aba="scanner">🎯 Scanner de mercados</button>
+    <button data-aba="rodada">🏆 Análise da rodada</button>
     <button data-aba="historico">📊 Histórico 10 jogos</button>
     <button data-aba="analises">💾 Minhas análises</button>
   </nav>
@@ -153,6 +154,23 @@
     <button class="acao" id="btn-scanner">Escanear confronto</button>
     <div id="sc-aviso"></div>
     <div id="sc-resultado"></div>
+  </section>
+
+  <!-- ================= RODADA ================= -->
+  <section id="aba-rodada">
+    <h2>Análise da rodada por campeonato</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Escolha a data e o campeonato: cada jogo ganha probabilidades de 1x2, over/under e placares corretos —
+      cruzando o histórico real do banco com um modelo de Poisson calibrado nos últimos 10 jogos de cada equipe.
+    </p>
+    <div class="linha c3">
+      <div><label for="ro-data">Data</label><input type="date" id="ro-data"></div>
+      <div><label for="ro-liga">Campeonato</label><select id="ro-liga"><option value="">Carregue os jogos…</option></select></div>
+      <div style="align-self:end"><button class="acao" id="btn-rodada">Carregar jogos</button></div>
+    </div>
+    <div id="ro-aviso"></div>
+    <div id="ro-lista"></div>
+    <div id="ro-analise"></div>
   </section>
 
   <!-- ================= HISTÓRICO ================= -->
@@ -216,7 +234,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v1.7";
+const APP_VERSAO = "v1.8";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -567,6 +585,135 @@ async function excluirAnalise(id){
 }
 window.salvarPlacar = salvarPlacar;
 window.excluirAnalise = excluirAnalise;
+
+// ==========================================================
+// ABA RODADA — análise por campeonato (empírico + Poisson)
+// ==========================================================
+$('ro-data').value = hojeISO();
+let rodadaJogos = [];
+
+$('btn-rodada').addEventListener('click', async () => {
+  const b = $('btn-rodada'); b.disabled = true;
+  aviso($('ro-aviso'), ''); $('ro-analise').innerHTML='';
+  try{
+    const r = await chamarEdge({ acao:'grade', data: $('ro-data').value });
+    rodadaJogos = r.jogos || [];
+    if (r.aviso) aviso($('ro-aviso'), r.aviso, 'erro');
+    const ligas = [...new Set(rodadaJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
+    $('ro-liga').innerHTML = '<option value="">Escolha o campeonato</option>' +
+      ligas.map(l => `<option>${l}</option>`).join('');
+    $('ro-lista').innerHTML = '<p class="msg-vazia">Agora escolha o campeonato acima.</p>';
+  } catch(e){ aviso($('ro-aviso'), 'Falha ao carregar: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+});
+
+$('ro-liga').addEventListener('change', () => {
+  const sel = $('ro-liga').value;
+  $('ro-analise').innerHTML='';
+  if (!sel){ $('ro-lista').innerHTML=''; return; }
+  const jogos = rodadaJogos.filter(j => `${j.pais} — ${j.liga}` === sel);
+  $('ro-lista').innerHTML = '<div class="tabela-scroll"><table>' +
+    '<tr><th>Hora</th><th>Confronto</th><th>Placar</th><th></th></tr>' +
+    jogos.map(j => `<tr>
+      <td>${j.hora||''}</td>
+      <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
+      <td>${j.placar||'-'}</td>
+      <td><button class="mini" onclick="analisarRodada(${rodadaJogos.indexOf(j)})">⚡ Analisar</button></td>
+    </tr>`).join('') + '</table></div>';
+});
+
+// Poisson
+const FAT = [1,1,2,6,24,120,720];
+const pois = (k,l) => Math.exp(-l) * Math.pow(l,k) / FAT[k];
+const pct = x => Math.round(x*100);
+
+async function analisarRodada(idx){
+  const j = rodadaJogos[idx];
+  $('ro-analise').innerHTML = '<p class="msg-vazia">⏳ Cruzando históricos e rodando o modelo…</p>';
+  $('ro-analise').scrollIntoView({behavior:'smooth', block:'start'});
+  try{
+    const pm = { acao:'historico', time: j.mandante }; if (j.mandante_id) pm.id = j.mandante_id;
+    const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
+    const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
+    if (!rm.jogos?.length || !rv.jogos?.length){
+      $('ro-analise').innerHTML = `<div class="aviso erro">Histórico insuficiente (${rm.jogos?.length||0} x ${rv.jogos?.length||0} jogos no banco). Rode o backfill de 90 dias na aba Histórico.</div>`;
+      return;
+    }
+    const em = estatisticas(rm.jogos), ev = estatisticas(rv.jogos);
+
+    // ---- Modelo de Poisson (ataque x defesa + leve fator casa) ----
+    const clamp = (x,a,b) => Math.min(Math.max(x,a),b);
+    const lCasa = clamp(((+em.mediaPro) + (+ev.mediaContra)) / 2 * 1.12, 0.2, 4.2);
+    const lFora = clamp(((+ev.mediaPro) + (+em.mediaContra)) / 2 * 0.92, 0.15, 4.0);
+
+    let p1=0, pX=0, p2=0, pO25=0, placares=[];
+    for (let h=0; h<=6; h++) for (let a=0; a<=6; a++){
+      const p = pois(h,lCasa) * pois(a,lFora);
+      if (h>a) p1+=p; else if (h===a) pX+=p; else p2+=p;
+      if (h+a>=3) pO25+=p;
+      placares.push({placar:`${h}x${a}`, p});
+    }
+    placares.sort((x,y)=>y.p-x.p);
+    const top = placares.slice(0,5);
+
+    // ---- Empírico (histórico real das duas) ----
+    const overEmp = Math.round((em.pctOver + ev.pctOver)/2);
+    const bttsEmp = Math.round((em.pctBtts + ev.pctBtts)/2);
+
+    const maisProvavel = p1>=pX && p1>=p2 ? `Vitória do ${rm.time} (${pct(p1)}%)`
+                       : p2>=pX ? `Vitória do ${rv.time} (${pct(p2)}%)`
+                       : `Empate (${pct(pX)}%)`;
+    const mediaOU = (pO25*100 + overEmp)/2;
+    const linhaOU = mediaOU >= 55 ? 'OVER 2.5' : mediaOU <= 45 ? 'UNDER 2.5' : 'SEM TENDÊNCIA CLARA';
+
+    // ---- Chips da tabela stats_times (planilha Série A), se os nomes casarem ----
+    let chips = '';
+    try{
+      const tok = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(p=>p.length>=4)[0] || s;
+      const { data: st } = await db.from('stats_times').select('*')
+        .or(`time_nome.ilike.%${tok(j.mandante)}%,time_nome.ilike.%${tok(j.visitante)}%`);
+      for (const s of (st ?? [])){
+        const ht = s.dados?.['HT Geral'], g = s.dados?.['Gols Geral'];
+        if (ht || g) chips += `<div class="stat"><b>${g?.['Over 2.5'] ?? '—'}</b><span>${s.time_nome} over 2.5 (base)</span></div>` +
+          (ht ? `<div class="stat"><b>${ht['Over 0.5'] ?? '—'}</b><span>${s.time_nome} gol no 1ºT</span></div>` : '');
+      }
+    } catch(_){}
+
+    $('ro-analise').innerHTML = `
+      <h3>${rm.time} x ${rv.time}</h3>
+      <div class="placar-box">
+        <div class="stat"><b>${pct(p1)}%</b><span>vitória ${rm.time}</span></div>
+        <div class="stat"><b>${pct(pX)}%</b><span>empate</span></div>
+        <div class="stat"><b>${pct(p2)}%</b><span>vitória ${rv.time}</span></div>
+        <div class="stat"><b>${pct(pO25)}%</b><span>over 2.5 (modelo)</span></div>
+        <div class="stat"><b>${overEmp}%</b><span>over 2.5 (histórico)</span></div>
+        <div class="stat"><b>${bttsEmp}%</b><span>ambas marcam (hist.)</span></div>
+        ${chips}
+      </div>
+      <div class="semaforo">
+        <div class="mercado ${p1>0.5||p2>0.5?'verde':'amarelo'}">
+          <div class="nome">Mais provável</div><div class="sinal">● ${maisProvavel}</div>
+          <div class="porque">Modelo de Poisson sobre os últimos ${em.n} jogos de cada equipe (λ casa ${lCasa.toFixed(2)} · λ fora ${lFora.toFixed(2)}).</div>
+        </div>
+        <div class="mercado ${linhaOU==='SEM TENDÊNCIA CLARA'?'amarelo':'verde'}">
+          <div class="nome">Over / Under</div><div class="sinal">● ${linhaOU}</div>
+          <div class="porque">Modelo aponta ${pct(pO25)}% de over 2.5; o histórico real das duas marca ${overEmp}%. Divergência grande entre os dois pede cautela.</div>
+        </div>
+        <div class="mercado verde">
+          <div class="nome">Placares corretos</div>
+          <div class="sinal">● TOP 5 DO MODELO</div>
+          <div class="porque">${top.map(t => `<b>${t.placar}</b> ${pct(t.p)}%`).join(' · ')}</div>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">
+        Probabilidades estatísticas — não capturam desfalques, técnico novo ou crise (a análise de contexto dos 13 pontos continua sendo a camada final).
+        Placar exato raramente passa de ~15%: use como mapa de risco dos seus lays, não como certeza.
+      </p>`;
+  } catch(e){
+    $('ro-analise').innerHTML = `<div class="aviso erro">Falha na análise: ${e.message}</div>`;
+  }
+}
+window.analisarRodada = analisarRodada;
 
 listarAnalises();
 </script>
