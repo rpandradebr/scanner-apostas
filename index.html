@@ -215,6 +215,7 @@
       <div style="align-self:end"><button class="acao" id="btn-salvar">Salvar análise</button></div>
     </div>
     <div class="linha"><div><label for="a-obs">Observações</label><textarea id="a-obs" rows="2" placeholder="Ex.: técnico estreante no mandante — variância alta"></textarea></div></div>
+    <div class="linha"><div><label for="a-analise">Análise completa (cole aqui os 13 pontos do Claude)</label><textarea id="a-analise" rows="4" placeholder="Cole a análise inteira — ela fica arquivada junto do veredito e pode ser relida a qualquer momento pelo botão 📄 na tabela."></textarea></div></div>
     <div id="a-aviso"></div>
 
     <h3>Taxa de acerto por mercado</h3>
@@ -257,7 +258,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.0";
+const APP_VERSAO = "v2.1";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -531,11 +532,12 @@ async function salvarAnalise(){
     lay_zebra: $('a-zebra-mercado').value,
     confianca: parseFloat($('a-confianca').value) || null,
     observacoes: $('a-obs').value.trim(),
+    analise_completa: $('a-analise').value.trim() || null,
   };
   if (!reg.mandante || !reg.visitante){ aviso($('a-aviso'), 'Preencha mandante e visitante.', 'erro'); return; }
   const { error } = await db.from('analises').insert(reg);
-  aviso($('a-aviso'), error ? 'Erro ao salvar: ' + error.message : 'Análise salva.', error ? 'erro' : '');
-  if (!error){ $('a-mandante').value=''; $('a-visitante').value=''; $('a-obs').value=''; listarAnalises(); }
+  aviso($('a-aviso'), error ? 'Erro ao salvar: ' + error.message + (String(error.message).includes('analise_completa') ? ' — rodou a migração v2.1 no SQL Editor?' : '') : 'Análise salva.', error ? 'erro' : '');
+  if (!error){ $('a-mandante').value=''; $('a-visitante').value=''; $('a-obs').value=''; $('a-analise').value=''; listarAnalises(); }
 }
 
 function normalizarPlacar(p){
@@ -567,9 +569,11 @@ function pill(res){
   return '<span class="pill n">—</span>';
 }
 
+let listaAnalises = [];
 async function listarAnalises(){
   const { data, error } = await db.from('analises').select('*').order('criado_em',{ascending:false}).limit(100);
   if (error){ aviso($('a-aviso'), 'Erro ao listar: ' + error.message, 'erro'); return; }
+  listaAnalises = data;
 
   // painel de taxa de acerto por mercado
   const mercados = { lay_1x0:'Lay 1x0', lay_0x1:'Lay 0x1', over_under:'Over/Under', lay_zebra:'Lay zebra' };
@@ -595,9 +599,30 @@ async function listarAnalises(){
       <td>${a.confianca ?? ''}</td>
       <td><input style="max-width:90px" placeholder="2x1" value="${a.placar_final ?? ''}"
            onkeydown="if(event.key==='Enter') salvarPlacar(${a.id}, this.value)"></td>
-      <td><button class="mini" onclick="excluirAnalise(${a.id})">excluir</button></td>
+      <td style="white-space:nowrap">${a.analise_completa ? `<button class="mini" onclick="verAnalise(${a.id})" title="Reler a análise completa">📄</button> ` : ''}<button class="mini" onclick="excluirAnalise(${a.id})">excluir</button></td>
     </tr>`).join('');
+  $('a-tabela').insertAdjacentHTML('afterend', '');
 }
+function verAnalise(id){
+  const a = listaAnalises.find(x => x.id === id);
+  if (!a?.analise_completa) return;
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let painel = document.getElementById('painel-leitura');
+  if (!painel){
+    painel = document.createElement('div');
+    painel.id = 'painel-leitura';
+    $('a-tabela').parentElement.insertAdjacentElement('afterend', painel);
+  }
+  painel.innerHTML = `<div class="aviso" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <b style="font-family:'Saira Condensed',sans-serif;font-size:19px;text-transform:uppercase">📄 ${esc(a.mandante)} x ${esc(a.visitante)} — análise arquivada</b>
+      <button class="mini" onclick="document.getElementById('painel-leitura').innerHTML=''">fechar ✕</button>
+    </div>
+    <div style="white-space:pre-wrap;margin-top:10px;font-size:14px;line-height:1.6;max-height:420px;overflow-y:auto">${esc(a.analise_completa)}</div>
+  </div>`;
+  painel.scrollIntoView({behavior:'smooth', block:'start'});
+}
+window.verAnalise = verAnalise;
 async function salvarPlacar(id, placar){
   if (placar && !normalizarPlacar(placar)){ aviso($('a-aviso'), 'Placar inválido — use o formato 2x1.', 'erro'); return; }
   const { error } = await db.from('analises').update({ placar_final: placar || null }).eq('id', id);
