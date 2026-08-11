@@ -108,6 +108,19 @@
   .stat span{font-size:11.5px;color:var(--chalk-dim);text-transform:uppercase;
     font-family:'IBM Plex Mono',monospace;letter-spacing:.08em}
 
+  details.grupo{background:var(--pitch);border:1px solid rgba(237,234,224,.12);border-radius:10px;margin:8px 0;overflow:hidden}
+  details.grupo summary{cursor:pointer;padding:11px 14px;font-family:'Saira Condensed',sans-serif;
+    font-weight:600;font-size:17px;text-transform:uppercase;letter-spacing:.03em;list-style:none;
+    display:flex;justify-content:space-between;align-items:center;gap:10px}
+  details.grupo summary::-webkit-details-marker{display:none}
+  details.grupo[open] summary{color:var(--amber);border-bottom:1px dashed rgba(237,234,224,.15)}
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--card-2);
+    border-radius:20px;padding:2px 10px;color:var(--chalk-dim)}
+  .dot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+    border-radius:50%;font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;margin-right:4px}
+  .dot.v{background:rgba(76,196,112,.2);color:var(--green)}
+  .dot.e{background:rgba(185,196,180,.16);color:var(--chalk-dim)}
+  .dot.d{background:rgba(255,107,87,.2);color:var(--red)}
   footer{margin-top:26px;font-size:12px;color:var(--chalk-dim);max-width:75ch}
 </style>
 </head>
@@ -142,8 +155,9 @@
     </div>
     <button class="acao" id="btn-grade">Carregar grade</button>
     <div id="grade-aviso"></div>
-    <div class="tabela-scroll"><table id="grade-tabela"></table></div>
-    <p class="msg-vazia" id="grade-vazia">Escolha uma data e carregue a grade. Clique em qualquer jogo para mandá-lo direto ao Scanner.</p>
+    <div id="grade-grupos"></div>
+    <div id="grade-ficha"></div>
+    <p class="msg-vazia" id="grade-vazia">Escolha uma data e carregue a grade. Clique em qualquer jogo para abrir a ficha completa do confronto.</p>
   </section>
 
   <!-- ================= SCANNER ================= -->
@@ -280,7 +294,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.3";
+const APP_VERSAO = "v2.4";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -369,26 +383,115 @@ function desenharGrade(){
     (!liga || j.liga === liga) &&
     (!busca || j.mandante.toLowerCase().includes(busca) || j.visitante.toLowerCase().includes(busca))
   );
-  $('grade-tabela').innerHTML =
-    '<tr><th>Hora</th><th>País</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>1 · X · 2</th><th>O/U 2.5</th><th>Status</th></tr>' +
-    lista.map(j => {
+  const grupos = {};
+  lista.forEach(j => {
+    const chave = `${j.pais ?? '?'} — ${j.liga ?? '?'}`;
+    (grupos[chave] = grupos[chave] || []).push(j);
+  });
+  const chaves = Object.keys(grupos).sort();
+  const cab = '<tr><th>Hora</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>1 · X · 2</th><th>O/U 2.5</th><th>Status</th></tr>';
+  $('grade-grupos').innerHTML = chaves.map(ch => {
+    const linhas = grupos[ch].map(j => {
       const o = oddsMap[j.fixture_id];
       const c1x2 = o?.odd_home ? `${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}` : '—';
       const cou = o?.odd_over25 ? `O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}` : '—';
-      return `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}" data-mid="${j.mandante_id ?? ''}" data-vid="${j.visitante_id ?? ''}">
-      <td>${j.hora||''}</td><td>${j.pais||''}</td><td>${j.liga||''}</td>
-      <td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td>
-      <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${c1x2}</td>
-      <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${cou}</td>
-      <td>${j.status||''}</td>
-    </tr>`;}).join('');
-  document.querySelectorAll('#grade-tabela tr.clicavel').forEach(tr =>
-    tr.addEventListener('click', () => {
-      $('sc-mandante').value = tr.dataset.m;  $('sc-mandante').dataset.tid = tr.dataset.mid || '';
-      $('sc-visitante').value = tr.dataset.v; $('sc-visitante').dataset.tid = tr.dataset.vid || '';
-      irParaAba('scanner');
-    }));
+      return `<tr class="clicavel" onclick="fichaJogo(${gradeJogos.indexOf(j)})">
+        <td>${j.hora||''}</td><td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td>
+        <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${c1x2}</td>
+        <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${cou}</td>
+        <td>${j.status||''}</td></tr>`;
+    }).join('');
+    return `<details class="grupo" ${(liga||busca||chaves.length<=4)?'open':''}>
+      <summary><span>${ch}</span><span class="badge">${grupos[ch].length}</span></summary>
+      <div class="tabela-scroll" style="padding:0 10px 10px"><table>${cab}${linhas}</table></div>
+    </details>`;
+  }).join('') || '<p class="msg-vazia">Nenhum jogo nos filtros atuais.</p>';
 }
+
+// ---------- FICHA DO CONFRONTO ----------
+function seqForma(jogos){
+  return jogos.slice(0,10).map(g => {
+    const pro = g.time_era_mandante ? g.gols_mandante : g.gols_visitante;
+    const con = g.time_era_mandante ? g.gols_visitante : g.gols_mandante;
+    const cls = pro>con ? 'v' : pro<con ? 'd' : 'e';
+    return `<span class="dot ${cls}" title="${g.data} · ${g.mandante} ${g.gols_mandante}x${g.gols_visitante} ${g.visitante}">${cls.toUpperCase()}</span>`;
+  }).join('');
+}
+function escadaOver(jogos){
+  const n = jogos.length || 1;
+  return [0.5,1.5,2.5,3.5].map(l => {
+    const q = jogos.filter(g => (g.gols_mandante + g.gols_visitante) > l).length;
+    return `<div class="stat"><b>${Math.round(q/n*100)}%</b><span>over ${l}</span></div>`;
+  }).join('');
+}
+async function fichaJogo(idx){
+  const j = gradeJogos[idx];
+  const alvo = $('grade-ficha');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Montando a ficha do confronto…</p>';
+  alvo.scrollIntoView({behavior:'smooth', block:'start'});
+  try{
+    const pm = { acao:'historico', time: j.mandante }; if (j.mandante_id) pm.id = j.mandante_id;
+    const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
+    const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
+    const o = oddsMap[j.fixture_id];
+    const oddsHtml = o ? `<div class="placar-box">
+        <div class="stat"><b>${fmtOdd(o.odd_home)}</b><span>casa (1)</span></div>
+        <div class="stat"><b>${fmtOdd(o.odd_draw)}</b><span>empate (X)</span></div>
+        <div class="stat"><b>${fmtOdd(o.odd_away)}</b><span>fora (2)</span></div>
+        <div class="stat"><b>${fmtOdd(o.odd_over25)}</b><span>over 2.5</span></div>
+        <div class="stat"><b>${fmtOdd(o.odd_under25)}</b><span>under 2.5</span></div>
+      </div>` : '<p class="msg-vazia">Sem odds carregadas para este jogo — rode "Buscar odds do dia" na aba Favoritos.</p>';
+
+    const time = (nome, r) => {
+      if (!r.jogos?.length) return `<h3>${nome}</h3><p class="msg-vazia">Sem histórico no banco${r.aviso ? ' — ' + r.aviso : ''}.</p>`;
+      const e = estatisticas(r.jogos);
+      return `<h3>${r.time ?? nome} — últimos ${e.n}</h3>
+        <div style="margin:6px 0 10px">${seqForma(r.jogos)}</div>
+        <div class="placar-box">
+          <div class="stat"><b>${e.mediaPro}</b><span>gols pró/jogo</span></div>
+          <div class="stat"><b>${e.mediaContra}</b><span>gols contra/jogo</span></div>
+          <div class="stat"><b>${e.pctMarcou}%</b><span>marcou</span></div>
+          <div class="stat"><b>${e.pctSofreu}%</b><span>sofreu</span></div>
+          <div class="stat"><b>${e.pctBtts}%</b><span>ambas marcam</span></div>
+          ${escadaOver(r.jogos)}
+        </div>`;
+    };
+
+    // H2H direto do banco (quando temos os IDs)
+    let h2hHtml = '';
+    if (j.mandante_id && j.visitante_id){
+      try{
+        const { data: h } = await db.from('jogos_dia').select('*')
+          .or(`and(mandante_id.eq.${j.mandante_id},visitante_id.eq.${j.visitante_id}),and(mandante_id.eq.${j.visitante_id},visitante_id.eq.${j.mandante_id})`)
+          .in('status', ['FT','AET','PEN'])
+          .order('data_jogo', {ascending:false}).limit(6);
+        if (h?.length){
+          h2hHtml = '<h3>Confrontos diretos (no banco)</h3><div class="tabela-scroll"><table>' +
+            '<tr><th>Data</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th></tr>' +
+            h.map(g => `<tr><td>${g.data_jogo}</td><td>${g.liga}</td><td>${g.mandante}</td><td><b>${g.placar}</b></td><td>${g.visitante}</td></tr>`).join('') +
+            '</table></div>';
+        }
+      } catch(_){}
+    }
+
+    alvo.innerHTML = `<div class="aviso" style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <b style="font-family:'Saira Condensed',sans-serif;font-size:21px;text-transform:uppercase">🔎 ${j.mandante} x ${j.visitante}</b>
+        <span style="font-size:12.5px;color:var(--chalk-dim)">${j.pais} — ${j.liga} · ${j.hora||''}</span>
+        <button class="mini" onclick="$('grade-ficha').innerHTML=''">fechar ✕</button>
+      </div>
+      ${oddsHtml}
+      ${time(j.mandante, rm)}
+      ${time(j.visitante, rv)}
+      ${h2hHtml}
+      <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="mini" onclick="$('sc-mandante').value='${j.mandante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-mandante').dataset.tid='${j.mandante_id??''}';$('sc-visitante').value='${j.visitante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-visitante').dataset.tid='${j.visitante_id??''}';irParaAba('scanner')">🎯 Abrir no Scanner</button>
+        <button class="mini" onclick="copiarPrompt('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt p/ análise completa</button>
+      </div>
+    </div>`;
+  } catch(e){ alvo.innerHTML = `<div class="aviso erro">Falha na ficha: ${e.message}</div>`; }
+}
+window.fichaJogo = fichaJogo;
 
 // ==========================================================
 // ABA 2 — SCANNER (semáforo dos 4 mercados)
