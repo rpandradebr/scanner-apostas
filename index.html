@@ -122,6 +122,7 @@
     <button data-aba="grade" class="on">📅 Grade do dia</button>
     <button data-aba="scanner">🎯 Scanner de mercados</button>
     <button data-aba="rodada">🏆 Análise da rodada</button>
+    <button data-aba="favoritos">⭐ Favoritos do dia</button>
     <button data-aba="historico">📊 Histórico 10 jogos</button>
     <button data-aba="analises">💾 Minhas análises</button>
     <button data-aba="importar">📥 Importar CSV</button>
@@ -172,6 +173,23 @@
     <div id="ro-aviso"></div>
     <div id="ro-lista"></div>
     <div id="ro-analise"></div>
+  </section>
+
+  <!-- ================= FAVORITOS DO DIA ================= -->
+  <section id="aba-favoritos">
+    <h2>Favoritos e zebras do dia (pelas odds)</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Busca as odds pré-jogo (1x2 e Over/Under 2.5) e classifica o dia inteiro:
+      super favoritos (odd ≤ 1.35), favoritos (1.36–1.65) e as maiores zebras.
+      As odds também passam a aparecer na Grade do dia.
+    </p>
+    <div class="linha c3">
+      <div><label for="fav-data">Data</label><input type="date" id="fav-data"></div>
+      <div style="align-self:end"><button class="acao" id="btn-odds">Buscar odds do dia</button></div>
+      <div style="align-self:end;font-size:13px;color:var(--chalk-dim)" id="fav-status"></div>
+    </div>
+    <div id="fav-aviso"></div>
+    <div id="fav-listas"></div>
   </section>
 
   <!-- ================= HISTÓRICO ================= -->
@@ -258,7 +276,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.1";
+const APP_VERSAO = "v2.2";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -295,6 +313,15 @@ function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]
 // ABA 1 — GRADE DO DIA
 // ==========================================================
 let gradeJogos = [];
+let oddsMap = {};
+async function carregarOddsMapa(data){
+  oddsMap = {};
+  try{
+    const { data: od } = await db.from('odds_dia').select('*').eq('data_jogo', data);
+    (od ?? []).forEach(o => { oddsMap[o.fixture_id] = o; });
+  } catch(_){}
+}
+const fmtOdd = v => v ? Number(v).toFixed(2) : '—';
 $('btn-grade').addEventListener('click', carregarGrade);
 $('grade-liga').addEventListener('change', desenharGrade);
 $('grade-time').addEventListener('input', desenharGrade);
@@ -305,6 +332,7 @@ async function carregarGrade(){
   try{
     const r = await chamarEdge({ acao:'grade', data: $('grade-data').value });
     gradeJogos = r.jogos || [];
+    await carregarOddsMapa($('grade-data').value);
     if (r.aviso) aviso($('grade-aviso'), r.aviso, 'erro');
     const ligas = [...new Set(gradeJogos.map(j => j.liga))].sort();
     $('grade-liga').innerHTML = '<option value="">Todos</option>' +
@@ -323,11 +351,18 @@ function desenharGrade(){
     (!busca || j.mandante.toLowerCase().includes(busca) || j.visitante.toLowerCase().includes(busca))
   );
   $('grade-tabela').innerHTML =
-    '<tr><th>Hora</th><th>País</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>Status</th></tr>' +
-    lista.map(j => `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}" data-mid="${j.mandante_id ?? ''}" data-vid="${j.visitante_id ?? ''}">
+    '<tr><th>Hora</th><th>País</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>1 · X · 2</th><th>O/U 2.5</th><th>Status</th></tr>' +
+    lista.map(j => {
+      const o = oddsMap[j.fixture_id];
+      const c1x2 = o?.odd_home ? `${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}` : '—';
+      const cou = o?.odd_over25 ? `O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}` : '—';
+      return `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}" data-mid="${j.mandante_id ?? ''}" data-vid="${j.visitante_id ?? ''}">
       <td>${j.hora||''}</td><td>${j.pais||''}</td><td>${j.liga||''}</td>
-      <td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td><td>${j.status||''}</td>
-    </tr>`).join('');
+      <td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td>
+      <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${c1x2}</td>
+      <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${cou}</td>
+      <td>${j.status||''}</td>
+    </tr>`;}).join('');
   document.querySelectorAll('#grade-tabela tr.clicavel').forEach(tr =>
     tr.addEventListener('click', () => {
       $('sc-mandante').value = tr.dataset.m;  $('sc-mandante').dataset.tid = tr.dataset.mid || '';
@@ -892,6 +927,78 @@ $('btn-importar').addEventListener('click', async () => {
   } catch(e){ aviso($('imp-aviso'), 'Falha na importação: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 });
+
+// ==========================================================
+// ABA FAVORITOS DO DIA — odds e classificação
+// ==========================================================
+$('fav-data').value = hojeISO();
+
+$('btn-odds').addEventListener('click', async () => {
+  const b = $('btn-odds'); b.disabled = true;
+  const data = $('fav-data').value;
+  aviso($('fav-aviso'), ''); $('fav-listas').innerHTML='';
+  try{
+    let pagina = 1, total = 0, rodada = 0;
+    while (pagina && rodada < 8){ // até ~96 páginas de segurança? não: 8 lotes de 8 páginas
+      rodada++;
+      $('fav-status').textContent = `⏳ Buscando odds (lote ${rodada})… ${total} jogos com odds.`;
+      const r = await chamarEdge({ acao:'odds', data, pagina, lote:8 });
+      if (r.aviso){ aviso($('fav-aviso'), r.aviso, 'erro'); break; }
+      total += r.gravadas ?? 0;
+      pagina = r.proxima_pagina;
+    }
+    $('fav-status').textContent = `✅ ${total} jogos com odds gravados.`;
+    await carregarOddsMapa(data);
+    // precisa da grade do dia para os nomes
+    const rg = await chamarEdge({ acao:'grade', data });
+    const jogos = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id]);
+    desenharFavoritos(jogos);
+  } catch(e){ aviso($('fav-aviso'), 'Falha: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+});
+
+function linhaFav(j, o, destaque){
+  return `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}" data-mid="${j.mandante_id ?? ''}" data-vid="${j.visitante_id ?? ''}">
+    <td>${j.hora||''}</td><td>${j.liga||''}</td>
+    <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${destaque}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}</td>
+  </tr>`;
+}
+function desenharFavoritos(jogos){
+  const comFav = jogos.map(j => {
+    const o = oddsMap[j.fixture_id];
+    const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
+    const ladoFav = (o.odd_home ?? 99) <= (o.odd_away ?? 99) ? j.mandante : j.visitante;
+    const maior = Math.max(o.odd_home ?? 0, o.odd_away ?? 0);
+    const ladoZebra = (o.odd_home ?? 0) >= (o.odd_away ?? 0) ? j.mandante : j.visitante;
+    return { j, o, menor, ladoFav, maior, ladoZebra };
+  }).filter(x => x.menor < 99);
+
+  const supers = comFav.filter(x => x.menor <= 1.35).sort((a,b) => a.menor - b.menor);
+  const favs   = comFav.filter(x => x.menor > 1.35 && x.menor <= 1.65).sort((a,b) => a.menor - b.menor);
+  const zebras = comFav.filter(x => x.maior >= 4.5).sort((a,b) => b.maior - a.maior).slice(0, 20);
+
+  const cab = '<tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>Destaque</th><th>1 · X · 2</th><th>O/U 2.5</th></tr>';
+  const bloco = (titulo, lista, fDestaque) => `
+    <h3>${titulo} — ${lista.length} jogo(s)</h3>
+    ${lista.length ? '<div class="tabela-scroll"><table>' + cab + lista.map(x => linhaFav(x.j, x.o, fDestaque(x))).join('') + '</table></div>'
+                   : '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'}`;
+
+  $('fav-listas').innerHTML =
+    bloco('🔥 Super favoritos (odd ≤ 1.35)', supers, x => `${x.ladoFav} @ ${fmtOdd(x.menor)}`) +
+    bloco('⭐ Favoritos (1.36 – 1.65)', favs, x => `${x.ladoFav} @ ${fmtOdd(x.menor)}`) +
+    bloco('🦓 Maiores zebras (odd ≥ 4.5)', zebras, x => `${x.ladoZebra} @ ${fmtOdd(x.maior)}`) +
+    '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Clique em qualquer linha para mandar o confronto direto ao Scanner. Odds de referência pré-jogo (Bet365 via API) — confira na exchange no momento da entrada, pois linha se move.</p>';
+
+  document.querySelectorAll('#fav-listas tr.clicavel').forEach(tr =>
+    tr.addEventListener('click', () => {
+      $('sc-mandante').value = tr.dataset.m;  $('sc-mandante').dataset.tid = tr.dataset.mid || '';
+      $('sc-visitante').value = tr.dataset.v; $('sc-visitante').dataset.tid = tr.dataset.vid || '';
+      irParaAba('scanner');
+    }));
+}
 
 listarAnalises();
 </script>
