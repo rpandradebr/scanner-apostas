@@ -136,6 +136,10 @@
       <div><label for="grade-liga">Filtrar campeonato</label><select id="grade-liga"><option value="">Todos</option></select></div>
       <div><label for="grade-time">Buscar time</label><input id="grade-time" placeholder="Digite parte do nome…"></div>
     </div>
+    <div class="linha" style="grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" id="grade-base" style="width:auto">
+      <label for="grade-base" style="margin:0;cursor:pointer">Mostrar categorias de base (sub-17/20, youth, reservas) — ocultas por padrão</label>
+    </div>
     <button class="acao" id="btn-grade">Carregar grade</button>
     <div id="grade-aviso"></div>
     <div class="tabela-scroll"><table id="grade-tabela"></table></div>
@@ -276,7 +280,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.2";
+const APP_VERSAO = "v2.3";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -312,6 +316,17 @@ function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]
 // ==========================================================
 // ABA 1 — GRADE DO DIA
 // ==========================================================
+// ---- Filtro de categorias de base (sub-17/20/23, youth, reservas) ----
+function ehCategoriaDeBase(j){
+  const texto = `${j.liga ?? ''} | ${j.mandante ?? ''} | ${j.visitante ?? ''}`;
+  return /\bU-?\s?(1[5-9]|2[0-3])\b/i.test(texto)           // U17, U-19, U 20, U23…
+      || /sub-?\s?(1[5-9]|2[0-3])/i.test(texto)             // Sub-17, Sub20…
+      || /\b(youth|juvenil|juveniles|primavera|reserves?|reserve league|srl|academy)\b/i.test(texto);
+}
+function semBase(jogos){
+  return $('grade-base')?.checked ? jogos : jogos.filter(j => !ehCategoriaDeBase(j));
+}
+
 let gradeJogos = [];
 let oddsMap = {};
 async function carregarOddsMapa(data){
@@ -325,6 +340,10 @@ const fmtOdd = v => v ? Number(v).toFixed(2) : '—';
 $('btn-grade').addEventListener('click', carregarGrade);
 $('grade-liga').addEventListener('change', desenharGrade);
 $('grade-time').addEventListener('input', desenharGrade);
+document.addEventListener('change', e => { if (e.target?.id === 'grade-base'){ desenharGrade();
+  const ligas = [...new Set(semBase(gradeJogos).map(j => j.liga))].sort();
+  $('grade-liga').innerHTML = '<option value="">Todos</option>' + ligas.map(l => `<option>${l}</option>`).join('');
+}});
 
 async function carregarGrade(){
   const botao = $('btn-grade'); botao.disabled = true;
@@ -334,7 +353,7 @@ async function carregarGrade(){
     gradeJogos = r.jogos || [];
     await carregarOddsMapa($('grade-data').value);
     if (r.aviso) aviso($('grade-aviso'), r.aviso, 'erro');
-    const ligas = [...new Set(gradeJogos.map(j => j.liga))].sort();
+    const ligas = [...new Set(semBase(gradeJogos).map(j => j.liga))].sort();
     $('grade-liga').innerHTML = '<option value="">Todos</option>' +
       ligas.map(l => `<option>${l}</option>`).join('');
     desenharGrade();
@@ -346,7 +365,7 @@ async function carregarGrade(){
 function desenharGrade(){
   const liga = $('grade-liga').value;
   const busca = $('grade-time').value.trim().toLowerCase();
-  const lista = gradeJogos.filter(j =>
+  const lista = semBase(gradeJogos).filter(j =>
     (!liga || j.liga === liga) &&
     (!busca || j.mandante.toLowerCase().includes(busca) || j.visitante.toLowerCase().includes(busca))
   );
@@ -683,7 +702,7 @@ $('btn-rodada').addEventListener('click', async () => {
   aviso($('ro-aviso'), ''); $('ro-analise').innerHTML='';
   try{
     const r = await chamarEdge({ acao:'grade', data: $('ro-data').value });
-    rodadaJogos = r.jogos || [];
+    rodadaJogos = (r.jogos || []).filter(j => !ehCategoriaDeBase(j));
     if (r.aviso) aviso($('ro-aviso'), r.aviso, 'erro');
     const ligas = [...new Set(rodadaJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
     $('ro-liga').innerHTML = '<option value="">Escolha o campeonato</option>' +
@@ -951,7 +970,7 @@ $('btn-odds').addEventListener('click', async () => {
     await carregarOddsMapa(data);
     // precisa da grade do dia para os nomes
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id]);
+    const jogos = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && !ehCategoriaDeBase(j));
     desenharFavoritos(jogos);
   } catch(e){ aviso($('fav-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
