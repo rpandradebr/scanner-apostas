@@ -326,12 +326,34 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.9";
+const APP_VERSAO = "v3.0";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
 
 document.getElementById('versao').textContent = "Painel de Mercados — " + APP_VERSAO;
+
+// Detector de erros: nada quebra em silêncio
+window.addEventListener('error', ev => {
+  const alvo = document.querySelector('.wrap');
+  if (!alvo) return;
+  const div = document.createElement('div');
+  div.className = 'aviso erro';
+  div.style.marginBottom = '14px';
+  div.innerHTML = '<b>⚠️ Erro de JavaScript detectado:</b> ' + (ev.message || 'desconhecido') +
+    (ev.lineno ? ' (linha ' + ev.lineno + ')' : '') + ' — tire um print deste aviso e mande para o Claude.';
+  alvo.insertBefore(div, alvo.children[2] ?? null);
+});
+window.addEventListener('unhandledrejection', ev => {
+  const alvo = document.querySelector('.wrap');
+  if (!alvo) return;
+  const div = document.createElement('div');
+  div.className = 'aviso erro';
+  div.style.marginBottom = '14px';
+  div.innerHTML = '<b>⚠️ Falha assíncrona:</b> ' + (ev.reason?.message ?? ev.reason ?? 'desconhecida') +
+    ' — tire um print deste aviso e mande para o Claude.';
+  alvo.insertBefore(div, alvo.children[2] ?? null);
+});
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---------- utilidades ----------
