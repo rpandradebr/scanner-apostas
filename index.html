@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --pitch:#0F2418; --pitch-2:#16311F; --card:#1C3A28; --card-2:#234731;
@@ -286,12 +287,13 @@
   <section id="aba-importar">
     <h2>Importar histórico via CSV</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
-      Aceita os CSVs do football-data.co.uk nos dois formatos: ligas principais (E0, SP1, I1…) e
-      "Extra Leagues" (Brasil, Argentina, Suécia…). Reimportar o mesmo arquivo nunca duplica —
+      Aceita os arquivos do football-data.co.uk em TRÊS formatos: CSV das ligas principais (E0, SP1, I1…),
+      CSV das "Extra Leagues" (Brasil, Argentina, Suécia…) e o Excel combinado da temporada
+      (all-euro-data-XXXX.xlsx, com as 22 divisões de uma vez). Reimportar nunca duplica —
       jogos repetidos são apenas atualizados.
     </p>
     <div class="linha c3">
-      <div><label for="imp-arquivo">Arquivo CSV</label><input type="file" id="imp-arquivo" accept=".csv,text/csv"></div>
+      <div><label for="imp-arquivo">Arquivo CSV</label><input type="file" id="imp-arquivo" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></div>
       <div><label for="imp-janela">Importar período</label>
         <select id="imp-janela">
           <option value="12">Últimos 12 meses (recomendado)</option>
@@ -314,7 +316,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.7";
+const APP_VERSAO = "v2.8";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1007,6 +1009,7 @@ window.analisarRodada = analisarRodada;
 const MAPA_DIV = {
   E0:['England','Premier League'], E1:['England','Championship'], E2:['England','League One'], E3:['England','League Two'], EC:['England','National League'],
   SC0:['Scotland','Premiership'], SC1:['Scotland','Championship'],
+  SC2:['Scotland','League One'], SC3:['Scotland','League Two'],
   D1:['Germany','Bundesliga'], D2:['Germany','2. Bundesliga'],
   SP1:['Spain','La Liga'], SP2:['Spain','La Liga 2'],
   I1:['Italy','Serie A'], I2:['Italy','Serie B'],
@@ -1038,59 +1041,88 @@ function parseCSVLinha(linha, sep){
 }
 $('btn-importar').addEventListener('click', async () => {
   const arquivo = $('imp-arquivo').files[0];
-  if (!arquivo){ aviso($('imp-aviso'), 'Escolha um arquivo CSV primeiro.', 'erro'); return; }
+  if (!arquivo){ aviso($('imp-aviso'), 'Escolha um arquivo CSV ou XLSX primeiro.', 'erro'); return; }
   const b = $('btn-importar'); b.disabled = true;
   aviso($('imp-aviso'), '⏳ Lendo o arquivo…'); $('imp-preview').innerHTML='';
   try{
-    const texto = (await arquivo.text()).replace(/^\uFEFF/, '');
-    const linhas = texto.split(/\r?\n/).filter(l => l.trim());
-    const sep = (linhas[0].match(/\t/g)||[]).length > (linhas[0].match(/,/g)||[]).length ? '\t' : ',';
-    const cab = parseCSVLinha(linhas[0], sep);
-    const idx = nome => cab.indexOf(nome);
+    const brutos = []; // {pais, liga, dataISO, hora, mand, vis, gm, gv}
+    const nomeArq = arquivo.name.toLowerCase();
 
-    // detecta o formato
-    const extra = idx('Country') >= 0 && idx('Home') >= 0;      // Extra Leagues
-    const principal = idx('Div') >= 0 && idx('HomeTeam') >= 0;  // ligas principais
-    if (!extra && !principal) throw new Error('Formato não reconhecido — esperado CSV do football-data.co.uk.');
+    if (nomeArq.endsWith('.xlsx')){
+      // ---- Excel combinado (all-euro-data): 1 aba por divisão ----
+      const wb = XLSX.read(await arquivo.arrayBuffer(), { cellDates: true });
+      for (const aba of wb.SheetNames){
+        const m = MAPA_DIV[aba] || ['Europe', aba];
+        const linhas = XLSX.utils.sheet_to_json(wb.Sheets[aba], { defval: null });
+        for (const r of linhas){
+          const home = r.HomeTeam ?? r.Home, away = r.AwayTeam ?? r.Away;
+          const gm = r.FTHG ?? r.HG, gv = r.FTAG ?? r.AG;
+          let d = r.Date;
+          if (!(home && away) || gm == null || gv == null || !d) continue;
+          let dataISO;
+          if (d instanceof Date){
+            dataISO = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          } else {
+            const [dd, mm, aa] = String(d).split('/');
+            if (!aa) continue;
+            dataISO = `${aa.length===2?'20'+aa:aa}-${mm}-${dd}`;
+          }
+          let hora = '';
+          if (r.Time instanceof Date) hora = `${String(r.Time.getHours()).padStart(2,'0')}:${String(r.Time.getMinutes()).padStart(2,'0')}`;
+          else if (typeof r.Time === 'string') hora = r.Time;
+          brutos.push({ pais: m[0], liga: m[1], dataISO, hora, mand: String(home).trim(), vis: String(away).trim(), gm, gv });
+        }
+      }
+    } else {
+      // ---- CSV (dois formatos do football-data) ----
+      const texto = (await arquivo.text()).replace(/^\uFEFF/, '');
+      const linhas = texto.split(/\r?\n/).filter(l => l.trim());
+      const sep = (linhas[0].match(/\t/g)||[]).length > (linhas[0].match(/,/g)||[]).length ? '\t' : ',';
+      const cab = parseCSVLinha(linhas[0], sep);
+      const idx = nome => cab.indexOf(nome);
+      const extra = idx('Country') >= 0 && idx('Home') >= 0;
+      const principal = idx('Div') >= 0 && idx('HomeTeam') >= 0;
+      if (!extra && !principal) throw new Error('Formato não reconhecido — esperado CSV ou XLSX do football-data.co.uk.');
 
+      for (let i=1; i<linhas.length; i++){
+        const c = parseCSVLinha(linhas[i], sep);
+        let pais, liga, dataBr, hora, mand, vis, gm, gv;
+        if (extra){
+          pais = c[idx('Country')]; liga = (c[idx('League')]||'').trim();
+          dataBr = c[idx('Date')]; hora = idx('Time')>=0 ? c[idx('Time')] : '';
+          mand = c[idx('Home')]; vis = c[idx('Away')]; gm = c[idx('HG')]; gv = c[idx('AG')];
+        } else {
+          const m = MAPA_DIV[c[idx('Div')]] || ['?', c[idx('Div')]];
+          pais = m[0]; liga = m[1];
+          dataBr = c[idx('Date')]; hora = idx('Time')>=0 ? c[idx('Time')] : '';
+          mand = c[idx('HomeTeam')]; vis = c[idx('AwayTeam')]; gm = c[idx('FTHG')]; gv = c[idx('FTAG')];
+        }
+        if (!mand || !vis || gm==='' || gv==='' || gm==null || gv==null) continue;
+        const [dd, mm, aa] = (dataBr||'').split('/');
+        if (!aa) continue;
+        brutos.push({ pais, liga, dataISO: `${aa.length===2?'20'+aa:aa}-${mm}-${dd}`, hora: hora||'', mand, vis, gm, gv });
+      }
+    }
+
+    // ---- filtro de período + montagem dos registros ----
     const meses = Number($('imp-janela').value);
     const corte = new Date(); corte.setMonth(corte.getMonth() - meses);
     const agora = new Date().toISOString();
     const registros = []; const ligasVistas = new Set();
-    let ignoradosData = 0, ignoradosSemPlacar = 0;
+    let ignoradosData = 0, ignoradosSemPlacar = brutos.filter(x => false).length;
 
-    for (let i=1; i<linhas.length; i++){
-      const c = parseCSVLinha(linhas[i], sep);
-      let pais, liga, dataBr, hora, mand, vis, gm, gv;
-      if (extra){
-        pais = c[idx('Country')]; liga = (c[idx('League')]||'').trim();
-        dataBr = c[idx('Date')]; hora = idx('Time')>=0 ? c[idx('Time')] : '';
-        mand = c[idx('Home')]; vis = c[idx('Away')];
-        gm = c[idx('HG')]; gv = c[idx('AG')];
-      } else {
-        const div = c[idx('Div')]; const m = MAPA_DIV[div] || ['?', div];
-        pais = m[0]; liga = m[1];
-        dataBr = c[idx('Date')]; hora = idx('Time')>=0 ? c[idx('Time')] : '';
-        mand = c[idx('HomeTeam')]; vis = c[idx('AwayTeam')];
-        gm = c[idx('FTHG')]; gv = c[idx('FTAG')];
-      }
-      if (!mand || !vis || gm==='' || gv==='' || gm==null || gv==null){ ignoradosSemPlacar++; continue; }
-      const [dd, mm, aa] = (dataBr||'').split('/');
-      if (!aa){ ignoradosSemPlacar++; continue; }
-      const ano = aa.length===2 ? '20'+aa : aa;
-      const dataISO = `${ano}-${mm}-${dd}`;
-      if (new Date(dataISO) < corte){ ignoradosData++; continue; }
-      ligasVistas.add(`${pais} — ${liga}`);
+    for (const x of brutos){
+      if (new Date(x.dataISO) < corte){ ignoradosData++; continue; }
+      ligasVistas.add(`${x.pais} — ${x.liga}`);
       registros.push({
-        fixture_id: -hash53(`${dataISO}|${mand}|${vis}`),
-        data_jogo: dataISO, hora: hora||'', pais, liga,
-        mandante: mand, mandante_id: null, visitante: vis, visitante_id: null,
-        placar: `${parseInt(gm)}x${parseInt(gv)}`, status: 'FT', atualizado_em: agora,
+        fixture_id: -hash53(`${x.dataISO}|${x.mand}|${x.vis}`),
+        data_jogo: x.dataISO, hora: x.hora||'', pais: x.pais, liga: x.liga,
+        mandante: x.mand, mandante_id: null, visitante: x.vis, visitante_id: null,
+        placar: `${parseInt(x.gm)}x${parseInt(x.gv)}`, status: 'FT', atualizado_em: agora,
       });
     }
     if (!registros.length) throw new Error('Nenhum jogo dentro do período escolhido.');
 
-    // grava em lotes de 500 com progresso
     let gravados = 0;
     for (let i=0; i<registros.length; i+=500){
       const lote = registros.slice(i, i+500);
@@ -1105,207 +1137,11 @@ $('btn-importar').addEventListener('click', async () => {
       <div class="stat"><b>${gravados}</b><span>jogos importados</span></div>
       <div class="stat"><b>${ligasVistas.size}</b><span>ligas no arquivo</span></div>
       <div class="stat"><b>${ignoradosData}</b><span>fora do período (pulados)</span></div>
-      <div class="stat"><b>${ignoradosSemPlacar}</b><span>sem placar (pulados)</span></div>
     </div>
     <p style="font-size:13px;color:var(--chalk-dim)">Ligas: ${[...ligasVistas].join(' · ')}</p>`;
   } catch(e){ aviso($('imp-aviso'), 'Falha na importação: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 });
-
-// ==========================================================
-// ABA FAVORITOS DO DIA — odds e classificação
-// ==========================================================
-$('fav-data').value = hojeISO();
-
-$('btn-odds').addEventListener('click', async () => {
-  const b = $('btn-odds'); b.disabled = true;
-  const data = $('fav-data').value;
-  aviso($('fav-aviso'), ''); $('fav-listas').innerHTML='';
-  try{
-    let pagina = 1, total = 0, rodada = 0;
-    while (pagina && rodada < 8){ // até ~96 páginas de segurança? não: 8 lotes de 8 páginas
-      rodada++;
-      $('fav-status').textContent = `⏳ Buscando odds (lote ${rodada})… ${total} jogos com odds.`;
-      const r = await chamarEdge({ acao:'odds', data, pagina, lote:8 });
-      if (r.aviso){ aviso($('fav-aviso'), r.aviso, 'erro'); break; }
-      total += r.gravadas ?? 0;
-      pagina = r.proxima_pagina;
-    }
-    $('fav-status').textContent = `✅ ${total} jogos com odds gravados.`;
-    await carregarOddsMapa(data);
-    // precisa da grade do dia para os nomes
-    const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && !ehCategoriaDeBase(j));
-    desenharFavoritos(jogos);
-  } catch(e){ aviso($('fav-aviso'), 'Falha: ' + e.message, 'erro'); }
-  finally{ b.disabled = false; }
-});
-
-function linhaFav(j, o, destaque){
-  return `<tr class="clicavel" data-m="${j.mandante}" data-v="${j.visitante}" data-mid="${j.mandante_id ?? ''}" data-vid="${j.visitante_id ?? ''}">
-    <td>${j.hora||''}</td><td>${j.liga||''}</td>
-    <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
-    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${destaque}</td>
-    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}</td>
-    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}</td>
-  </tr>`;
-}
-function desenharFavoritos(jogos){
-  const comFav = jogos.map(j => {
-    const o = oddsMap[j.fixture_id];
-    const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
-    const ladoFav = (o.odd_home ?? 99) <= (o.odd_away ?? 99) ? j.mandante : j.visitante;
-    const maior = Math.max(o.odd_home ?? 0, o.odd_away ?? 0);
-    const ladoZebra = (o.odd_home ?? 0) >= (o.odd_away ?? 0) ? j.mandante : j.visitante;
-    return { j, o, menor, ladoFav, maior, ladoZebra };
-  }).filter(x => x.menor < 99);
-
-  const supers = comFav.filter(x => x.menor <= 1.35).sort((a,b) => a.menor - b.menor);
-  const favs   = comFav.filter(x => x.menor > 1.35 && x.menor <= 1.65).sort((a,b) => a.menor - b.menor);
-  const zebras = comFav.filter(x => x.maior >= 4.5).sort((a,b) => b.maior - a.maior).slice(0, 20);
-
-  const cab = '<tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>Destaque</th><th>1 · X · 2</th><th>O/U 2.5</th></tr>';
-  const bloco = (titulo, lista, fDestaque) => `
-    <h3>${titulo} — ${lista.length} jogo(s)</h3>
-    ${lista.length ? '<div class="tabela-scroll"><table>' + cab + lista.map(x => linhaFav(x.j, x.o, fDestaque(x))).join('') + '</table></div>'
-                   : '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'}`;
-
-  $('fav-listas').innerHTML =
-    bloco('🔥 Super favoritos (odd ≤ 1.35)', supers, x => `${x.ladoFav} @ ${fmtOdd(x.menor)}`) +
-    bloco('⭐ Favoritos (1.36 – 1.65)', favs, x => `${x.ladoFav} @ ${fmtOdd(x.menor)}`) +
-    bloco('🦓 Maiores zebras (odd ≥ 4.5)', zebras, x => `${x.ladoZebra} @ ${fmtOdd(x.maior)}`) +
-    '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Clique em qualquer linha para mandar o confronto direto ao Scanner. Odds de referência pré-jogo (Bet365 via API) — confira na exchange no momento da entrada, pois linha se move.</p>';
-
-  document.querySelectorAll('#fav-listas tr.clicavel').forEach(tr =>
-    tr.addEventListener('click', () => {
-      $('sc-mandante').value = tr.dataset.m;  $('sc-mandante').dataset.tid = tr.dataset.mid || '';
-      $('sc-visitante').value = tr.dataset.v; $('sc-visitante').dataset.tid = tr.dataset.vid || '';
-      irParaAba('scanner');
-    }));
-}
-
-// ==========================================================
-// ABA SUGESTÕES DO DIA — funil odds -> histórico -> nota
-// ==========================================================
-$('su-data').value = hojeISO();
-
-$('btn-sugestoes').addEventListener('click', gerarSugestoes);
-
-async function gerarSugestoes(){
-  const b = $('btn-sugestoes'); b.disabled = true;
-  const data = $('su-data').value;
-  const corte = Number($('su-corte').value);
-  aviso($('su-aviso'), ''); $('su-lista').innerHTML='';
-  try{
-    // 1) grade + odds
-    const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
-    await carregarOddsMapa(data);
-    const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
-    if (!comOdds.length){
-      aviso($('su-aviso'), 'Sem odds carregadas para esta data — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
-      b.disabled = false; return;
-    }
-    // 2) pré-filtro: clareza pelas odds (favorito nítido OU linha de gols esticada)
-    const candidatos = comOdds.map(j => {
-      const o = oddsMap[j.fixture_id];
-      const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
-      const clarezaFav = menor <= 1.65 ? (1.65 - menor) : 0;
-      const clarezaOU = Math.max(
-        o.odd_over25 && o.odd_over25 <= 1.75 ? (1.75 - o.odd_over25) : 0,
-        o.odd_under25 && o.odd_under25 <= 1.75 ? (1.75 - o.odd_under25) : 0
-      );
-      return { j, o, clareza: clarezaFav + clarezaOU };
-    }).filter(c => c.clareza > 0)
-      .sort((a,b2) => b2.clareza - a.clareza)
-      .slice(0, 20);
-
-    if (!candidatos.length){
-      aviso($('su-aviso'), 'Nenhum jogo com perfil claro pelas odds hoje — dia de ficar fora ou operar só com análise manual.', 'erro');
-      b.disabled = false; return;
-    }
-
-    // 3) histórico dos finalistas (em levas de 3)
-    const sugestoes = [];
-    for (let i=0; i<candidatos.length; i+=3){
-      aviso($('su-aviso'), `⏳ Analisando candidatos ${Math.min(i+3,candidatos.length)}/${candidatos.length}…`);
-      const leva = candidatos.slice(i, i+3);
-      const resultados = await Promise.all(leva.map(async c => {
-        try{
-          const pm = { acao:'historico', time: c.j.mandante }; if (c.j.mandante_id) pm.id = c.j.mandante_id;
-          const pv = { acao:'historico', time: c.j.visitante }; if (c.j.visitante_id) pv.id = c.j.visitante_id;
-          const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
-          if ((rm.jogos?.length ?? 0) < 6 || (rv.jogos?.length ?? 0) < 6) return null;
-          return { ...c, em: estatisticas(rm.jogos), ev: estatisticas(rv.jogos), nm: rm.time ?? c.j.mandante, nv: rv.time ?? c.j.visitante };
-        } catch(_){ return null; }
-      }));
-      resultados.filter(Boolean).forEach(c => {
-        const s = pontuarJogo(c);
-        if (s && s.nota >= corte) sugestoes.push({ ...c, ...s });
-      });
-    }
-
-    sugestoes.sort((a,b2) => b2.nota - a.nota);
-    if (!sugestoes.length){
-      aviso($('su-aviso'), `Nenhum jogo atingiu a nota mínima ${corte} hoje. Dia fraco é dia de proteger banca — não force entrada.`, 'erro');
-    } else {
-      aviso($('su-aviso'), `✅ ${sugestoes.length} sugestão(ões) acima da nota ${corte}.`);
-      $('su-lista').innerHTML = '<div class="semaforo">' + sugestoes.slice(0,10).map(s => `
-        <div class="mercado verde">
-          <div class="nome">${s.j.mandante} x ${s.j.visitante}</div>
-          <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
-          <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
-          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
-            <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
-          </div>
-        </div>`).join('') + '</div>' +
-        '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo — regra do Cuenca) e conferir a odd na exchange.</p>';
-    }
-  } catch(e){ aviso($('su-aviso'), 'Falha: ' + e.message, 'erro'); }
-  finally{ b.disabled = false; }
-}
-
-function pontuarJogo(c){
-  const { o, em, ev } = c;
-  const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
-  const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
-  const favNome = favEhMandante ? c.nm : c.nv;
-  const favStats = favEhMandante ? em : ev;
-  const overComb = (em.pctOver + ev.pctOver) / 2;
-  const bttsComb = (em.pctBtts + ev.pctBtts) / 2;
-  const mediaJogo = (parseFloat(em.mediaPro)+parseFloat(em.mediaContra)+parseFloat(ev.mediaPro)+parseFloat(ev.mediaContra))/2;
-  const notas = [];
-
-  // Lay zebra: favorito curto E em boa forma
-  if (menor <= 1.55 && favStats.pctVit >= 50){
-    notas.push({ mercado:'LAY ZEBRA', nota: Math.min(10, 6 + (1.55-menor)*6 + (favStats.pctVit-50)/20),
-      motivo:`${favNome} @ ${fmtOdd(menor)} com ${favStats.pctVit}% de vitórias nos últimos 10 — o lay no azarão ganha com vitória do favorito ou empate.` });
-  }
-  // Under: histórico E mercado concordando
-  if (overComb <= 42 && o.odd_under25 && o.odd_under25 <= 1.85){
-    notas.push({ mercado:'UNDER 2.5', nota: Math.min(10, 6 + (42-overComb)/8 + (1.85-o.odd_under25)*2),
-      motivo:`Só ${Math.round(overComb)}% de over 2.5 no histórico das duas, e o mercado confirma (under @ ${fmtOdd(o.odd_under25)}).` });
-  }
-  // Over: idem
-  if (overComb >= 62 && o.odd_over25 && o.odd_over25 <= 1.90){
-    notas.push({ mercado:'OVER 2.5', nota: Math.min(10, 6 + (overComb-62)/8 + (1.90-o.odd_over25)*2),
-      motivo:`${Math.round(overComb)}% de over 2.5 no histórico das duas, mercado junto (over @ ${fmtOdd(o.odd_over25)}).` });
-  }
-  // Lay 0x1: mandante marca sempre + visitante sofre
-  if (em.pctMarcou >= 80 && ev.pctSofreu >= 70){
-    notas.push({ mercado:'LAY 0x1', nota: Math.min(10, 6 + (em.pctMarcou-80)/8 + (ev.pctSofreu-70)/12),
-      motivo:`${c.nm} marcou em ${em.pctMarcou}% dos últimos 10 e ${c.nv} sofreu gol em ${ev.pctSofreu}% — o 0x1 exige duas improbabilidades juntas.` });
-  }
-  // Lay 1x0: jogo de gols dos dois lados
-  if (bttsComb >= 68 && mediaJogo >= 2.9){
-    notas.push({ mercado:'LAY 1x0', nota: Math.min(10, 6 + (bttsComb-68)/8),
-      motivo:`Ambas marcam em ${Math.round(bttsComb)}% dos jogos das duas e média projetada de ${mediaJogo.toFixed(1)} gols — 1x0 seco é minoria.` });
-  }
-  if (!notas.length) return null;
-  notas.sort((a,b2) => b2.nota - a.nota);
-  return notas[0];
-}
 
 listarAnalises();
 </script>
