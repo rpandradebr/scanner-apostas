@@ -122,6 +122,16 @@
   .dot.v{background:rgba(76,196,112,.2);color:var(--green)}
   .dot.e{background:rgba(185,196,180,.16);color:var(--chalk-dim)}
   .dot.d{background:rgba(255,107,87,.2);color:var(--red)}
+  table.comp{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0}
+  table.comp td, table.comp th{padding:7px 10px;border-bottom:1px solid rgba(237,234,224,.09)}
+  table.comp td.rotulo{color:var(--chalk-dim);font-size:12.5px}
+  table.comp td.valor{font-family:'IBM Plex Mono',monospace;text-align:center;width:110px}
+  table.comp td.best{color:var(--green);font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+  .chip{background:var(--pitch);border:1px solid rgba(237,234,224,.15);border-radius:20px;
+    padding:5px 12px;font-size:12.5px}
+  .chip b{color:var(--amber)}
+  .ultimos{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim);margin:4px 0 8px}
   footer{margin-top:26px;font-size:12px;color:var(--chalk-dim);max-width:75ch}
 </style>
 </head>
@@ -316,7 +326,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.8";
+const APP_VERSAO = "v2.9";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -439,12 +449,59 @@ function seqForma(jogos){
     return `<span class="dot ${cls}" title="${g.data} · ${g.mandante} ${g.gols_mandante}x${g.gols_visitante} ${g.visitante}">${cls.toUpperCase()}</span>`;
   }).join('');
 }
-function escadaOver(jogos){
+function estatCompleta(jogos){
+  const e = estatisticas(jogos);
   const n = jogos.length || 1;
-  return [0.5,1.5,2.5,3.5].map(l => {
-    const q = jogos.filter(g => (g.gols_mandante + g.gols_visitante) > l).length;
-    return `<div class="stat"><b>${Math.round(q/n*100)}%</b><span>over ${l}</span></div>`;
-  }).join('');
+  let emp=0, cs=0; const placares={};
+  jogos.forEach(g => {
+    const pro = g.time_era_mandante ? g.gols_mandante : g.gols_visitante;
+    const con = g.time_era_mandante ? g.gols_visitante : g.gols_mandante;
+    if (pro===con) emp++;
+    if (con===0) cs++;
+    const p = `${pro}x${con}`;
+    placares[p] = (placares[p]||0)+1;
+  });
+  const pctEmp = Math.round(emp/n*100);
+  const pctDer = 100 - e.pctVit - pctEmp;
+  const ppj = ((e.pctVit/100*3 + pctEmp/100*1)).toFixed(2);
+  const comum = Object.entries(placares).sort((a,b)=>b[1]-a[1])[0];
+  return { ...e, pctEmp, pctDer, ppj, pctCS: Math.round(cs/n*100),
+           pctBranco: 100 - e.pctMarcou, placarComum: comum ? `${comum[0]} (${comum[1]}x)` : '—' };
+}
+function pctOverLinha(jogos, l){
+  const n = jogos.length || 1;
+  return Math.round(jogos.filter(g => (g.gols_mandante+g.gols_visitante) > l).length / n * 100);
+}
+function sequencias(nome, jogos){
+  const res = jogos.map(g => {
+    const pro = g.time_era_mandante ? g.gols_mandante : g.gols_visitante;
+    const con = g.time_era_mandante ? g.gols_visitante : g.gols_mandante;
+    return { v: pro>con, d: pro<con, marcou: pro>0, sofreu: con>0,
+             over: pro+con>=3, btts: pro>0 && con>0 };
+  });
+  const streak = f => { let c=0; for (const r of res){ if (f(r)) c++; else break; } return c; };
+  const chips = [];
+  const semV = streak(r => !r.v), venc = streak(r => r.v);
+  if (semV >= 3) chips.push(`<span class="chip">${nome}: <b>${semV}</b> jogos sem vencer</span>`);
+  if (venc >= 3) chips.push(`<span class="chip">${nome}: <b>${venc}</b> vitórias seguidas</span>`);
+  const marc = streak(r => r.marcou), semM = streak(r => !r.marcou);
+  if (marc >= 4) chips.push(`<span class="chip">${nome}: marca há <b>${marc}</b> jogos</span>`);
+  if (semM >= 2) chips.push(`<span class="chip">${nome}: <b>${semM}</b> jogos sem marcar</span>`);
+  const ov = streak(r => r.over), un = streak(r => !r.over);
+  if (ov >= 4) chips.push(`<span class="chip">${nome}: over 2.5 há <b>${ov}</b> jogos</span>`);
+  if (un >= 4) chips.push(`<span class="chip">${nome}: under 2.5 há <b>${un}</b> jogos</span>`);
+  const bt = streak(r => r.btts), sbt = streak(r => !r.btts);
+  if (bt >= 4) chips.push(`<span class="chip">${nome}: ambas marcam há <b>${bt}</b> jogos</span>`);
+  if (sbt >= 4) chips.push(`<span class="chip">${nome}: <b>${sbt}</b> jogos sem BTTS</span>`);
+  const sof = streak(r => r.sofreu), cs = streak(r => !r.sofreu);
+  if (sof >= 5) chips.push(`<span class="chip">${nome}: sofre gol há <b>${sof}</b> jogos</span>`);
+  if (cs >= 3) chips.push(`<span class="chip">${nome}: <b>${cs}</b> clean sheets seguidos</span>`);
+  return chips;
+}
+function ultimos5(jogos){
+  return jogos.slice(0,5).map(g =>
+    `${g.data.slice(5)} · ${g.mandante} <b>${g.gols_mandante}x${g.gols_visitante}</b> ${g.visitante}`
+  ).join('<br>');
 }
 async function fichaJogo(idx){
   const j = gradeJogos[idx];
@@ -456,30 +513,98 @@ async function fichaJogo(idx){
     const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
     const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
     const o = oddsMap[j.fixture_id];
+    const nm = rm.time ?? j.mandante, nv = rv.time ?? j.visitante;
+
     const oddsHtml = o ? `<div class="placar-box">
         <div class="stat"><b>${fmtOdd(o.odd_home)}</b><span>casa (1)</span></div>
         <div class="stat"><b>${fmtOdd(o.odd_draw)}</b><span>empate (X)</span></div>
         <div class="stat"><b>${fmtOdd(o.odd_away)}</b><span>fora (2)</span></div>
         <div class="stat"><b>${fmtOdd(o.odd_over25)}</b><span>over 2.5</span></div>
         <div class="stat"><b>${fmtOdd(o.odd_under25)}</b><span>under 2.5</span></div>
-      </div>` : '<p class="msg-vazia">Sem odds carregadas para este jogo — rode "Buscar odds do dia" na aba Favoritos.</p>';
+      </div>` : '<p class="msg-vazia">Sem odds — rode "Buscar odds do dia" na aba Favoritos.</p>';
 
-    const time = (nome, r) => {
-      if (!r.jogos?.length) return `<h3>${nome}</h3><p class="msg-vazia">Sem histórico no banco${r.aviso ? ' — ' + r.aviso : ''}.</p>`;
-      const e = estatisticas(r.jogos);
-      return `<h3>${r.time ?? nome} — últimos ${e.n}</h3>
-        <div style="margin:6px 0 10px">${seqForma(r.jogos)}</div>
-        <div class="placar-box">
-          <div class="stat"><b>${e.mediaPro}</b><span>gols pró/jogo</span></div>
-          <div class="stat"><b>${e.mediaContra}</b><span>gols contra/jogo</span></div>
-          <div class="stat"><b>${e.pctMarcou}%</b><span>marcou</span></div>
-          <div class="stat"><b>${e.pctSofreu}%</b><span>sofreu</span></div>
-          <div class="stat"><b>${e.pctBtts}%</b><span>ambas marcam</span></div>
-          ${escadaOver(r.jogos)}
-        </div>`;
+    if (!rm.jogos?.length || !rv.jogos?.length){
+      alvo.innerHTML = `<div class="aviso"><b>🔎 ${j.mandante} x ${j.visitante}</b>${oddsHtml}
+        <p class="msg-vazia">Histórico insuficiente (${rm.jogos?.length||0} x ${rv.jogos?.length||0}). Rode o backfill/importações.</p></div>`;
+      return;
+    }
+    const em = estatCompleta(rm.jogos), ev = estatCompleta(rv.jogos);
+    const emCasa = rm.jogos.filter(g => g.time_era_mandante);
+    const evFora = rv.jogos.filter(g => !g.time_era_mandante);
+    const ec = emCasa.length >= 3 ? estatCompleta(emCasa) : null;
+    const ef = evFora.length >= 3 ? estatCompleta(evFora) : null;
+
+    // ---- Aproveitamento comparativo (melhor de cada linha em verde) ----
+    const linha = (rot, a, b, maiorMelhor=true, sufixo='') => {
+      const na = parseFloat(a), nb = parseFloat(b);
+      const aBest = maiorMelhor ? na >= nb : na <= nb;
+      return `<tr><td class="rotulo">${rot}</td>
+        <td class="valor ${aBest?'best':''}">${a}${sufixo}</td>
+        <td class="valor ${!aBest?'best':''}">${b}${sufixo}</td></tr>`;
     };
+    const comp = `<h3>Aproveitamento — últimos ${em.n} x ${ev.n}</h3>
+      <table class="comp">
+        <tr><th></th><th style="text-align:center">${nm}</th><th style="text-align:center">${nv}</th></tr>
+        ${linha('Pontos por jogo', em.ppj, ev.ppj)}
+        ${linha('Venceu', em.pctVit, ev.pctVit, true, '%')}
+        ${linha('Empatou', em.pctEmp, ev.pctEmp, true, '%')}
+        ${linha('Perdeu', em.pctDer, ev.pctDer, false, '%')}
+        ${linha('Marcou gol', em.pctMarcou, ev.pctMarcou, true, '%')}
+        ${linha('Sofreu gol', em.pctSofreu, ev.pctSofreu, false, '%')}
+        ${linha('Gols marcados/jogo', em.mediaPro, ev.mediaPro)}
+        ${linha('Gols sofridos/jogo', em.mediaContra, ev.mediaContra, false)}
+        ${linha('Clean sheets', em.pctCS, ev.pctCS, true, '%')}
+        ${linha('Passou em branco', em.pctBranco, ev.pctBranco, false, '%')}
+        ${linha('Ambas marcam', em.pctBtts, ev.pctBtts, true, '%')}
+        <tr><td class="rotulo">Placar mais comum</td><td class="valor">${em.placarComum}</td><td class="valor">${ev.placarComum}</td></tr>
+      </table>`;
 
-    // H2H direto do banco: casa por ID (API) E por nome (bases importadas de CSV/Excel)
+    // ---- Split casa/fora ----
+    const split = (ec || ef) ? `<h3>Recorte do mando</h3><div class="placar-box">
+      ${ec ? `<div class="stat"><b>${ec.ppj}</b><span>${nm} em casa (ppj, ${ec.n}j)</span></div>
+              <div class="stat"><b>${ec.mediaPro}</b><span>${nm} gols pró em casa</span></div>` : ''}
+      ${ef ? `<div class="stat"><b>${ef.ppj}</b><span>${nv} fora (ppj, ${ef.n}j)</span></div>
+              <div class="stat"><b>${ef.mediaContra}</b><span>${nv} gols contra fora</span></div>` : ''}
+    </div>` : '';
+
+    // ---- Total de gols (escada com média) ----
+    const escada = `<h3>Total de gols</h3><table class="comp">
+      <tr><th></th><th style="text-align:center">${nm}</th><th style="text-align:center">${nv}</th><th style="text-align:center">Média</th></tr>
+      ${[0.5,1.5,2.5,3.5].map(l => {
+        const a = pctOverLinha(rm.jogos,l), b = pctOverLinha(rv.jogos,l);
+        return `<tr><td class="rotulo">Over ${l}</td><td class="valor">${a}%</td><td class="valor">${b}%</td><td class="valor"><b>${Math.round((a+b)/2)}%</b></td></tr>`;
+      }).join('')}
+      <tr><td class="rotulo">Under 2.5</td><td class="valor">${100-pctOverLinha(rm.jogos,2.5)}%</td><td class="valor">${100-pctOverLinha(rv.jogos,2.5)}%</td><td class="valor"><b>${Math.round((200-pctOverLinha(rm.jogos,2.5)-pctOverLinha(rv.jogos,2.5))/2)}%</b></td></tr>
+    </table>`;
+
+    // ---- Tendências automáticas ----
+    const chips = [...sequencias(nm, rm.jogos), ...sequencias(nv, rv.jogos)];
+    const tend = chips.length ? `<h3>Tendências</h3><div class="chips">${chips.join('')}</div>` : '';
+
+    // ---- Placares prováveis (Poisson) ----
+    const clamp2 = (x,a,b) => Math.min(Math.max(x,a),b);
+    const lC = clamp2(((+em.mediaPro)+(+ev.mediaContra))/2*1.12, .2, 4.2);
+    const lF = clamp2(((+ev.mediaPro)+(+em.mediaContra))/2*0.92, .15, 4.0);
+    let p1=0,pX=0,p2=0, pls=[];
+    for (let h=0;h<=6;h++) for (let a=0;a<=6;a++){
+      const p = pois(h,lC)*pois(a,lF);
+      if (h>a) p1+=p; else if (h===a) pX+=p; else p2+=p;
+      pls.push({pl:`${h}x${a}`, p});
+    }
+    pls.sort((x,y)=>y.p-x.p);
+    const modelo = `<h3>Placares prováveis (modelo)</h3>
+      <div class="placar-box">
+        <div class="stat"><b>${pct(p1)}%</b><span>vitória ${nm}</span></div>
+        <div class="stat"><b>${pct(pX)}%</b><span>empate</span></div>
+        <div class="stat"><b>${pct(p2)}%</b><span>vitória ${nv}</span></div>
+      </div>
+      <div class="chips">${pls.slice(0,5).map(x=>`<span class="chip"><b>${x.pl}</b> ${pct(x.p)}%</span>`).join('')}</div>`;
+
+    // ---- Forma + últimos 5 ----
+    const forma = `<h3>${nm} — forma</h3><div>${seqForma(rm.jogos)}</div><div class="ultimos">${ultimos5(rm.jogos)}</div>
+      <h3>${nv} — forma</h3><div>${seqForma(rv.jogos)}</div><div class="ultimos">${ultimos5(rv.jogos)}</div>`;
+
+    // ---- H2H colorido ----
     let h2hHtml = '';
     try{
       const tok = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(p=>p.length>=4)[0] || s;
@@ -495,10 +620,8 @@ async function fichaJogo(idx){
       }
       if (clausulas.length){
         const { data: h } = await db.from('jogos_dia').select('*')
-          .or(clausulas.join(','))
-          .in('status', ['FT','AET','PEN'])
-          .order('data_jogo', {ascending:false}).limit(10);
-        // remove o próprio jogo do dia e duplicatas
+          .or(clausulas.join(',')).in('status', ['FT','AET','PEN'])
+          .order('data_jogo', {ascending:false}).limit(12);
         const vistos = new Set();
         const lista = (h ?? []).filter(g => {
           if (g.data_jogo === j.data_jogo && g.mandante === j.mandante) return false;
@@ -507,10 +630,16 @@ async function fichaJogo(idx){
           vistos.add(k); return true;
         }).slice(0, 8);
         if (lista.length){
-          h2hHtml = '<h3>Confrontos diretos (no banco)</h3><div class="tabela-scroll"><table>' +
-            '<tr><th>Data</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th></tr>' +
-            lista.map(g => `<tr><td>${g.data_jogo}</td><td>${g.liga}</td><td>${g.mandante}</td><td><b>${g.placar}</b></td><td>${g.visitante}</td></tr>`).join('') +
-            '</table></div>';
+          let vA=0, vB=0, emps=0;
+          const linhas = lista.map(g => {
+            const [gm, gv] = (g.placar||'0x0').split('x').map(Number);
+            const mandEhA = g.mandante.toLowerCase().includes(tA.toLowerCase());
+            const golsA = mandEhA ? gm : gv, golsB = mandEhA ? gv : gm;
+            let cls = 'e'; if (golsA>golsB){cls='v'; vA++;} else if (golsA<golsB){cls='d'; vB++;} else emps++;
+            return `<tr><td><span class="dot ${cls}">${cls.toUpperCase()}</span></td><td>${g.data_jogo}</td><td>${g.liga}</td><td>${g.mandante}</td><td><b>${g.placar}</b></td><td>${g.visitante}</td></tr>`;
+          }).join('');
+          h2hHtml = `<h3>Confrontos diretos — ${nm} ${vA}V · ${emps}E · ${vB}V ${nv}</h3>
+            <div class="tabela-scroll"><table><tr><th></th><th>Data</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th></tr>${linhas}</table></div>`;
         }
       }
     } catch(_){}
@@ -522,13 +651,18 @@ async function fichaJogo(idx){
         <button class="mini" onclick="$('grade-ficha').innerHTML=''">fechar ✕</button>
       </div>
       ${oddsHtml}
-      ${time(j.mandante, rm)}
-      ${time(j.visitante, rv)}
+      ${comp}
+      ${split}
+      ${escada}
+      ${tend}
+      ${modelo}
+      ${forma}
       ${h2hHtml}
       <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="mini" onclick="$('sc-mandante').value='${j.mandante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-mandante').dataset.tid='${j.mandante_id??''}';$('sc-visitante').value='${j.visitante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-visitante').dataset.tid='${j.visitante_id??''}';irParaAba('scanner')">🎯 Abrir no Scanner</button>
         <button class="mini" onclick="copiarPrompt('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt p/ análise completa</button>
       </div>
+      <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">1º/2º tempo, cartões, escanteios e jogadores exigem o plano pago da API — módulo desenhado, aguardando o upgrade.</p>
     </div>`;
   } catch(e){ alvo.innerHTML = `<div class="aviso erro">Falha na ficha: ${e.message}</div>`; }
 }
