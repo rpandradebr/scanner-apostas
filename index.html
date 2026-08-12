@@ -314,7 +314,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.6";
+const APP_VERSAO = "v2.7";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -477,22 +477,41 @@ async function fichaJogo(idx){
         </div>`;
     };
 
-    // H2H direto do banco (quando temos os IDs)
+    // H2H direto do banco: casa por ID (API) E por nome (bases importadas de CSV/Excel)
     let h2hHtml = '';
-    if (j.mandante_id && j.visitante_id){
-      try{
+    try{
+      const tok = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(p=>p.length>=4)[0] || s;
+      const tA = tok(j.mandante), tB = tok(j.visitante);
+      const clausulas = [];
+      if (j.mandante_id && j.visitante_id){
+        clausulas.push(`and(mandante_id.eq.${j.mandante_id},visitante_id.eq.${j.visitante_id})`);
+        clausulas.push(`and(mandante_id.eq.${j.visitante_id},visitante_id.eq.${j.mandante_id})`);
+      }
+      if (tA.length >= 4 && tB.length >= 4){
+        clausulas.push(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%)`);
+        clausulas.push(`and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`);
+      }
+      if (clausulas.length){
         const { data: h } = await db.from('jogos_dia').select('*')
-          .or(`and(mandante_id.eq.${j.mandante_id},visitante_id.eq.${j.visitante_id}),and(mandante_id.eq.${j.visitante_id},visitante_id.eq.${j.mandante_id})`)
+          .or(clausulas.join(','))
           .in('status', ['FT','AET','PEN'])
-          .order('data_jogo', {ascending:false}).limit(6);
-        if (h?.length){
+          .order('data_jogo', {ascending:false}).limit(10);
+        // remove o próprio jogo do dia e duplicatas
+        const vistos = new Set();
+        const lista = (h ?? []).filter(g => {
+          if (g.data_jogo === j.data_jogo && g.mandante === j.mandante) return false;
+          const k = `${g.data_jogo}|${g.mandante}|${g.visitante}`;
+          if (vistos.has(k)) return false;
+          vistos.add(k); return true;
+        }).slice(0, 8);
+        if (lista.length){
           h2hHtml = '<h3>Confrontos diretos (no banco)</h3><div class="tabela-scroll"><table>' +
             '<tr><th>Data</th><th>Liga</th><th>Mandante</th><th>Placar</th><th>Visitante</th></tr>' +
-            h.map(g => `<tr><td>${g.data_jogo}</td><td>${g.liga}</td><td>${g.mandante}</td><td><b>${g.placar}</b></td><td>${g.visitante}</td></tr>`).join('') +
+            lista.map(g => `<tr><td>${g.data_jogo}</td><td>${g.liga}</td><td>${g.mandante}</td><td><b>${g.placar}</b></td><td>${g.visitante}</td></tr>`).join('') +
             '</table></div>';
         }
-      } catch(_){}
-    }
+      }
+    } catch(_){}
 
     alvo.innerHTML = `<div class="aviso" style="margin-top:14px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
