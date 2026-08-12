@@ -136,6 +136,7 @@
     <button data-aba="scanner">🎯 Scanner de mercados</button>
     <button data-aba="rodada">🏆 Análise da rodada</button>
     <button data-aba="favoritos">⭐ Favoritos do dia</button>
+    <button data-aba="sugestoes">💡 Sugestões do dia</button>
     <button data-aba="historico">📊 Histórico 10 jogos</button>
     <button data-aba="analises">💾 Minhas análises</button>
     <button data-aba="importar">📥 Importar CSV</button>
@@ -208,6 +209,24 @@
     </div>
     <div id="fav-aviso"></div>
     <div id="fav-listas"></div>
+  </section>
+
+  <!-- ================= SUGESTÕES DO DIA ================= -->
+  <section id="aba-sugestoes">
+    <h2>Sugestões do dia — onde vale trabalhar</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Funil em 2 estágios: as odds filtram os jogos com perfil claro; o histórico das equipes confirma.
+      Cada sugestão sai com o mercado indicado, a nota (0–10) e o porquê.
+      <b>Pré-requisito:</b> rode "Buscar odds do dia" na aba Favoritos antes.
+    </p>
+    <div class="linha c3">
+      <div><label for="su-data">Data</label><input type="date" id="su-data"></div>
+      <div><label for="su-corte">Nota mínima</label>
+        <select id="su-corte"><option value="6.5">6.5 (padrão)</option><option value="6">6.0 (mais jogos)</option><option value="7.5">7.5 (só a nata)</option></select></div>
+      <div style="align-self:end"><button class="acao" id="btn-sugestoes">Gerar sugestões</button></div>
+    </div>
+    <div id="su-aviso"></div>
+    <div id="su-lista"></div>
   </section>
 
   <!-- ================= HISTÓRICO ================= -->
@@ -295,7 +314,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v2.5";
+const APP_VERSAO = "v2.6";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -511,10 +530,11 @@ function paramsHistorico(inputEl){
 function estatisticas(jogos, comoMandante){
   // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
   const encerrados = jogos.filter(j => j.gols_mandante !== null);
-  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0;
+  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0;
   encerrados.forEach(j => {
     const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
     const contra = j.time_era_mandante ? j.gols_visitante : j.gols_mandante;
+    if (pro > contra) vit++;
     if (pro > 0) marcou++;
     if (contra > 0) sofreu++;
     golsPro += pro; golsContra += contra;
@@ -530,6 +550,7 @@ function estatisticas(jogos, comoMandante){
     mediaContra: (golsContra/n).toFixed(2),
     pctOver: Math.round(over25/n*100),
     pctBtts: Math.round(btts/n*100),
+    pctVit: Math.round(vit/n*100),
   };
 }
 function cartaoMercado(nome, cor, sinal, porque){
@@ -1142,6 +1163,129 @@ function desenharFavoritos(jogos){
       $('sc-visitante').value = tr.dataset.v; $('sc-visitante').dataset.tid = tr.dataset.vid || '';
       irParaAba('scanner');
     }));
+}
+
+// ==========================================================
+// ABA SUGESTÕES DO DIA — funil odds -> histórico -> nota
+// ==========================================================
+$('su-data').value = hojeISO();
+
+$('btn-sugestoes').addEventListener('click', gerarSugestoes);
+
+async function gerarSugestoes(){
+  const b = $('btn-sugestoes'); b.disabled = true;
+  const data = $('su-data').value;
+  const corte = Number($('su-corte').value);
+  aviso($('su-aviso'), ''); $('su-lista').innerHTML='';
+  try{
+    // 1) grade + odds
+    const rg = await chamarEdge({ acao:'grade', data });
+    const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
+    await carregarOddsMapa(data);
+    const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+    if (!comOdds.length){
+      aviso($('su-aviso'), 'Sem odds carregadas para esta data — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
+      b.disabled = false; return;
+    }
+    // 2) pré-filtro: clareza pelas odds (favorito nítido OU linha de gols esticada)
+    const candidatos = comOdds.map(j => {
+      const o = oddsMap[j.fixture_id];
+      const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
+      const clarezaFav = menor <= 1.65 ? (1.65 - menor) : 0;
+      const clarezaOU = Math.max(
+        o.odd_over25 && o.odd_over25 <= 1.75 ? (1.75 - o.odd_over25) : 0,
+        o.odd_under25 && o.odd_under25 <= 1.75 ? (1.75 - o.odd_under25) : 0
+      );
+      return { j, o, clareza: clarezaFav + clarezaOU };
+    }).filter(c => c.clareza > 0)
+      .sort((a,b2) => b2.clareza - a.clareza)
+      .slice(0, 20);
+
+    if (!candidatos.length){
+      aviso($('su-aviso'), 'Nenhum jogo com perfil claro pelas odds hoje — dia de ficar fora ou operar só com análise manual.', 'erro');
+      b.disabled = false; return;
+    }
+
+    // 3) histórico dos finalistas (em levas de 3)
+    const sugestoes = [];
+    for (let i=0; i<candidatos.length; i+=3){
+      aviso($('su-aviso'), `⏳ Analisando candidatos ${Math.min(i+3,candidatos.length)}/${candidatos.length}…`);
+      const leva = candidatos.slice(i, i+3);
+      const resultados = await Promise.all(leva.map(async c => {
+        try{
+          const pm = { acao:'historico', time: c.j.mandante }; if (c.j.mandante_id) pm.id = c.j.mandante_id;
+          const pv = { acao:'historico', time: c.j.visitante }; if (c.j.visitante_id) pv.id = c.j.visitante_id;
+          const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
+          if ((rm.jogos?.length ?? 0) < 6 || (rv.jogos?.length ?? 0) < 6) return null;
+          return { ...c, em: estatisticas(rm.jogos), ev: estatisticas(rv.jogos), nm: rm.time ?? c.j.mandante, nv: rv.time ?? c.j.visitante };
+        } catch(_){ return null; }
+      }));
+      resultados.filter(Boolean).forEach(c => {
+        const s = pontuarJogo(c);
+        if (s && s.nota >= corte) sugestoes.push({ ...c, ...s });
+      });
+    }
+
+    sugestoes.sort((a,b2) => b2.nota - a.nota);
+    if (!sugestoes.length){
+      aviso($('su-aviso'), `Nenhum jogo atingiu a nota mínima ${corte} hoje. Dia fraco é dia de proteger banca — não force entrada.`, 'erro');
+    } else {
+      aviso($('su-aviso'), `✅ ${sugestoes.length} sugestão(ões) acima da nota ${corte}.`);
+      $('su-lista').innerHTML = '<div class="semaforo">' + sugestoes.slice(0,10).map(s => `
+        <div class="mercado verde">
+          <div class="nome">${s.j.mandante} x ${s.j.visitante}</div>
+          <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
+          <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+            <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
+            <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
+          </div>
+        </div>`).join('') + '</div>' +
+        '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo — regra do Cuenca) e conferir a odd na exchange.</p>';
+    }
+  } catch(e){ aviso($('su-aviso'), 'Falha: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+}
+
+function pontuarJogo(c){
+  const { o, em, ev } = c;
+  const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
+  const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
+  const favNome = favEhMandante ? c.nm : c.nv;
+  const favStats = favEhMandante ? em : ev;
+  const overComb = (em.pctOver + ev.pctOver) / 2;
+  const bttsComb = (em.pctBtts + ev.pctBtts) / 2;
+  const mediaJogo = (parseFloat(em.mediaPro)+parseFloat(em.mediaContra)+parseFloat(ev.mediaPro)+parseFloat(ev.mediaContra))/2;
+  const notas = [];
+
+  // Lay zebra: favorito curto E em boa forma
+  if (menor <= 1.55 && favStats.pctVit >= 50){
+    notas.push({ mercado:'LAY ZEBRA', nota: Math.min(10, 6 + (1.55-menor)*6 + (favStats.pctVit-50)/20),
+      motivo:`${favNome} @ ${fmtOdd(menor)} com ${favStats.pctVit}% de vitórias nos últimos 10 — o lay no azarão ganha com vitória do favorito ou empate.` });
+  }
+  // Under: histórico E mercado concordando
+  if (overComb <= 42 && o.odd_under25 && o.odd_under25 <= 1.85){
+    notas.push({ mercado:'UNDER 2.5', nota: Math.min(10, 6 + (42-overComb)/8 + (1.85-o.odd_under25)*2),
+      motivo:`Só ${Math.round(overComb)}% de over 2.5 no histórico das duas, e o mercado confirma (under @ ${fmtOdd(o.odd_under25)}).` });
+  }
+  // Over: idem
+  if (overComb >= 62 && o.odd_over25 && o.odd_over25 <= 1.90){
+    notas.push({ mercado:'OVER 2.5', nota: Math.min(10, 6 + (overComb-62)/8 + (1.90-o.odd_over25)*2),
+      motivo:`${Math.round(overComb)}% de over 2.5 no histórico das duas, mercado junto (over @ ${fmtOdd(o.odd_over25)}).` });
+  }
+  // Lay 0x1: mandante marca sempre + visitante sofre
+  if (em.pctMarcou >= 80 && ev.pctSofreu >= 70){
+    notas.push({ mercado:'LAY 0x1', nota: Math.min(10, 6 + (em.pctMarcou-80)/8 + (ev.pctSofreu-70)/12),
+      motivo:`${c.nm} marcou em ${em.pctMarcou}% dos últimos 10 e ${c.nv} sofreu gol em ${ev.pctSofreu}% — o 0x1 exige duas improbabilidades juntas.` });
+  }
+  // Lay 1x0: jogo de gols dos dois lados
+  if (bttsComb >= 68 && mediaJogo >= 2.9){
+    notas.push({ mercado:'LAY 1x0', nota: Math.min(10, 6 + (bttsComb-68)/8),
+      motivo:`Ambas marcam em ${Math.round(bttsComb)}% dos jogos das duas e média projetada de ${mediaJogo.toFixed(1)} gols — 1x0 seco é minoria.` });
+  }
+  if (!notas.length) return null;
+  notas.sort((a,b2) => b2.nota - a.nota);
+  return notas[0];
 }
 
 listarAnalises();
