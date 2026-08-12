@@ -219,7 +219,12 @@
       <div style="align-self:end;font-size:13px;color:var(--chalk-dim)" id="fav-status"></div>
     </div>
     <div id="fav-aviso"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px">
+      <button class="mini" id="sub-vencedor" style="border-color:var(--amber);color:var(--amber)">🏆 Mercado de vencedor</button>
+      <button class="mini" id="sub-gols">⚽ Mercado de gols (under 2.5 / 3.5)</button>
+    </div>
     <div id="fav-listas"></div>
+    <div id="fav-listas-gols" style="display:none"></div>
   </section>
 
   <!-- ================= SUGESTÕES DO DIA ================= -->
@@ -326,7 +331,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.1";
+const APP_VERSAO = "v3.2";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1321,11 +1326,54 @@ $('btn-odds').addEventListener('click', async () => {
     $('fav-status').textContent = `✅ ${total} jogos com odds.`;
     await carregarOddsMapa(data);
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && !ehCategoriaDeBase(j));
-    desenharFavoritos(jogos);
+    favJogosComOdds = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && !ehCategoriaDeBase(j));
+    desenharFavoritos(favJogosComOdds);
+    desenharGols(favJogosComOdds);
   } catch(e){ aviso($('fav-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 });
+
+let favJogosComOdds = [];
+$('sub-vencedor').addEventListener('click', () => {
+  $('sub-vencedor').style.borderColor='var(--amber)'; $('sub-vencedor').style.color='var(--amber)';
+  $('sub-gols').style.borderColor=''; $('sub-gols').style.color='';
+  $('fav-listas').style.display=''; $('fav-listas-gols').style.display='none';
+});
+$('sub-gols').addEventListener('click', () => {
+  $('sub-gols').style.borderColor='var(--amber)'; $('sub-gols').style.color='var(--amber)';
+  $('sub-vencedor').style.borderColor=''; $('sub-vencedor').style.color='';
+  $('fav-listas').style.display='none'; $('fav-listas-gols').style.display='';
+});
+
+function linhaGols(j, o){
+  const idx = gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1);
+  return `<tr class="clicavel" onclick="fichaJogo(${idx})">
+    <td>${j.hora||''}</td><td>${j.liga||''}</td>
+    <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtOdd(o.odd_under25)}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtOdd(o.odd_under35)}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtOdd(o.odd_over25)}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtOdd(o.odd_over35)}</td>
+  </tr>`;
+}
+function desenharGols(jogos){
+  const comG = jogos.map(j => ({ j, o: oddsMap[j.fixture_id] }))
+    .filter(x => x.o && (x.o.odd_under25 || x.o.odd_under35));
+  const cab = '<tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>Under 2.5</th><th>Under 3.5</th><th>Over 2.5</th><th>Over 3.5</th></tr>';
+  const bloco = (titulo, dica, lista) => `
+    <h3>${titulo}</h3><p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 6px">${dica}</p>
+    ${lista.length ? '<div class="tabela-scroll"><table>' + cab + lista.map(x => linhaGols(x.j, x.o)).join('') + '</table></div>'
+                   : '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'}`;
+
+  // jogos mais "travados": menor odd de under (mercado enxerga poucos gols)
+  const u25 = comG.filter(x => x.o.odd_under25).sort((a,b) => a.o.odd_under25 - b.o.odd_under25).slice(0, 25);
+  const u35 = comG.filter(x => x.o.odd_under35).sort((a,b) => a.o.odd_under35 - b.o.odd_under35).slice(0, 25);
+
+  $('fav-listas-gols').innerHTML =
+    bloco('🔒 Jogos mais travados — Under 2.5', 'Ordenados pela menor odd de under 2.5 (mercado esperando poucos gols). Odd baixa = under provável, retorno menor.', u25) +
+    bloco('🔒 Jogos travados — Under 3.5', 'Under 3.5 costuma ser mais seguro (só quebra com 4+ gols). Menor odd = jogo que o mercado vê como fechado.', u35) +
+    '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Clique em qualquer linha para abrir a ficha completa. Confira o histórico de gols das duas equipes na ficha antes de confiar só na odd.</p>';
+}
 
 function linhaFav(j, o, destaque){
   return `<tr class="clicavel" onclick="fichaJogo(${gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1)})">
