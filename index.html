@@ -255,6 +255,7 @@
       <div style="align-self:end;display:flex;gap:10px;flex-wrap:wrap">
         <button class="acao" id="btn-historico">Buscar histórico</button>
         <button class="mini" id="btn-backfill" title="Baixa as grades dos últimos 90 dias para o banco, em lotes (fazer 1x)">⏬ Baixar últimos 90 dias</button>
+        <button class="mini" id="btn-colher" title="Recarrega as grades dos últimos 5 dias e completa os placares finais (rode diariamente; gasta ~5 requisições)">🔄 Colher resultados recentes</button>
         <button class="mini" id="btn-fdorg" title="Mapeia os times das ligas principais na football-data.org (fazer 1x; requer o secret FOOTBALLDATA_KEY)">🔗 Ativar últimos-10 (ligas principais)</button>
       </div>
     </div>
@@ -349,7 +350,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.6";
+const APP_VERSAO = "v3.7";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -871,6 +872,27 @@ $('btn-backfill').addEventListener('click', async () => {
     }
   } catch(e){ aviso($('h-aviso'), 'Falha no backfill: ' + e.message, 'erro'); }
   finally{ b.disabled = false; b.textContent = '⏬ Baixar últimos 90 dias'; }
+});
+
+$('btn-colher').addEventListener('click', async () => {
+  const b = $('btn-colher'); b.disabled = true;
+  let atualizados = 0, dias = 0;
+  try{
+    // recarrega os últimos 5 dias (ontem para trás) — força a API a gravar placares finais
+    for (let i = 1; i <= 5; i++){
+      const d = new Date(Date.now() - i*86400000).toISOString().slice(0,10);
+      $('h-aviso') && aviso($('h-aviso'), `⏳ Colhendo resultados de ${d} (${i}/5)…`);
+      const r = await chamarEdge({ acao:'grade', data: d });
+      if (r.aviso && String(r.aviso).includes('indisponível')){
+        aviso($('h-aviso'), `Cota da API esgotada hoje. Colhi ${dias} dia(s). Tente amanhã para completar.`, 'erro');
+        break;
+      }
+      const finalizados = (r.jogos ?? []).filter(j => ['FT','AET','PEN'].includes(j.status)).length;
+      atualizados += finalizados; dias++;
+    }
+    if (dias) aviso($('h-aviso'), `✅ ${dias} dia(s) recarregados, ${atualizados} jogos com placar final no banco. Rode "Atualizar resultados" na aba Histórico de sugestões para apurar green/red.`);
+  } catch(e){ aviso($('h-aviso'), 'Falha ao colher: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
 });
 
 $('btn-fdorg').addEventListener('click', async () => {
