@@ -244,6 +244,7 @@
     </div>
     <div id="su-aviso"></div>
     <div id="su-lista"></div>
+    <div id="su-rankings" style="margin-top:18px"></div>
   </section>
 
   <!-- ================= HISTÓRICO ================= -->
@@ -348,7 +349,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.5";
+const APP_VERSAO = "v3.6";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -729,7 +730,7 @@ function paramsHistorico(inputEl){
 function estatisticas(jogos, comoMandante){
   // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
   const encerrados = jogos.filter(j => j.gols_mandante !== null);
-  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0;
+  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0, over05=0, over15=0, under35=0;
   encerrados.forEach(j => {
     const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
     const contra = j.time_era_mandante ? j.gols_visitante : j.gols_mandante;
@@ -738,6 +739,9 @@ function estatisticas(jogos, comoMandante){
     if (contra > 0) sofreu++;
     golsPro += pro; golsContra += contra;
     if (pro + contra >= 3) over25++;
+    if (pro + contra >= 1) over05++;
+    if (pro + contra >= 2) over15++;
+    if (pro + contra <= 3) under35++;
     if (pro > 0 && contra > 0) btts++;
   });
   const n = encerrados.length || 1;
@@ -750,6 +754,10 @@ function estatisticas(jogos, comoMandante){
     pctOver: Math.round(over25/n*100),
     pctBtts: Math.round(btts/n*100),
     pctVit: Math.round(vit/n*100),
+    pctOver05: Math.round(over05/n*100),
+    pctOver15: Math.round(over15/n*100),
+    pctUnder35: Math.round(under35/n*100),
+    pctUnder25: Math.round((n-over25)/n*100),
   };
 }
 function cartaoMercado(nome, cor, sinal, porque){
@@ -1457,11 +1465,57 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
 }
 window.salvarSugestao = salvarSugestao;
 
+let analisadosSug = [];
+function mediaPct(c, campo){ return Math.round((c.em[campo] + c.ev[campo]) / 2); }
+function desenharRankingsSug(){
+  if (!analisadosSug.length){ $('su-rankings').innerHTML=''; return; }
+  const mercadosRank = [
+    { id:'btts',    titulo:'🤝 Ambas marcam',   campo:'pctBtts',    dica:'Maior % de BTTS no histórico das duas equipes' },
+    { id:'o05',     titulo:'⚽ Over 0.5 (sai gol)', campo:'pctOver05', dica:'Chance de pelo menos 1 gol — mercado mais seguro de over' },
+    { id:'o25',     titulo:'🔥 Over 2.5',        campo:'pctOver',    dica:'Jogos de muitos gols (3+)' },
+    { id:'u35',     titulo:'🔒 Under 3.5',       campo:'pctUnder35', dica:'Jogos que dificilmente passam de 3 gols' },
+    { id:'u25',     titulo:'🛡️ Under 2.5',       campo:'pctUnder25', dica:'Jogos travados (até 2 gols)' },
+  ];
+  const abas = mercadosRank.map((m,i) =>
+    `<button class="mini" id="rk-${m.id}" style="${i===0?'border-color:var(--amber);color:var(--amber)':''}" onclick="trocaRanking('${m.id}')">${m.titulo}</button>`
+  ).join('');
+  let corpo = '';
+  mercadosRank.forEach((m,i) => {
+    const lista = analisadosSug.map(c => ({ c, v: mediaPct(c, m.campo) }))
+      .sort((a,b) => b.v - a.v).slice(0, 15);
+    corpo += `<div class="rk-corpo" id="rkc-${m.id}" style="display:${i===0?'block':'none'}">
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin:6px 0">${m.dica} · média dos últimos 10 jogos de cada equipe.</p>
+      <div class="tabela-scroll"><table>
+      <tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>${m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th></tr>
+      ${lista.map(x => {
+        const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
+        return `<tr class="clicavel" onclick="fichaJogo(${idx})">
+          <td>${x.c.j.hora||''}</td><td>${x.c.j.liga||''}</td>
+          <td><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
+          <td style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${x.v}%</b></td>
+          <td style="font-size:12px;color:var(--chalk-dim)">${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%</td>
+        </tr>`;
+      }).join('')}
+      </table></div></div>`;
+  });
+  $('su-rankings').innerHTML = `<h3>Rankings por mercado (${analisadosSug.length} jogos analisados)</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">${abas}</div>${corpo}
+    <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">Ranking estatístico pelo histórico — clique no jogo para a ficha completa e confira as odds antes de operar.</p>`;
+}
+function trocaRanking(id){
+  ['btts','o05','o25','u35','u25'].forEach(x => {
+    const btn = $('rk-'+x), corpo = $('rkc-'+x);
+    if (btn){ btn.style.borderColor = x===id?'var(--amber)':''; btn.style.color = x===id?'var(--amber)':''; }
+    if (corpo) corpo.style.display = x===id?'block':'none';
+  });
+}
+window.trocaRanking = trocaRanking;
+
 async function gerarSugestoes(){
   const b = $('btn-sugestoes'); b.disabled = true;
   const data = $('su-data').value;
   const corte = Number($('su-corte').value);
-  aviso($('su-aviso'), ''); $('su-lista').innerHTML='';
+  aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
   try{
     const rg = await chamarEdge({ acao:'grade', data });
     const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
@@ -1500,11 +1554,13 @@ async function gerarSugestoes(){
         } catch(_){ return null; }
       }));
       res.filter(Boolean).forEach(c => {
+        analisadosSug.push(c);
         const s = pontuarJogo(c);
         if (s && s.nota >= corte) sugestoes.push({ ...c, ...s });
       });
     }
 
+    desenharRankingsSug();
     sugestoes.sort((a,b2) => b2.nota - a.nota);
     if (!sugestoes.length){
       aviso($('su-aviso'), `Nenhum jogo atingiu a nota mínima ${corte} hoje. Dia fraco é dia de proteger banca.`, 'erro');
