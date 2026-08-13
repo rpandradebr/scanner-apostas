@@ -331,7 +331,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.2";
+const APP_VERSAO = "v3.3";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1417,6 +1417,29 @@ function desenharFavoritos(jogos){
 $('su-data').value = hojeISO();
 $('btn-sugestoes').addEventListener('click', gerarSugestoes);
 
+
+async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, botao){
+  const reg = {
+    data_jogo: $('su-data').value || null,
+    campeonato: liga || '',
+    mandante, visitante,
+    zebra: 'nenhuma', lay_1x0:'FORA', lay_0x1:'FORA', over_under:'FORA', lay_zebra:'FORA',
+    confianca: nota, observacoes: '[Sugestão automática] ' + motivo,
+    analise_completa: null,
+  };
+  if (mercado === 'LAY 1x0') reg.lay_1x0 = 'VIAVEL';
+  else if (mercado === 'LAY 0x1') reg.lay_0x1 = 'VIAVEL';
+  else if (mercado === 'UNDER 2.5') reg.over_under = 'UNDER 2.5';
+  else if (mercado === 'OVER 2.5') reg.over_under = 'OVER 2.5';
+  else if (mercado === 'LAY ZEBRA'){ reg.lay_zebra = 'VIAVEL'; }
+  const { error } = await db.from('analises').insert(reg);
+  if (error){ botao.textContent = '❌ erro'; return; }
+  botao.textContent = '✅ salvo em Minhas Análises';
+  botao.disabled = true;
+  listarAnalises();
+}
+window.salvarSugestao = salvarSugestao;
+
 async function gerarSugestoes(){
   const b = $('btn-sugestoes'); b.disabled = true;
   const data = $('su-data').value;
@@ -1478,6 +1501,7 @@ async function gerarSugestoes(){
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="mini" onclick="fichaJogo(${'${'}gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
             <button class="mini" onclick="copiarPrompt('${'${'}s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
+            <button class="mini" onclick="salvarSugestao('${'${'}s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${'${'}s.mercado}',${'${'}s.nota.toFixed(1)},'${'${'}s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this)">💾 Salvar no histórico</button>
           </div>
         </div>`).join('') + '</div>' +
         '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo) e conferir a odd na exchange.</p>';
