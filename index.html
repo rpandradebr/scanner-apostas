@@ -151,6 +151,7 @@
     <button data-aba="historico">📊 Histórico 10 jogos</button>
     <button data-aba="analises">💾 Minhas análises</button>
     <button data-aba="importar">📥 Importar CSV</button>
+    <button data-aba="histsug">📋 Histórico de sugestões</button>
   </nav>
 
   <!-- ================= GRADE ================= -->
@@ -321,6 +322,22 @@
     <div id="imp-preview"></div>
   </section>
 
+  <!-- ================= HISTÓRICO DE SUGESTÕES ================= -->
+  <section id="aba-histsug">
+    <h2>Histórico de sugestões — green / red automático</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Todas as sugestões que você salvou. Clique em "Atualizar resultados" para o sistema
+      buscar os placares finais e marcar green ou red sozinho. Jogos ainda não encerrados ficam como "aguardando".
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="acao" id="btn-atualizar-res">🔄 Atualizar resultados</button>
+      <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="hs-status"></span>
+    </div>
+    <div id="hs-painel"></div>
+    <div id="hs-aviso"></div>
+    <div class="tabela-scroll"><table id="hs-tabela"></table></div>
+  </section>
+
   <footer>
     Ferramenta pessoal de apoio à decisão — os sinais são estatísticos e não substituem a análise de contexto (13 pontos) nem garantem resultado.
     Confira odds e escalações no momento da entrada. Jogue com responsabilidade.
@@ -331,7 +348,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.4";
+const APP_VERSAO = "v3.5";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1425,7 +1442,7 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
     mandante, visitante,
     zebra: 'nenhuma', lay_1x0:'FORA', lay_0x1:'FORA', over_under:'FORA', lay_zebra:'FORA',
     confianca: nota, observacoes: '[Sugestão automática] ' + motivo,
-    analise_completa: null,
+    analise_completa: null, origem: 'sugestao', mercado_sugerido: mercado,
   };
   if (mercado === 'LAY 1x0') reg.lay_1x0 = 'VIAVEL';
   else if (mercado === 'LAY 0x1') reg.lay_0x1 = 'VIAVEL';
@@ -1541,6 +1558,117 @@ function pontuarJogo(c){
 }
 
 listarAnalises();
+
+// ==========================================================
+// ABA HISTÓRICO DE SUGESTÕES — resultado automático
+// ==========================================================
+function confereMercado(mercado, gm, gv){
+  const total = gm + gv;
+  if (mercado === 'UNDER 2.5') return total <= 2 ? 'GREEN' : 'RED';
+  if (mercado === 'OVER 2.5')  return total >= 3 ? 'GREEN' : 'RED';
+  if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
+  if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
+  if (mercado === 'LAY ZEBRA'){
+    // zebra = quem tinha odd maior; sem guardar lado, usamos heurística:
+    // lay zebra ganha se NÃO houve vitória do visitante por 2+ (aprox.) -> melhor: green se mandante venceu ou empate
+    return gm >= gv ? 'GREEN' : 'RED';
+  }
+  return null;
+}
+async function buscarPlacar(a){
+  // 1) tenta no banco por nome+data (grades já gravam placar final)
+  const tok = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(p=>p.length>=4)[0] || s;
+  const tA = tok(a.mandante), tB = tok(a.visitante);
+  try{
+    let query = db.from('jogos_dia').select('*').in('status',['FT','AET','PEN']);
+    if (a.data_jogo) query = query.eq('data_jogo', a.data_jogo);
+    const { data } = await query
+      .or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`)
+      .limit(1);
+    if (data?.length){
+      const [gm, gv] = (data[0].placar||'0x0').split('x').map(Number);
+      const mandEhA = data[0].mandante.toLowerCase().includes(tA.toLowerCase());
+      return mandEhA ? {gm, gv} : {gm: gv, gv: gm};
+    }
+  } catch(_){}
+  // 2) fallback: recarrega a grade daquele dia (força a API atualizar o banco) e tenta de novo
+  if (a.data_jogo){
+    try{
+      await chamarEdge({ acao:'grade', data: a.data_jogo });
+      let q2 = db.from('jogos_dia').select('*').eq('data_jogo', a.data_jogo).in('status',['FT','AET','PEN']);
+      const { data } = await q2.or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`).limit(1);
+      if (data?.length){
+        const [gm, gv] = (data[0].placar||'0x0').split('x').map(Number);
+        const mandEhA = data[0].mandante.toLowerCase().includes(tA.toLowerCase());
+        return mandEhA ? {gm, gv} : {gm: gv, gv: gm};
+      }
+    } catch(_){}
+  }
+  return null;
+}
+
+$('btn-atualizar-res').addEventListener('click', async () => {
+  const b = $('btn-atualizar-res'); b.disabled = true;
+  aviso($('hs-aviso'), '');
+  try{
+    const { data: sugs } = await db.from('analises').select('*')
+      .eq('origem','sugestao').is('placar_final', null).order('criado_em',{ascending:false});
+    if (!sugs?.length){ $('hs-status').textContent = 'Nenhuma sugestão pendente de resultado.'; b.disabled=false; listarHistSug(); return; }
+    let resolvidos = 0;
+    for (let i=0; i<sugs.length; i++){
+      $('hs-status').textContent = `⏳ Buscando ${i+1}/${sugs.length}…`;
+      const pl = await buscarPlacar(sugs[i]);
+      if (pl){
+        const res = confereMercado(sugs[i].mercado_sugerido, pl.gm, pl.gv);
+        await db.from('analises').update({
+          placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res
+        }).eq('id', sugs[i].id);
+        resolvidos++;
+      }
+    }
+    $('hs-status').textContent = `✅ ${resolvidos} resultado(s) atualizados de ${sugs.length} pendentes.`;
+    listarHistSug();
+  } catch(e){ aviso($('hs-aviso'), 'Falha: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+});
+
+async function listarHistSug(){
+  const { data, error } = await db.from('analises').select('*')
+    .eq('origem','sugestao').order('criado_em',{ascending:false}).limit(200);
+  if (error){ aviso($('hs-aviso'), 'Erro: '+error.message,'erro'); return; }
+  if (!data?.length){ $('hs-tabela').innerHTML=''; $('hs-painel').innerHTML='<p class="msg-vazia">Nenhuma sugestão salva ainda. Salve sugestões na aba 💡 Sugestões do dia.</p>'; return; }
+
+  // painel de taxa por mercado (só sugestões resolvidas)
+  const mercados = {};
+  data.forEach(a => {
+    if (!a.resultado_auto) return;
+    const m = a.mercado_sugerido || '?';
+    mercados[m] = mercados[m] || {g:0,r:0};
+    if (a.resultado_auto==='GREEN') mercados[m].g++; else mercados[m].r++;
+  });
+  $('hs-painel').innerHTML = '<div class="placar-box">' +
+    Object.entries(mercados).map(([m,v]) => {
+      const t = v.g+v.r;
+      return `<div class="stat"><b>${t?Math.round(v.g/t*100):0}%</b><span>${m} · ${v.g}G/${v.r}R</span></div>`;
+    }).join('') +
+    (Object.keys(mercados).length ? '' : '<p class="msg-vazia">Nenhum resultado apurado ainda — clique em Atualizar resultados.</p>') +
+    '</div>';
+
+  const pill = r => r==='GREEN' ? '<span class="pill g">GREEN</span>' : r==='RED' ? '<span class="pill r">RED</span>' : '<span class="pill n">aguardando</span>';
+  $('hs-tabela').innerHTML =
+    '<tr><th>Data</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th></tr>' +
+    data.map(a => `<tr>
+      <td>${a.data_jogo ?? ''}</td>
+      <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
+      <td>${a.mercado_sugerido ?? ''}</td>
+      <td>${a.confianca ?? ''}</td>
+      <td>${a.placar_final ?? '—'}</td>
+      <td>${pill(a.resultado_auto)}</td>
+    </tr>`).join('');
+}
+
+listarHistSug();
+
 </script>
 </body>
 </html>
