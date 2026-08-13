@@ -331,7 +331,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.3";
+const APP_VERSAO = "v3.4";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1499,9 +1499,9 @@ async function gerarSugestoes(){
           <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
           <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
-            <button class="mini" onclick="fichaJogo(${'${'}gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
-            <button class="mini" onclick="copiarPrompt('${'${'}s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
-            <button class="mini" onclick="salvarSugestao('${'${'}s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${'${'}(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${'${'}s.mercado}',${'${'}s.nota.toFixed(1)},'${'${'}s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this)">💾 Salvar no histórico</button>
+            <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
+            <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
+            <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this)">💾 Salvar no histórico</button>
           </div>
         </div>`).join('') + '</div>' +
         '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo) e conferir a odd na exchange.</p>';
