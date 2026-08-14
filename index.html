@@ -350,7 +350,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.7";
+const APP_VERSAO = "v3.8";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -860,9 +860,11 @@ $('btn-backfill').addEventListener('click', async () => {
       const r = await chamarEdge({ acao:'backfill', dias:90, lote:15 });
       totalJogos += r.jogos_gravados ?? 0;
       totalChamadas += r.chamadas_api ?? 0;
-      const parou = Object.values(r.resumo ?? {}).some(v => String(v).startsWith('PAROU'));
+      const linhaParou = Object.entries(r.resumo ?? {}).find(([k,v]) => String(v).startsWith('PAROU'));
+      const parou = !!linhaParou;
       if (parou){
-        aviso($('h-aviso'), `A API interrompeu (provável cota do dia). Gravados ${totalJogos} jogos em ${totalChamadas} chamadas — clique de novo amanhã para completar o restante.`, 'erro');
+        const msgReal = linhaParou ? String(linhaParou[1]).replace('PAROU: ','') : '';
+        aviso($('h-aviso'), `A API recusou datas antigas. Gravados ${totalJogos} jogos. Motivo real: ${msgReal}. (No plano grátis, temporadas antigas são bloqueadas — o backfill de 90 dias precisa do plano pago; mas "Colher resultados recentes" funciona no grátis.)`, 'erro');
         break;
       }
       if (!r.dias_pendentes){
