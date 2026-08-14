@@ -466,7 +466,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.24";
+const APP_VERSAO = "v3.25";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -754,13 +754,55 @@ async function fichaJogo(idx){
       pls.push({pl:`${h}x${a}`, p});
     }
     pls.sort((x,y)=>y.p-x.p);
-    const modelo = `<h3>Placares prováveis (modelo)</h3>
+
+    // ---- Matriz de placares específicos (para os lays) ----
+    const probPlacar = (h,a) => pois(h,lC)*pois(a,lF);
+    const placaresAlvo = [
+      {pl:'0x0', p:probPlacar(0,0)},
+      {pl:'1x0', p:probPlacar(1,0)}, {pl:'0x1', p:probPlacar(0,1)},
+      {pl:'2x0', p:probPlacar(2,0)}, {pl:'0x2', p:probPlacar(0,2)},
+      {pl:'3x0', p:probPlacar(3,0)}, {pl:'0x3', p:probPlacar(0,3)},
+      {pl:'2x1', p:probPlacar(2,1)}, {pl:'1x2', p:probPlacar(1,2)},
+      {pl:'3x1', p:probPlacar(3,1)}, {pl:'1x3', p:probPlacar(1,3)},
+      {pl:'1x1', p:probPlacar(1,1)}, {pl:'2x2', p:probPlacar(2,2)},
+    ];
+    // goleadas: soma de todos os placares com 4+ de um lado (diferença grande)
+    let golMand=0, golVis=0;
+    for (let h=0;h<=8;h++) for (let a=0;a<=8;a++){
+      if (h>=4 && h-a>=3) golMand += probPlacar(h,a);
+      if (a>=4 && a-h>=3) golVis += probPlacar(h,a);
+    }
+    placaresAlvo.sort((x,y)=>x.p-y.p); // menos provável primeiro (para os lays)
+    const corProb = p => { const v = p*100; return v < 4 ? 'var(--green)' : v < 8 ? 'var(--amber)' : 'var(--chalk-dim)'; };
+    const matriz = `<h3>Matriz de placares (probabilidade)</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Ordenado do menos provável ao mais provável. Verde = improvável (bom para LAY do placar); cinza = provável. Modelo Poisson sobre as médias dos últimos 10.</p>
+      <div class="tabela-scroll"><table class="comp">
+        <tr><th>Placar</th><th style="text-align:center">Probabilidade</th><th>Placar</th><th style="text-align:center">Probabilidade</th></tr>
+        ${(() => {
+          let linhas = '';
+          for (let i=0;i<placaresAlvo.length;i+=2){
+            const a = placaresAlvo[i], b = placaresAlvo[i+1];
+            linhas += `<tr>
+              <td class="valor"><b>${a.pl}</b></td><td class="valor" style="color:${corProb(a.p)}">${pct(a.p)}%</td>
+              ${b ? `<td class="valor"><b>${b.pl}</b></td><td class="valor" style="color:${corProb(b.p)}">${pct(b.p)}%</td>` : '<td></td><td></td>'}
+            </tr>`;
+          }
+          return linhas;
+        })()}
+        <tr style="border-top:2px solid rgba(237,234,224,.2)">
+          <td class="rotulo">🥅 Goleada ${nm} (4+, dif 3+)</td><td class="valor" style="color:${corProb(golMand)}">${pct(golMand)}%</td>
+          <td class="rotulo">🥅 Goleada ${nv} (4+, dif 3+)</td><td class="valor" style="color:${corProb(golVis)}">${pct(golVis)}%</td>
+        </tr>
+      </table></div>`;
+
+    const modelo = `<h3>Resultado provável (modelo)</h3>
       <div class="placar-box">
         <div class="stat"><b>${pct(p1)}%</b><span>vitória ${nm}</span></div>
         <div class="stat"><b>${pct(pX)}%</b><span>empate</span></div>
         <div class="stat"><b>${pct(p2)}%</b><span>vitória ${nv}</span></div>
       </div>
-      <div class="chips">${pls.slice(0,5).map(x=>`<span class="chip"><b>${x.pl}</b> ${pct(x.p)}%</span>`).join('')}</div>`;
+      <div class="chips">${pls.slice(0,5).map(x=>`<span class="chip"><b>${x.pl}</b> ${pct(x.p)}%</span>`).join('')}</div>
+      ${matriz}`;
 
     // ---- Forma + últimos 5 ----
     const forma = `<h3>${nm} — forma</h3><div>${seqForma(rm.jogos)}</div><div class="ultimos">${ultimos5(rm.jogos)}</div>
