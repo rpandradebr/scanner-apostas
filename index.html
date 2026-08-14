@@ -425,6 +425,12 @@
             <option value="P:desarmes">🛡️ Desarmes (jogador, do dia)</option>
             <option value="P:chutes">🎯 Chutes (jogador, do dia)</option>
           </optgroup>
+          <optgroup label="Árbitros (média histórica)">
+            <option value="A:media_cartoes">⚖️ Cartões por jogo (árbitro)</option>
+            <option value="A:media_amarelos">🟨 Amarelos por jogo (árbitro)</option>
+            <option value="A:media_faltas">⚠️ Faltas por jogo (árbitro)</option>
+            <option value="A:media_penaltis">🎯 Pênaltis por jogo (árbitro)</option>
+          </optgroup>
         </select></div>
       <div style="align-self:end"><button class="acao" id="btn-carregar-es">Carregar jogos</button></div>
     </div>
@@ -460,7 +466,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.22";
+const APP_VERSAO = "v3.23";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -818,6 +824,7 @@ async function fichaJogo(idx){
         <button class="mini" onclick="$('sc-mandante').value='${j.mandante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-mandante').dataset.tid='${j.mandante_id??''}';$('sc-visitante').value='${j.visitante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-visitante').dataset.tid='${j.visitante_id??''}';irParaAba('scanner')">🎯 Abrir no Scanner</button>
         <button class="mini" onclick="copiarPrompt('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt p/ análise completa</button>
         ${(j.fixture_id > 0 && ['FT','AET','PEN'].includes(j.status)) ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)</button>` : ''}
+        <button class="mini" onclick="verArbitro('${j.fixture_id}', this)">⚖️ Média do árbitro</button>
       </div>
       <div id="ficha-estats"></div>
       <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">As estatísticas detalhadas (chutes, cartões, desarmes, escanteios, notas, minuto dos gols) são buscadas sob demanda — 3 requisições por jogo. No plano grátis use com parcimônia; no Pro, à vontade.</p>
@@ -892,6 +899,46 @@ async function estatsDetalhadas(fixtureId, botao){
   }
 }
 window.estatsDetalhadas = estatsDetalhadas;
+
+async function verArbitro(fixtureId, botao){
+  botao.disabled = true; botao.textContent = '⏳ buscando árbitro…';
+  const alvo = $('ficha-estats');
+  try{
+    // 1) descobre o árbitro do jogo (do banco ou da grade)
+    let arbitro = null;
+    try{
+      const { data } = await db.from('jogos_dia').select('arbitro').eq('fixture_id', fixtureId).limit(1);
+      arbitro = data?.[0]?.arbitro;
+    } catch(_){}
+    if (!arbitro){
+      alvo.innerHTML = '<div class="aviso">Árbitro deste jogo ainda não registrado no banco. Recarregue a grade deste dia (a captura do árbitro é nova, v3.23) e tente de novo.</div>';
+      botao.textContent = '⚖️ Média do árbitro'; botao.disabled = false; return;
+    }
+    // 2) busca a média (cache 7 dias)
+    let media = null;
+    try{
+      const { data } = await db.from('stats_arbitros').select('*').eq('arbitro', arbitro).limit(1);
+      if (data?.length && (Date.now() - new Date(data[0].atualizado_em).getTime()) < 7*86400000) media = data[0];
+    } catch(_){}
+    if (!media){
+      const r = await chamarEdge({ acao:'stats_arbitro', arbitro, n: 15 });
+      if (r.ok) media = r.registro;
+      else { alvo.innerHTML = `<div class="aviso">Não foi possível calcular a média de ${arbitro}: ${r.erro||'sem dados'}. (Precisa de jogos dele no banco com estatística de cartões — mais confiável em ligas grandes.)</div>`; botao.textContent='⚖️ Média do árbitro'; botao.disabled=false; return; }
+    }
+    alvo.innerHTML = `<h3>⚖️ Árbitro: ${arbitro}</h3>
+      <div class="placar-box">
+        <div class="stat"><b>${media.media_cartoes ?? '—'}</b><span>cartões/jogo</span></div>
+        <div class="stat"><b>${media.media_amarelos ?? '—'}</b><span>amarelos/jogo</span></div>
+        <div class="stat"><b>${media.media_vermelhos ?? '—'}</b><span>vermelhos/jogo</span></div>
+        <div class="stat"><b>${media.media_faltas ?? '—'}</b><span>faltas/jogo</span></div>
+        <div class="stat"><b>${media.media_penaltis ?? '—'}</b><span>pênaltis/jogo</span></div>
+        <div class="stat"><b>${media.jogos_amostra}</b><span>jogos na amostra</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--chalk-dim)">Ligas da amostra: ${media.ligas||'—'}. Para o mercado de cartões, o árbitro pesa tanto quanto os times — média alta (5+) favorece over de cartões.</p>`;
+    botao.textContent = '✅ árbitro carregado';
+  } catch(e){ alvo.innerHTML = `<div class="aviso erro">Falha: ${e.message}</div>`; botao.textContent='⚖️ Média do árbitro'; botao.disabled=false; }
+}
+window.verArbitro = verArbitro;
 
 // ==========================================================
 // ABA 2 — SCANNER (semáforo dos 4 mercados)
@@ -2147,6 +2194,63 @@ $('btn-rankear-es').addEventListener('click', async () => {
           </table></div>
           <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Média por jogo dos últimos 10 de cada time. Guardado no banco por 24h. Use para achar times de padrão forte e cruzar com o confronto do dia.</p>`;
         $('es-status').textContent = `✅ ${linhas.length} times ranqueados.`;
+      }
+    } catch(e){ aviso($('es-aviso'), 'Falha: ' + e.message, 'erro'); }
+    finally{ b.disabled = false; }
+    return;
+  }
+
+  // ===== MODO ÁRBITRO (A:) =====
+  if (tipo.startsWith('A:')){
+    const campo = tipo.split(':')[1];
+    const sel = jogosSelecionados(false);
+    if (sel.erro){ aviso($('es-aviso'), sel.erro, 'erro'); return; }
+    if (!sel.jogos.length){ aviso($('es-aviso'), 'Nenhum jogo das ligas escolhidas nesta data.', 'erro'); return; }
+    const b = $('btn-rankear-es'); b.disabled = true;
+    aviso($('es-aviso'), ''); $('es-resultado').innerHTML='';
+    try{
+      const fids = sel.jogos.map(j => j.fixture_id).filter(x => x > 0);
+      const { data: comArb } = await db.from('jogos_dia').select('fixture_id, arbitro, mandante, visitante').in('fixture_id', fids);
+      const arbitros = {};
+      (comArb ?? []).forEach(j => { if (j.arbitro){ (arbitros[j.arbitro] = arbitros[j.arbitro] || []).push(j); } });
+      const listaArb = Object.keys(arbitros);
+      if (!listaArb.length){ aviso($('es-aviso'), 'Nenhum árbitro registrado para os jogos deste dia. Recarregue a grade do dia (captura de árbitro é da v3.23) e tente de novo.', 'erro'); b.disabled=false; return; }
+      const linhas = [];
+      for (let i=0; i<listaArb.length; i++){
+        const arb = listaArb[i];
+        $('es-status').textContent = `⏳ Calculando árbitro ${i+1}/${listaArb.length} — ${arb}…`;
+        let media = null;
+        try{
+          const { data } = await db.from('stats_arbitros').select('*').eq('arbitro', arb).limit(1);
+          if (data?.length && (Date.now() - new Date(data[0].atualizado_em).getTime()) < 7*86400000) media = data[0];
+        } catch(_){}
+        if (!media){
+          const r = await chamarEdge({ acao:'stats_arbitro', arbitro: arb, n: 15 });
+          if (r.ok) media = r.registro;
+        }
+        if (media && media[campo] != null){
+          const jogosDele = arbitros[arb].map(j => `${j.mandante} x ${j.visitante}`).join('; ');
+          linhas.push({ arbitro: arb, valor: Number(media[campo]), amostra: media.jogos_amostra, jogos: jogosDele });
+        }
+      }
+      linhas.sort((a,c) => c.valor - a.valor);
+      if (!linhas.length){
+        aviso($('es-aviso'), 'Sem dados de árbitros (precisa de jogos no banco com estatística de cartões — mais confiável em ligas grandes).', 'erro');
+        $('es-status').textContent='';
+      } else {
+        const nomeTipo = $('es-tipo').selectedOptions[0].textContent;
+        $('es-resultado').innerHTML = `<h3>${nomeTipo} — ${sel.rotulo}</h3>
+          <div class="tabela-scroll"><table>
+          <tr><th>#</th><th>Árbitro</th><th>${nomeTipo}</th><th>Amostra</th><th>Apita hoje</th></tr>
+          ${linhas.map((l,i) => `<tr>
+            <td>${i+1}</td><td><b>${l.arbitro}</b></td>
+            <td style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${l.valor.toFixed(2)}</b></td>
+            <td style="color:var(--chalk-dim)">${l.amostra}j</td>
+            <td style="color:var(--chalk-dim);font-size:12px">${l.jogos}</td>
+          </tr>`).join('')}
+          </table></div>
+          <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Média histórica do árbitro (últimos 15 jogos que apitou no seu banco). Cartões: árbitro rigoroso (5+/jogo) favorece over de cartões independente dos times.</p>`;
+        $('es-status').textContent = `✅ ${linhas.length} árbitros ranqueados.`;
       }
     } catch(e){ aviso($('es-aviso'), 'Falha: ' + e.message, 'erro'); }
     finally{ b.disabled = false; }
