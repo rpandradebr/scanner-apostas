@@ -350,7 +350,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.9";
+const APP_VERSAO = "v3.11";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -707,7 +707,7 @@ async function fichaJogo(idx){
       <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="mini" onclick="$('sc-mandante').value='${j.mandante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-mandante').dataset.tid='${j.mandante_id??''}';$('sc-visitante').value='${j.visitante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-visitante').dataset.tid='${j.visitante_id??''}';irParaAba('scanner')">🎯 Abrir no Scanner</button>
         <button class="mini" onclick="copiarPrompt('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt p/ análise completa</button>
-        ${j.fixture_id > 0 ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)</button>` : ''}
+        ${(j.fixture_id > 0 && ['FT','AET','PEN'].includes(j.status)) ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)</button>` : ''}
       </div>
       <div id="ficha-estats"></div>
       <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">As estatísticas detalhadas (chutes, cartões, desarmes, escanteios, notas, minuto dos gols) são buscadas sob demanda — 3 requisições por jogo. No plano grátis use com parcimônia; no Pro, à vontade.</p>
@@ -766,7 +766,7 @@ async function estatsDetalhadas(fixtureId, botao){
           '</div>';
       });
     }
-    alvo.innerHTML = html || '<p class="msg-vazia">Sem dados detalhados para este jogo.</p>';
+    alvo.innerHTML = html || '<div class="aviso">Este jogo ainda não tem estatísticas detalhadas. Isso acontece quando: (1) a partida ainda não foi disputada, (2) é de uma liga/temporada fora da cobertura do plano grátis, ou (3) os dados ainda não foram publicados (podem levar até 2h após o apito final). Estatísticas detalhadas existem apenas para jogos já encerrados.</div>';
     botao.textContent = '✅ estatísticas carregadas';
   } catch(e){
     alvo.innerHTML = `<div class="aviso erro">Falha: ${e.message}</div>`;
@@ -945,7 +945,7 @@ $('btn-colher').addEventListener('click', async () => {
     for (let i = 1; i <= 5; i++){
       const d = new Date(Date.now() - i*86400000).toISOString().slice(0,10);
       $('h-aviso') && aviso($('h-aviso'), `⏳ Colhendo resultados de ${d} (${i}/5)…`);
-      const r = await chamarEdge({ acao:'grade', data: d });
+      const r = await chamarEdge({ acao:'grade', data: d, forcar: 1 });
       if (r.aviso && String(r.aviso).includes('indisponível')){
         aviso($('h-aviso'), `Cota da API esgotada hoje. Colhi ${dias} dia(s). Tente amanhã para completar.`, 'erro');
         break;
