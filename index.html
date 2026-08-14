@@ -149,6 +149,7 @@
     <button data-aba="rodada">🏆 Análise da rodada</button>
     <button data-aba="favoritos">⭐ Favoritos do dia</button>
     <button data-aba="sugestoes">💡 Sugestões do dia</button>
+    <button data-aba="topdia">🏆 TOP do dia</button>
     <button data-aba="historico">📊 Histórico 10 jogos</button>
     <button data-aba="analises">💾 Minhas análises</button>
     <button data-aba="importar">📥 Importar CSV</button>
@@ -264,6 +265,33 @@
     <div id="su-aviso"></div>
     <div id="su-lista"></div>
     <div id="su-rankings" style="margin-top:18px"></div>
+  </section>
+
+  <!-- ================= TOP DO DIA ================= -->
+  <section id="aba-topdia">
+    <h2>🏆 TOP do dia — os 10 melhores jogos por mercado</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Pontuação de 0 a 100 cruzando odds e histórico das duas equipes. Escolha o mercado e veja os 10 jogos mais promissores.
+      <b>Pré-requisito:</b> rode "Buscar odds do dia" na aba Favoritos antes.
+    </p>
+    <div class="linha c3">
+      <div><label for="td-data">Data</label><input type="date" id="td-data"></div>
+      <div><label for="td-mercado">Mercado</label>
+        <select id="td-mercado">
+          <option value="back_fav">Back Favorito</option>
+          <option value="under35">Under 3.5</option>
+          <option value="btts">Ambos Marcam</option>
+          <option value="lay01">Lay 0x1</option>
+          <option value="lay10">Lay 1x0</option>
+          <option value="lay_zebra">Lay Zebra</option>
+          <option value="lay_gol_mand">Lay Goleada Mandante</option>
+          <option value="lay_gol_vis">Lay Goleada Visitante</option>
+        </select></div>
+      <div style="align-self:end"><button class="acao" id="btn-topdia">Gerar TOP 10</button></div>
+    </div>
+    <div id="td-aviso"></div>
+    <div id="td-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
+    <div id="td-lista"></div>
   </section>
 
   <!-- ================= HISTÓRICO ================= -->
@@ -419,7 +447,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.19";
+const APP_VERSAO = "v3.20";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -869,7 +897,7 @@ function paramsHistorico(inputEl){
 function estatisticas(jogos, comoMandante){
   // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
   const encerrados = jogos.filter(j => j.gols_mandante !== null);
-  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0, over05=0, over15=0, under35=0;
+  let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0, over05=0, over15=0, under35=0, goleadaPro=0, goleadaContra=0;
   encerrados.forEach(j => {
     const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
     const contra = j.time_era_mandante ? j.gols_visitante : j.gols_mandante;
@@ -882,6 +910,8 @@ function estatisticas(jogos, comoMandante){
     if (pro + contra >= 2) over15++;
     if (pro + contra <= 3) under35++;
     if (pro > 0 && contra > 0) btts++;
+    if (pro - contra >= 3) goleadaPro++;
+    if (contra - pro >= 3) goleadaContra++;
   });
   const n = encerrados.length || 1;
   return {
@@ -897,6 +927,8 @@ function estatisticas(jogos, comoMandante){
     pctOver15: Math.round(over15/n*100),
     pctUnder35: Math.round(under35/n*100),
     pctUnder25: Math.round((n-over25)/n*100),
+    pctGoleadaPro: Math.round(goleadaPro/n*100),
+    pctGoleadaContra: Math.round(goleadaContra/n*100),
   };
 }
 function cartaoMercado(nome, cor, sinal, porque){
@@ -2099,6 +2131,138 @@ $('btn-rankear-es').addEventListener('click', async () => {
       $('es-status').textContent = `✅ ${linhas.length} registros de ${jogos.length} jogos.`;
     }
   } catch(e){ aviso($('es-aviso'), 'Falha: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+});
+
+window.carregarAoVivo = window.carregarAoVivo || (()=>{});
+
+
+// ==========================================================
+// ABA TOP DO DIA — pontuação 0-100 por mercado
+// ==========================================================
+$('td-data').value = hojeISO();
+
+const MERCADOS_TD = {
+  back_fav: { nome:'Back Favorito', dica:'Apostar no favorito para vencer' },
+  under35: { nome:'Under 3.5', dica:'Menos de 4 gols no jogo' },
+  btts: { nome:'Ambos Marcam', dica:'As duas equipes marcam' },
+  lay01: { nome:'Lay 0x1', dica:'Contra o placar exato 0x1' },
+  lay10: { nome:'Lay 1x0', dica:'Contra o placar exato 1x0' },
+  lay_zebra: { nome:'Lay Zebra', dica:'Contra o azarão vencer' },
+  lay_gol_mand: { nome:'Lay Goleada Mandante', dica:'Contra o mandante vencer por 3+' },
+  lay_gol_vis: { nome:'Lay Goleada Visitante', dica:'Contra o visitante vencer por 3+' },
+};
+
+// pontua um jogo (0-100) para um mercado, usando odds (o) e stats das duas equipes (em/ev)
+function pontuarTD(mercado, o, em, ev){
+  const menorOdd = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
+  const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
+  const favStats = favEhMandante ? em : ev;
+  const zebraStats = favEhMandante ? ev : em;
+  const overComb = (em.pctOver + ev.pctOver) / 2;
+  const under35Comb = (em.pctUnder35 + ev.pctUnder35) / 2;
+  const bttsComb = (em.pctBtts + ev.pctBtts) / 2;
+  const clamp = (x) => Math.max(0, Math.min(100, Math.round(x)));
+
+  switch(mercado){
+    case 'back_fav': {
+      if (menorOdd > 2.2) return null; // sem favorito claro
+      // quanto menor a odd e maior a forma do favorito, melhor
+      const base = (2.2 - menorOdd) / 1.2 * 60; // odd
+      const forma = favStats.pctVit * 0.4; // forma
+      return clamp(base + forma);
+    }
+    case 'under35': {
+      // odd de under e histórico de poucos gols
+      const oddBonus = o.odd_under35 ? Math.max(0, (2.0 - o.odd_under35) * 25) : 0;
+      return clamp(under35Comb * 0.7 + oddBonus);
+    }
+    case 'btts':
+      return clamp(bttsComb);
+    case 'lay01': {
+      // 0x1 improvável: mandante marca muito E visitante não segura
+      return clamp(em.pctMarcou * 0.5 + ev.pctSofreu * 0.5);
+    }
+    case 'lay10': {
+      // 1x0 improvável: jogo de gols dos dois lados
+      return clamp(bttsComb * 0.6 + overComb * 0.4);
+    }
+    case 'lay_zebra': {
+      if (menorOdd > 1.7) return null; // precisa de favorito
+      // favorito forte e em boa forma = zebra improvável
+      const oddScore = (1.7 - menorOdd) / 0.55 * 55;
+      const formaScore = favStats.pctVit * 0.3 + (100 - zebraStats.pctVit) * 0.15;
+      return clamp(oddScore + formaScore);
+    }
+    case 'lay_gol_mand': {
+      // goleada do mandante improvável: mandante não goleia E visitante não leva goleada
+      return clamp(100 - (em.pctGoleadaPro * 0.6 + ev.pctGoleadaContra * 0.4));
+    }
+    case 'lay_gol_vis': {
+      return clamp(100 - (ev.pctGoleadaPro * 0.6 + em.pctGoleadaContra * 0.4));
+    }
+  }
+  return null;
+}
+
+$('btn-topdia').addEventListener('click', async () => {
+  const b = $('btn-topdia'); b.disabled = true;
+  const data = $('td-data').value;
+  const mercado = $('td-mercado').value;
+  aviso($('td-aviso'), ''); $('td-lista').innerHTML='';
+  try{
+    const rg = await chamarEdge({ acao:'grade', data });
+    const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
+    await carregarOddsMapa(data);
+    const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+    if (!comOdds.length){
+      aviso($('td-aviso'), 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
+      b.disabled = false; return;
+    }
+    const pontuados = [];
+    for (let i=0; i<comOdds.length; i+=4){
+      $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
+      const leva = comOdds.slice(i, i+4);
+      const res = await Promise.all(leva.map(async j => {
+        try{
+          const pm = { acao:'historico', time: j.mandante }; if (j.mandante_id) pm.id = j.mandante_id;
+          const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
+          const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
+          if ((rm.jogos?.length??0) < 6 || (rv.jogos?.length??0) < 6) return null;
+          const em = estatisticas(rm.jogos), ev = estatisticas(rv.jogos);
+          const nota = pontuarTD(mercado, oddsMap[j.fixture_id], em, ev);
+          if (nota == null) return null;
+          return { j, nota, em, ev, nm: rm.time??j.mandante, nv: rv.time??j.visitante };
+        } catch(_){ return null; }
+      }));
+      res.filter(Boolean).forEach(x => pontuados.push(x));
+    }
+    pontuados.sort((a,c) => c.nota - a.nota);
+    const top = pontuados.slice(0, 10);
+    if (!top.length){
+      aviso($('td-aviso'), 'Nenhum jogo qualificado para este mercado hoje.', 'erro');
+      $('td-status').textContent = '';
+    } else {
+      const m = MERCADOS_TD[mercado];
+      $('td-status').textContent = `✅ TOP ${top.length} de ${pontuados.length} jogos analisados.`;
+      const cor = n => n >= 75 ? 'var(--green)' : n >= 55 ? 'var(--amber)' : 'var(--red)';
+      $('td-lista').innerHTML = `<h3>${m.nome} — ${m.dica}</h3>` +
+        top.map((x,i) => {
+          const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
+          return `<div class="mercado" style="border-left-color:${cor(x.nota)};display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer" onclick="fichaJogo(${idx})">
+            <div>
+              <div class="nome" style="font-size:17px">${i+1}. ${x.nm} x ${x.nv}</div>
+              <div class="porque">${x.j.hora||''} · ${x.j.pais} — ${x.j.liga}</div>
+            </div>
+            <div style="text-align:center;min-width:70px">
+              <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:${cor(x.nota)}">${x.nota}</div>
+              <div style="font-size:10px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">PONTOS</div>
+            </div>
+          </div>`;
+        }).join('') +
+        '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Pontuação combina odds e histórico das duas equipes. Verde ≥75 (forte), amarelo 55-74 (moderado), vermelho <55 (fraco). Clique no jogo para a ficha. Sempre confirme com a análise dos 13 pontos e a odd na exchange antes de operar.</p>';
+    }
+  } catch(e){ aviso($('td-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 });
 
