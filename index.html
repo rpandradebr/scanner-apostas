@@ -395,7 +395,19 @@
       <div><label for="es-liga">Campeonato (ou use favoritas acima)</label><select id="es-liga"><option value="">Carregue os jogos…</option></select></div>
       <div><label for="es-tipo">Estatística</label>
         <select id="es-tipo">
-          <optgroup label="Por time">
+          <optgroup label="Média por time (últimos 10 jogos)">
+            <option value="M:media_amarelos">🟨 Cartões amarelos (média)</option>
+            <option value="M:media_vermelhos">🟥 Cartões vermelhos (média)</option>
+            <option value="M:media_chutes">🎯 Chutes (média)</option>
+            <option value="M:media_chutes_gol">🎯 Chutes no gol (média)</option>
+            <option value="M:media_escanteios">📐 Escanteios (média)</option>
+            <option value="M:media_faltas">⚠️ Faltas (média)</option>
+            <option value="M:media_impedimentos">🚩 Impedimentos (média)</option>
+            <option value="M:media_posse">⏱️ Posse de bola (média)</option>
+            <option value="M:media_passes">🔄 Passes (média)</option>
+            <option value="M:media_desarmes">🛡️ Desarmes (média)</option>
+          </optgroup>
+          <optgroup label="De um dia específico (por time)">
             <option value="Yellow Cards">🟨 Cartões amarelos</option>
             <option value="Red Cards">🟥 Cartões vermelhos</option>
             <option value="Total Shots">🎯 Chutes (time)</option>
@@ -408,9 +420,10 @@
             <option value="Corner Kicks">📐 Escanteios</option>
             <option value="Ball Possession">⏱️ Posse de bola</option>
           </optgroup>
-          <optgroup label="Por jogador">
-            <option value="P:desarmes">🛡️ Desarmes (jogador)</option>
-            <option value="P:chutes">🎯 Chutes (jogador)</option>
+          </optgroup>
+          <optgroup label="De um dia — por jogador">
+            <option value="P:desarmes">🛡️ Desarmes (jogador, do dia)</option>
+            <option value="P:chutes">🎯 Chutes (jogador, do dia)</option>
           </optgroup>
         </select></div>
       <div style="align-self:end"><button class="acao" id="btn-carregar-es">Carregar jogos</button></div>
@@ -447,7 +460,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.20";
+const APP_VERSAO = "v3.21";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2063,27 +2076,87 @@ $('btn-carregar-es').addEventListener('click', async () => {
 $('btn-rankear-es').addEventListener('click', async () => {
   const tipo = $('es-tipo').value;
   const usarFav = $('es-usar-fav').checked;
-  let jogos, rotuloLiga;
-  if (usarFav){
-    const fav = getLigasFav();
-    if (!fav.length){ aviso($('es-aviso'), 'Você marcou "usar favoritas" mas não escolheu nenhuma liga. Clique nas ligas acima para favoritá-las.', 'erro'); return; }
-    const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    jogos = esJogos.filter(j => {
-      if (!['FT','AET','PEN'].includes(j.status)) return false;
-      const nome = norm(`${j.pais} — ${j.liga}`);
-      // casa se alguma favorita bate: mesmo país E a liga contém o termo principal
-      return fav.some(f => {
-        const [pais, liga] = f.split('—').map(x => norm(x));
-        return nome.includes(pais.trim()) && (!liga || nome.includes(liga.trim()));
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  function jogosSelecionados(exigirEncerrado){
+    if (usarFav){
+      const fav = getLigasFav();
+      if (!fav.length) return { erro: 'Você marcou "usar favoritas" mas não escolheu nenhuma liga. Clique nas ligas acima.' };
+      const js = esJogos.filter(j => {
+        if (exigirEncerrado && !['FT','AET','PEN'].includes(j.status)) return false;
+        const nome = norm(`${j.pais} — ${j.liga}`);
+        return fav.some(f => { const [p,l] = f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l || nome.includes(l.trim())); });
       });
-    });
-    rotuloLiga = `ligas favoritas`;
-  } else {
-    const liga = $('es-liga').value;
-    if (!liga){ aviso($('es-aviso'), 'Escolha um campeonato, ou marque "usar minhas ligas favoritas".', 'erro'); return; }
-    jogos = esJogos.filter(j => `${j.pais} — ${j.liga}` === liga && ['FT','AET','PEN'].includes(j.status));
-    rotuloLiga = liga;
+      return { jogos: js, rotulo: 'ligas favoritas' };
+    } else {
+      const liga = $('es-liga').value;
+      if (!liga) return { erro: 'Escolha um campeonato, ou marque "usar minhas ligas favoritas".' };
+      const js = esJogos.filter(j => `${j.pais} — ${j.liga}` === liga && (!exigirEncerrado || ['FT','AET','PEN'].includes(j.status)));
+      return { jogos: js, rotulo: liga };
+    }
   }
+
+  if (tipo.startsWith('M:')){
+    const campo = tipo.split(':')[1];
+    const sel = jogosSelecionados(false);
+    if (sel.erro){ aviso($('es-aviso'), sel.erro, 'erro'); return; }
+    if (!sel.jogos.length){ aviso($('es-aviso'), 'Nenhum jogo das ligas escolhidas nesta data.', 'erro'); return; }
+    const times = {};
+    sel.jogos.forEach(j => {
+      if (j.mandante_id) times[j.mandante_id] = { id:j.mandante_id, nome:j.mandante, liga:`${j.pais} — ${j.liga}` };
+      if (j.visitante_id) times[j.visitante_id] = { id:j.visitante_id, nome:j.visitante, liga:`${j.pais} — ${j.liga}` };
+    });
+    const listaTimes = Object.values(times);
+    if (!listaTimes.length){ aviso($('es-aviso'), 'Jogos sem ID de time (importados de CSV não têm médias detalhadas). Use jogos vindos da grade da API.', 'erro'); return; }
+    if (listaTimes.length > 30 && !confirm(`Isso vai calcular médias de ${listaTimes.length} times (pode gastar bastante requisição na primeira vez). Continuar?`)) return;
+
+    const b = $('btn-rankear-es'); b.disabled = true;
+    aviso($('es-aviso'), ''); $('es-resultado').innerHTML='';
+    const linhas = [];
+    try{
+      for (let i=0; i<listaTimes.length; i++){
+        const t = listaTimes[i];
+        $('es-status').textContent = `⏳ Calculando médias ${i+1}/${listaTimes.length} — ${t.nome}…`;
+        let media = null;
+        try{
+          const { data } = await db.from('stats_times').select('*').eq('time_id', t.id).limit(1);
+          if (data?.length && (Date.now() - new Date(data[0].atualizado_em).getTime()) < 86400000) media = data[0];
+        } catch(_){}
+        if (!media){
+          const r = await chamarEdge({ acao:'stats_time', time_id: t.id, liga: t.liga, nome: t.nome, n: 10 });
+          if (r.ok) media = r.registro;
+        }
+        if (media && media[campo] != null){
+          linhas.push({ nome: t.nome, liga: t.liga, valor: Number(media[campo]), amostra: media.jogos_amostra });
+        }
+      }
+      linhas.sort((a,c) => c.valor - a.valor);
+      if (!linhas.length){
+        aviso($('es-aviso'), 'Sem dados desta estatística para estes times (liga pode não ter cobertura detalhada).', 'erro');
+        $('es-status').textContent = '';
+      } else {
+        const nomeTipo = $('es-tipo').selectedOptions[0].textContent;
+        $('es-resultado').innerHTML = `<h3>${nomeTipo} — ${sel.rotulo} (média últimos 10 jogos)</h3>
+          <div class="tabela-scroll"><table>
+          <tr><th>#</th><th>Time</th><th>Liga</th><th>${nomeTipo}</th><th>Amostra</th></tr>
+          ${linhas.map((l,i) => `<tr>
+            <td>${i+1}</td><td><b>${l.nome}</b></td>
+            <td style="color:var(--chalk-dim);font-size:12px">${l.liga}</td>
+            <td style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${l.valor.toFixed(2)}</b></td>
+            <td style="color:var(--chalk-dim)">${l.amostra}j</td>
+          </tr>`).join('')}
+          </table></div>
+          <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Média por jogo dos últimos 10 de cada time. Guardado no banco por 24h. Use para achar times de padrão forte e cruzar com o confronto do dia.</p>`;
+        $('es-status').textContent = `✅ ${linhas.length} times ranqueados.`;
+      }
+    } catch(e){ aviso($('es-aviso'), 'Falha: ' + e.message, 'erro'); }
+    finally{ b.disabled = false; }
+    return;
+  }
+
+  let jogos, rotuloLiga;
+  { const sel = jogosSelecionados(true);
+    if (sel.erro){ aviso($('es-aviso'), sel.erro, 'erro'); return; }
+    jogos = sel.jogos; rotuloLiga = sel.rotulo; }
   if (!jogos.length){ aviso($('es-aviso'), 'Nenhum jogo encerrado nas ligas escolhidas nesta data. Estatísticas detalhadas só existem para jogos já disputados.', 'erro'); return; }
   if (jogos.length > 40 && !confirm(`Isso vai buscar ${jogos.length} jogos (${jogos.length*3} requisições). Continuar?`)){ return; }
 
