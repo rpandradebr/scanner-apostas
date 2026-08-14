@@ -143,18 +143,18 @@
   </header>
 
   <nav>
-    <button data-aba="aovivo">🔴 Ao vivo</button>
-    <button data-aba="grade" class="on">📅 Grade do dia</button>
-    <button data-aba="scanner">🎯 Scanner de mercados</button>
-    <button data-aba="rodada">🏆 Análise da rodada</button>
-    <button data-aba="favoritos">⭐ Favoritos do dia</button>
-    <button data-aba="sugestoes">💡 Sugestões do dia</button>
-    <button data-aba="topdia">🏆 TOP do dia</button>
-    <button data-aba="historico">📊 Histórico 10 jogos</button>
-    <button data-aba="analises">💾 Minhas análises</button>
-    <button data-aba="importar">📥 Importar CSV</button>
-    <button data-aba="histsug">📋 Histórico de sugestões</button>
-    <button data-aba="estats">📊 Estatísticas por jogo</button>
+    <button data-aba="aovivo" title="Jogos acontecendo agora, com placar e minuto ao vivo. Clique num jogo para abrir a análise.">🔴 Ao vivo</button>
+    <button data-aba="grade" class="on" title="Todos os jogos do dia escolhido, agrupados por país e liga, com odds. Clique num jogo para a ficha completa.">📅 Grade do dia</button>
+    <button data-aba="scanner" title="Analisa um confronto específico: digite os dois times e veja o semáforo de mercados (Lay 1x0, 0x1, Over/Under, zebra).">🎯 Scanner de mercados</button>
+    <button data-aba="rodada" title="Escolha um campeonato e veja a análise Poisson de todos os jogos da rodada, com probabilidades de placar.">🏆 Análise da rodada</button>
+    <button data-aba="favoritos" title="Busca as odds do dia e classifica: super favoritos, favoritos e zebras (mercado de vencedor) e mercado de gols (under/over).">⭐ Favoritos do dia</button>
+    <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos para trabalhar, com nota e mercado indicado. Tem rankings por mercado (BTTS, over, under).">💡 Sugestões do dia</button>
+    <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados de 0 a 100 para cada mercado (Back favorito, Under 3.5, Lay goleada, etc.). Escolha o mercado e veja o ranking.">🏆 TOP do dia</button>
+    <button data-aba="historico" title="Últimos 10 jogos de qualquer time, com médias. Aqui também ficam os botões de manutenção: baixar 90 dias, colher resultados, ativar últimos-10.">📊 Histórico 10 jogos</button>
+    <button data-aba="analises" title="Suas análises salvas. Registre o veredito, cole a análise completa e, depois do jogo, o placar para ver green/red e sua taxa de acerto.">💾 Minhas análises</button>
+    <button data-aba="importar" title="Importe planilhas de resultados (CSV do football-data.co.uk ou Excel combinado) direto para o banco, sem gastar requisição da API.">📥 Importar CSV</button>
+    <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático. Clique em "Atualizar resultados" para o sistema apurar sozinho.">📋 Histórico de sugestões</button>
+    <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -460,7 +460,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.21";
+const APP_VERSAO = "v3.22";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
