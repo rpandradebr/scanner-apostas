@@ -353,7 +353,11 @@
     </p>
     <div style="background:var(--pitch);border:1px solid rgba(237,234,224,.15);border-radius:10px;padding:12px;margin-bottom:14px">
       <label style="margin-bottom:8px">⭐ Minhas ligas favoritas (o ranking usa só estas quando marcado)</label>
-      <div id="es-favligas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span class="msg-vazia" style="font-size:13px">Carregue os jogos de um dia para escolher suas ligas.</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="mini" id="es-marcar-preset" style="border-color:var(--amber);color:var(--amber)">⭐ Marcar ligas principais</button>
+        <button class="mini" id="es-limpar-fav">🗑️ Limpar seleção</button>
+      </div>
+      <div id="es-favligas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span class="msg-vazia" style="font-size:13px">Clique em "Marcar ligas principais" para selecionar o pacote pronto, ou carregue os jogos de um dia para escolher manualmente.</span></div>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin:0">
         <input type="checkbox" id="es-usar-fav" style="width:auto"> Usar só minhas ligas favoritas no ranking (ignora o seletor de campeonato)
       </label>
@@ -415,7 +419,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.16";
+const APP_VERSAO = "v3.19";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1940,6 +1944,36 @@ window.carregarAoVivo = carregarAoVivo;
 $('es-data').value = hojeISO();
 let esJogos = [];
 
+
+const LIGAS_PRESET = [
+  // Inglaterra
+  "England — Premier League", "England — Championship", "England — FA Cup", "England — League Cup",
+  // Brasil
+  "Brazil — Serie A", "Brazil — Serie B", "Brazil — Copa Do Brasil",
+  // Espanha
+  "Spain — La Liga", "Spain — Copa Del Rey",
+  // Alemanha
+  "Germany — Bundesliga", "Germany — 2. Bundesliga", "Germany — DFB Pokal",
+  // França
+  "France — Ligue 1", "France — Coupe de France",
+  // Itália
+  "Italy — Serie A", "Italy — Coppa Italia",
+  // Continentais Sul-América
+  "World — CONMEBOL Libertadores", "World — CONMEBOL Sudamericana",
+  // Continentais Europa
+  "World — UEFA Champions League", "World — UEFA Europa League", "World — UEFA Europa Conference League",
+  // Argentina
+  "Argentina — Liga Profesional Argentina", "Argentina — Copa Argentina",
+  // Sugeridas (esquecidas comuns)
+  "Portugal — Primeira Liga", "Netherlands — Eredivisie", "Mexico — Liga MX", "USA — Major League Soccer",
+  // Campeãs de cartão (América do Sul lidera o mundo em cartões)
+  "Bolivia — Primera Division", "Peru — Liga 1", "Chile — Primera Division",
+  "Colombia — Primera A", "Ecuador — Liga Pro", "Paraguay — Division Profesional", "Uruguay — Primera Division",
+  // Leagues Cup (EUA x México) e Recopa
+  "World — Leagues Cup", "World — CONMEBOL Recopa",
+  // Arábia Saudita
+  "Saudi-Arabia — Pro League", "Saudi-Arabia — King Cup",
+];
 function getLigasFav(){ try{ return JSON.parse(localStorage.getItem('ligasFav')||'[]'); }catch(_){ return []; } }
 function setLigasFav(arr){ localStorage.setItem('ligasFav', JSON.stringify(arr)); }
 function desenharFavLigas(ligas){
@@ -1961,6 +1995,22 @@ function toggleLigaFav(liga){
   desenharFavLigas(ligas);
 }
 window.toggleLigaFav = toggleLigaFav;
+
+$('es-marcar-preset').addEventListener('click', () => {
+  // adiciona todas do preset que ainda não estão
+  let fav = getLigasFav();
+  LIGAS_PRESET.forEach(l => { if (!fav.includes(l)) fav.push(l); });
+  setLigasFav(fav);
+  const ligas = [...new Set(esJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
+  desenharFavLigas(ligas);
+  aviso($('es-aviso'), `${LIGAS_PRESET.length} ligas principais marcadas. As que aparecerem na grade do dia serão usadas no ranking. (Nomes podem variar levemente — se alguma não casar, marque manualmente na lista.)`);
+});
+$('es-limpar-fav').addEventListener('click', () => {
+  if (!confirm('Limpar todas as ligas favoritas?')) return;
+  setLigasFav([]);
+  const ligas = [...new Set(esJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
+  desenharFavLigas(ligas);
+});
 
 $('btn-carregar-es').addEventListener('click', async () => {
   const b = $('btn-carregar-es'); b.disabled = true;
@@ -1985,8 +2035,17 @@ $('btn-rankear-es').addEventListener('click', async () => {
   if (usarFav){
     const fav = getLigasFav();
     if (!fav.length){ aviso($('es-aviso'), 'Você marcou "usar favoritas" mas não escolheu nenhuma liga. Clique nas ligas acima para favoritá-las.', 'erro'); return; }
-    jogos = esJogos.filter(j => fav.includes(`${j.pais} — ${j.liga}`) && ['FT','AET','PEN'].includes(j.status));
-    rotuloLiga = `${fav.length} ligas favoritas`;
+    const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    jogos = esJogos.filter(j => {
+      if (!['FT','AET','PEN'].includes(j.status)) return false;
+      const nome = norm(`${j.pais} — ${j.liga}`);
+      // casa se alguma favorita bate: mesmo país E a liga contém o termo principal
+      return fav.some(f => {
+        const [pais, liga] = f.split('—').map(x => norm(x));
+        return nome.includes(pais.trim()) && (!liga || nome.includes(liga.trim()));
+      });
+    });
+    rotuloLiga = `ligas favoritas`;
   } else {
     const liga = $('es-liga').value;
     if (!liga){ aviso($('es-aviso'), 'Escolha um campeonato, ou marque "usar minhas ligas favoritas".', 'erro'); return; }
