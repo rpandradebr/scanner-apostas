@@ -350,7 +350,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.11";
+const APP_VERSAO = "v3.12";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -736,6 +736,7 @@ async function estatsDetalhadas(fixtureId, botao){
         'Fouls':'Faltas','Corner Kicks':'Escanteios','Offsides':'Impedimentos','Ball Possession':'Posse de bola',
         'Yellow Cards':'Cartões amarelos','Red Cards':'Cartões vermelhos','Goalkeeper Saves':'Defesas do goleiro',
         'Total passes':'Total de passes','Passes accurate':'Passes certos','Passes %':'Precisão de passes',
+        'expected_goals':'Gols esperados (xG)','goals_prevented':'Gols evitados (defesa)',
       };
       html += `<h3>Estatísticas da partida</h3><table class="comp">
         <tr><th style="text-align:center">${a.time}</th><th></th><th style="text-align:center">${b.time}</th></tr>` +
@@ -755,16 +756,23 @@ async function estatsDetalhadas(fixtureId, botao){
       }
     }
     if (r.jogadores?.length){
+      let algumComStats = false;
       r.jogadores.forEach(t => {
         const comStats = t.lista.filter(p => p.min);
         if (!comStats.length) return;
+        const temDesarme = comStats.some(p => p.desarmes != null);
+        if (!temDesarme && !comStats.some(p => p.nota)) return;
+        algumComStats = true;
         const topNota = [...comStats].sort((x,y)=>(parseFloat(y.nota)||0)-(parseFloat(x.nota)||0)).slice(0,3);
         const topDesarme = [...comStats].sort((x,y)=>(y.desarmes||0)-(x.desarmes||0))[0];
         html += `<h3>${t.time} — destaques</h3><div class="chips">` +
-          topNota.map(p => `<span class="chip">⭐ ${p.nome} nota <b>${p.nota||'—'}</b> · ${p.chutes||0} chutes · ${p.desarmes||0} desarmes</span>`).join('') +
+          topNota.map(p => `<span class="chip">⭐ ${p.nome} nota <b>${p.nota||'—'}</b> · ${p.chutes||0} chutes · ${p.desarmes ?? '—'} desarmes</span>`).join('') +
           (topDesarme?.desarmes ? `<span class="chip">🛡️ Mais desarmes: <b>${topDesarme.nome}</b> (${topDesarme.desarmes})</span>` : '') +
           '</div>';
       });
+      if (!algumComStats){
+        html += `<h3>Desarmes e notas de jogadores</h3><p style="font-size:13px;color:var(--chalk-dim)">A API não coletou estatística individual de jogadores para esta partida (desarmes, notas, dribles). Isso varia por jogo — a estatística de time acima está completa. Jogos das grandes ligas europeias costumam ter cobertura de jogador mais consistente.</p>`;
+      }
     }
     alvo.innerHTML = html || '<div class="aviso">Este jogo ainda não tem estatísticas detalhadas. Isso acontece quando: (1) a partida ainda não foi disputada, (2) é de uma liga/temporada fora da cobertura do plano grátis, ou (3) os dados ainda não foram publicados (podem levar até 2h após o apito final). Estatísticas detalhadas existem apenas para jogos já encerrados.</div>';
     botao.textContent = '✅ estatísticas carregadas';
