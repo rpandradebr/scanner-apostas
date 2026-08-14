@@ -351,9 +351,16 @@
       Funciona melhor com jogos já encerrados e ligas grandes (onde a cobertura é completa).
       Cada jogo custa 3 requisições — o campeonato limita o volume.
     </p>
+    <div style="background:var(--pitch);border:1px solid rgba(237,234,224,.15);border-radius:10px;padding:12px;margin-bottom:14px">
+      <label style="margin-bottom:8px">⭐ Minhas ligas favoritas (o ranking usa só estas quando marcado)</label>
+      <div id="es-favligas" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"><span class="msg-vazia" style="font-size:13px">Carregue os jogos de um dia para escolher suas ligas.</span></div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin:0">
+        <input type="checkbox" id="es-usar-fav" style="width:auto"> Usar só minhas ligas favoritas no ranking (ignora o seletor de campeonato)
+      </label>
+    </div>
     <div class="linha c4">
       <div><label for="es-data">Data</label><input type="date" id="es-data"></div>
-      <div><label for="es-liga">Campeonato</label><select id="es-liga"><option value="">Carregue os jogos…</option></select></div>
+      <div><label for="es-liga">Campeonato (ou use favoritas acima)</label><select id="es-liga"><option value="">Carregue os jogos…</option></select></div>
       <div><label for="es-tipo">Estatística</label>
         <select id="es-tipo">
           <optgroup label="Por time">
@@ -408,7 +415,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.15";
+const APP_VERSAO = "v3.16";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1933,6 +1940,28 @@ window.carregarAoVivo = carregarAoVivo;
 $('es-data').value = hojeISO();
 let esJogos = [];
 
+function getLigasFav(){ try{ return JSON.parse(localStorage.getItem('ligasFav')||'[]'); }catch(_){ return []; } }
+function setLigasFav(arr){ localStorage.setItem('ligasFav', JSON.stringify(arr)); }
+function desenharFavLigas(ligas){
+  const fav = getLigasFav();
+  if (!ligas.length){ $('es-favligas').innerHTML = '<span class="msg-vazia" style="font-size:13px">Carregue os jogos de um dia para escolher suas ligas.</span>'; return; }
+  // mostra as ligas do dia + as já favoritadas (mesmo que não estejam hoje)
+  const todas = [...new Set([...ligas, ...fav])].sort();
+  $('es-favligas').innerHTML = todas.map(l => {
+    const on = fav.includes(l);
+    return `<button class="mini" style="${on?'border-color:var(--amber);color:var(--amber)':''}" onclick="toggleLigaFav('${l.replace(/'/g,String.fromCharCode(92,39))}')">${on?'⭐':'☆'} ${l}</button>`;
+  }).join('');
+}
+function toggleLigaFav(liga){
+  let fav = getLigasFav();
+  if (fav.includes(liga)) fav = fav.filter(x => x !== liga);
+  else fav.push(liga);
+  setLigasFav(fav);
+  const ligas = [...new Set(esJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
+  desenharFavLigas(ligas);
+}
+window.toggleLigaFav = toggleLigaFav;
+
 $('btn-carregar-es').addEventListener('click', async () => {
   const b = $('btn-carregar-es'); b.disabled = true;
   aviso($('es-aviso'), ''); $('es-resultado').innerHTML='';
@@ -1942,18 +1971,30 @@ $('btn-carregar-es').addEventListener('click', async () => {
     const ligas = [...new Set(esJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
     $('es-liga').innerHTML = '<option value="">Escolha o campeonato</option>' +
       ligas.map(l => `<option>${l}</option>`).join('');
+    desenharFavLigas(ligas);
     $('btn-rankear-es').disabled = false;
-    $('es-status').textContent = `${esJogos.length} jogos carregados. Escolha o campeonato e a estatística, depois gere o ranking.`;
+    $('es-status').textContent = `${esJogos.length} jogos carregados. Escolha o campeonato (ou marque favoritas) e a estatística.`;
   } catch(e){ aviso($('es-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 });
 
 $('btn-rankear-es').addEventListener('click', async () => {
-  const liga = $('es-liga').value;
   const tipo = $('es-tipo').value;
-  if (!liga){ aviso($('es-aviso'), 'Escolha um campeonato primeiro (para limitar o volume de requisições).', 'erro'); return; }
-  const jogos = esJogos.filter(j => `${j.pais} — ${j.liga}` === liga && ['FT','AET','PEN'].includes(j.status));
-  if (!jogos.length){ aviso($('es-aviso'), 'Nenhum jogo encerrado neste campeonato nesta data. Estatísticas detalhadas só existem para jogos já disputados.', 'erro'); return; }
+  const usarFav = $('es-usar-fav').checked;
+  let jogos, rotuloLiga;
+  if (usarFav){
+    const fav = getLigasFav();
+    if (!fav.length){ aviso($('es-aviso'), 'Você marcou "usar favoritas" mas não escolheu nenhuma liga. Clique nas ligas acima para favoritá-las.', 'erro'); return; }
+    jogos = esJogos.filter(j => fav.includes(`${j.pais} — ${j.liga}`) && ['FT','AET','PEN'].includes(j.status));
+    rotuloLiga = `${fav.length} ligas favoritas`;
+  } else {
+    const liga = $('es-liga').value;
+    if (!liga){ aviso($('es-aviso'), 'Escolha um campeonato, ou marque "usar minhas ligas favoritas".', 'erro'); return; }
+    jogos = esJogos.filter(j => `${j.pais} — ${j.liga}` === liga && ['FT','AET','PEN'].includes(j.status));
+    rotuloLiga = liga;
+  }
+  if (!jogos.length){ aviso($('es-aviso'), 'Nenhum jogo encerrado nas ligas escolhidas nesta data. Estatísticas detalhadas só existem para jogos já disputados.', 'erro'); return; }
+  if (jogos.length > 40 && !confirm(`Isso vai buscar ${jogos.length} jogos (${jogos.length*3} requisições). Continuar?`)){ return; }
 
   const b = $('btn-rankear-es'); b.disabled = true;
   aviso($('es-aviso'), ''); $('es-resultado').innerHTML='';
@@ -1987,7 +2028,7 @@ $('btn-rankear-es').addEventListener('click', async () => {
       $('es-status').textContent = '';
     } else {
       const nomeTipo = $('es-tipo').selectedOptions[0].textContent;
-      $('es-resultado').innerHTML = `<h3>${nomeTipo} — ${liga} (${$('es-data').value})</h3>
+      $('es-resultado').innerHTML = `<h3>${nomeTipo} — ${rotuloLiga} (${$('es-data').value})</h3>
         <div class="tabela-scroll"><table>
         <tr><th>#</th><th>${ehJogador?'Jogador':'Time'}</th><th>Jogo</th><th>${nomeTipo}</th></tr>
         ${linhas.slice(0,40).map((l,i) => `<tr>
