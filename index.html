@@ -466,7 +466,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.23";
+const APP_VERSAO = "v3.24";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1341,7 +1341,31 @@ const pct = x => Math.round(x*100);
 
 // ---- Ponte para a análise completa (13 pontos) no Claude ----
 function montarPrompt(mandante, visitante, liga){
-  return `Analise ${mandante} x ${visitante}${liga ? ' pelo campeonato ' + liga : ''}. Quero a análise completa dos 13 pontos com veredito nos mercados Lay 1x0, Lay 0x1, Over/Under e Lay zebra.`;
+  const camp = liga || '[campeonato]';
+  return `JOGO QUE ESTÁ PRA COMEÇAR ENTRE ${mandante} x ${visitante} PELO ${camp}, [insira rodada ou a fase].
+Considere tudo o que está abaixo e me entregue a melhor análise possível:
+1- Momento das equipes, em que fase vive cada uma, tem briga por classificação, por play-off, para ser campeão, para não ser rebaixado, o que cada equipe precisa? vitória ou empate já basta?
+Se tiver premiação financeira (malas brancas) ou se alguma das equipes está em ritmo de férias, considere também, okay?
+2- Necessidade do resultado, existe Must Win para uma das equipes (motivação real), qual é o foco: alguma das equipes vem de eliminação pesada ou tem jogo decisivo por uma copa: (ex: Champions da região (copa continental) ou copa locais) no meio da semana? Principalmente se uma das equipes é favorita, pois devem poupar, e podem perder intensidade nesse jogo, me passe tudo, okay?
+3- Análise a formação de cada equipe, como cada equipe vem pro jogo? Faça isso com a escalação já confirmada e não a provável, okay?
+4- Linha de frente e desfalques de impacto: Quais jogadores estão lesionados, suspensos, não foram relacionados por motivo pessoais ou que estão no banco?
+Considere principalmente os jogadores que são referência em suas posições, exemplo: o 9 que é artilheiro, o 10 que é (criador), o atacante que quebra linha no 1x1, zagueiro, lateral ou volante que lidera o defensivo, isso interfere e muito nos mercados de macht odd, resultado correto e gols, então considere toda ausência importante, okay?
+5- Mando de campo, é uma equipe que tem força em casa, vem forte pra esse confronto, terá apoio da sua torcida?
+6- Analisar Métricas de Expectativa dos últimos jogos de cada equipe, avalie o xG (Gols Esperados) e o xGA (Gols Esperados Contra) das equipes nas últimas 5 partidas. A posição na tabela, média de gols marcados e tomados, analisar fator casa e fator fora, seja cirúrgico nessa análise, faça um filtro e me passe de forma resumida somente o mais necessário, okay?
+7- Confrontos diretos, só os mais recentes e se realmente existe "tabu" ou não, okay?
+8- Qual estilo de jogo de cada equipe, como o mandante costuma jogar em casa e como o time visitante costuma jogar fora?
+9- Extra campo, pesquise todas as notícias sobre os times que possam interferir na partida, existe crise interna de alguma das equipes? Exemplo: Salário atrasado? conflitos internos entre jogadores ou treinador/comissão técnica com jogadores? Existem boatos de demissão, escândalos políticos na direção ou em outros setores que podem refletir no placar do jogo?
+10- Fator clima e gramado só considere estádios que ainda não estão preparados pra fortes chuvas, que tem históricos com problemas de drenagem, caso contrário ignore, por favor. Exemplo, estádios padrão FIFA, padrão Europa, de grandes clubes a forte chuva não costumam prejudicar ou interferir no resultado de gols ou da partida, então só considere análise fator clima e gramado se o mesmo realmente está com poças de água, se já tem históricos de má drenagem ou outros problemas, caso contrário ignore, okay?
+11- Perfil do Árbitro: Quem é o árbitro escalado? Ele tem tendência a dar muitos cartões? Tem média alta de faltas marcadas por jogo? O estilo dele favorece o jogo truncado ou dinâmico?
+12- Curiosidades ou notícias de última hora desse confronto, o que tem pra nós?
+13- Qual é o padrão que mais vem acontecendo de ambas equipes, que realmente chama muito atenção?
+⚠️ VALIDAÇÃO OBRIGATÓRIA: Você deve estruturar sua resposta com cabeçalhos claros para cada um dos 13 pontos listados acima, sem exceção.
+APÓS COLETAR TODA A ANÁLISE NECESSÁRIA DESSE CONFRONTO, ME ENTREGUE POR FAVOR:
+1- Resultado mais provável ?
+2- Quantos gols podem vir nesse jogo?
+3- Qual o mercado mais seguro para apostar?
+4- De 0 a 10 qual a sua confiança?
+⚠️ Não fique em cima do muro, justifique cada conclusão`;
 }
 async function copiarPrompt(mandante, visitante, liga, botao){
   try{
@@ -2426,12 +2450,13 @@ $('btn-topdia').addEventListener('click', async () => {
       $('td-lista').innerHTML = `<h3>${m.nome} — ${m.dica}</h3>` +
         top.map((x,i) => {
           const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
-          return `<div class="mercado" style="border-left-color:${cor(x.nota)};display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer" onclick="fichaJogo(${idx})">
-            <div>
+          return `<div class="mercado" style="border-left-color:${cor(x.nota)};display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div style="cursor:pointer;flex:1" onclick="fichaJogo(${idx})">
               <div class="nome" style="font-size:17px">${i+1}. ${x.nm} x ${x.nv}</div>
               <div class="porque">${x.j.hora||''} · ${x.j.pais} — ${x.j.liga}</div>
+              <button class="mini" style="margin-top:6px" onclick="event.stopPropagation();copiarPrompt('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt</button>
             </div>
-            <div style="text-align:center;min-width:70px">
+            <div style="text-align:center;min-width:70px;cursor:pointer" onclick="fichaJogo(${idx})">
               <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:${cor(x.nota)}">${x.nota}</div>
               <div style="font-size:10px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">PONTOS</div>
             </div>
