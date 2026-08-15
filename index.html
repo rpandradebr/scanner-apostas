@@ -311,6 +311,15 @@
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
       <input type="checkbox" id="td-favoritas" style="width:auto"> Só minhas ligas favoritas (marque-as na aba 📊 Estatísticas)
     </label>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chalk-dim);margin-bottom:10px;flex-wrap:wrap">
+      <label style="margin:0">Máximo de jogos a analisar (economiza requisições):</label>
+      <select id="td-limite" style="width:auto;padding:4px 8px">
+        <option value="50">50 (rápido)</option>
+        <option value="100" selected>100 (padrão)</option>
+        <option value="200">200</option>
+        <option value="9999">Todos (gasta mais)</option>
+      </select>
+    </div>
       <div style="align-self:end"><button class="acao" id="btn-topdia">Gerar TOP 10</button></div>
     </div>
     <div id="td-aviso"></div>
@@ -519,7 +528,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.40";
+const APP_VERSAO = "v3.43";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1066,27 +1075,33 @@ function paramsHistorico(inputEl){
 // jogosOcorridos=true dura mais (o passado não muda); a ocorrer dura 6h
 async function estatisticasComCache(time, id, jogosSaoPassados){
   const chave = id ? String(id) : (time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  if (!chave) return null;
-  const validade = jogosSaoPassados ? 7*86400000 : 6*3600000; // passado: 7 dias; futuro: 6h
-  // 1) tenta o cache do banco
+  // 1) tenta o cache do banco (acelerador — se falhar, segue pra API normalmente)
+  if (chave){
+    try{
+      const validade = jogosSaoPassados ? 7*86400000 : 6*3600000;
+      const { data } = await db.from('cache_stats_gols').select('*').eq('time_chave', chave).limit(1);
+      if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < validade && data[0].stats_json){
+        return data[0].stats_json;
+      }
+    }catch(_){}
+  }
+  // 2) busca na API (comportamento principal — sempre funciona mesmo sem cache)
   try{
-    const { data } = await db.from('cache_stats_gols').select('*').eq('time_chave', chave).limit(1);
-    if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < validade){
-      return data[0].stats_json;
-    }
-  }catch(_){}
-  // 2) busca na API e salva
-  const p = { acao:'historico', time }; if (id) p.id = id;
-  const r = await chamarEdge(p);
-  if ((r.jogos?.length??0) < 4) return null;
-  const st = estatisticas(r.jogos);
-  st._nome = r.time || time;
-  try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){}
-  return st;
+    const p = { acao:'historico', time }; if (id) p.id = id;
+    const r = await chamarEdge(p);
+    if ((r.jogos?.length??0) < 4) return null;
+    const st = estatisticas(r.jogos);
+    st._nome = r.time || time;
+    // salva no cache pra acelerar próximas vezes (se falhar, não tem problema)
+    if (chave){ try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){} }
+    return st;
+  }catch(_){ return null; }
 }
 window.estatisticasComCache = estatisticasComCache;
 
 function estatisticas(jogos, comoMandante){
+  // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
+  const encerrados = jogos.filter(j => j.gols_mandante !== null && j.gols_mandante !== undefined);
   let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0, over05=0, over15=0, under35=0, goleadaPro=0, goleadaContra=0;
   encerrados.forEach(j => {
     const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
@@ -2693,7 +2708,19 @@ $('btn-topdia').addEventListener('click', async () => {
       const saoPassados = situ === 'ocorridos';
       // jogos ocorridos frequentemente não têm mais odds (casas removem após o fim) —
       // então só exigimos odds para jogos a ocorrer; ocorridos usam histórico (Under/Over/BTTS funcionam sem odds)
-      const comOdds = saoPassados ? jogos : jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+      let comOdds = saoPassados ? jogos : jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+      // aplica limite (economiza requisições) — prioriza ligas favoritas se houver
+      const limite = $('td-limite') ? parseInt($('td-limite').value) : 100;
+      if (comOdds.length > limite){
+        const fav = (typeof getLigasFav==='function') ? getLigasFav() : [];
+        if (fav.length){
+          const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const ehFav = j => { const nome = norm(`${j.pais} — ${j.liga}`); return fav.some(f => { const [p,l]=f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l||nome.includes(l.trim())); }); };
+          comOdds = [...comOdds].sort((a,c) => (ehFav(c)?1:0) - (ehFav(a)?1:0));
+        }
+        comOdds = comOdds.slice(0, limite);
+        aviso($('td-aviso'), `Analisando os primeiros ${limite} jogos (de ${jogos.length}) para economizar requisições. Aumente o limite ou marque "só favoritas" para focar.`, '');
+      }
       if (!comOdds.length){
         aviso($('td-aviso'), saoPassados ? `Nenhum jogo encerrado nesta data/filtro (${jogos.length} jogos no filtro). Tente outra data ou desmarque favoritas.` : 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
         b.disabled = false; return;
@@ -2732,10 +2759,10 @@ $('btn-topdia').addEventListener('click', async () => {
       let msg;
       if (!jogosComStats.length){
         const dbg = window._tdDebug;
-        const detalhe = dbg ? ` (${dbg.noFiltro} jogos no filtro, ${dbg.comHistorico} com histórico no banco)` : '';
+        const detalhe = dbg ? ` (${dbg.noFiltro} jogos analisados, ${dbg.comHistorico} com histórico suficiente)` : '';
         msg = soFav
-          ? `Nenhum jogo ${situTxt} das suas ligas favoritas com histórico suficiente${detalhe}. ${situ==='ocorridos' ? 'As ligas grandes jogam à noite — talvez ainda não terminaram, ou o histórico dos times não está no banco.' : 'Tente desmarcar "só favoritas" ou outra data.'}`
-          : `Nenhum jogo ${situTxt} com histórico no banco${detalhe}. ${dbg && dbg.noFiltro > 0 ? 'Os jogos existem, mas os times não têm histórico salvo — rode o backfill ou "colher resultados" para preencher.' : 'Tente outra data.'}`;
+          ? `Nenhum jogo ${situTxt} das suas ligas favoritas com histórico suficiente${detalhe}. ${situ==='ocorridos' ? 'As ligas grandes jogam à noite — talvez ainda não terminaram.' : 'Tente desmarcar "só favoritas" ou outra data.'}`
+          : `Nenhum jogo ${situTxt} com histórico suficiente${detalhe}. Os times precisam de ao menos 4 jogos no histórico da API. Tente outra data ou verifique se a data tem jogos de ligas cobertas.`;
       } else {
         msg = `Analisei ${jogosComStats.length} jogos, mas nenhum se qualificou para ${MERCADOS_TD[mercado].nome}. Este mercado exige um perfil específico (ex.: Back Favorito precisa de favorito claro). Tente outro mercado — os jogos já estão carregados, a troca é instantânea.`;
       }
