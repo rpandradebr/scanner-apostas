@@ -519,7 +519,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.36";
+const APP_VERSAO = "v3.37";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1990,6 +1990,15 @@ async function gerarSugestoes(){
           <div class="nome">${s.j.mandante} x ${s.j.visitante}</div>
           <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
           <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
+          ${(() => {
+            const o = oddsMap[s.j.fixture_id];
+            if (!o?.odd_home) return '';
+            const favEhCasa = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
+            const favNome = favEhCasa ? (s.nm||s.j.mandante) : (s.nv||s.j.visitante);
+            const favOdd = favEhCasa ? o.odd_home : o.odd_away;
+            return `<div style="font-size:12px;color:var(--chalk-dim);margin-top:4px">
+              Odds: <b>${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b>${fmtOdd(o.odd_away)}</b> | ⭐ Fav: <b style="color:var(--amber)">${favNome}</b> (${fmtOdd(favOdd)})</div>`;
+          })()}
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
             <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
@@ -2049,6 +2058,17 @@ function confereMercado(mercado, gm, gv){
   if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
   if (mercado === 'LAY ZEBRA'){
     return gm >= gv ? 'GREEN' : 'RED';
+  }
+  if (mercado === 'BACK FAVORITO'){
+    // sem saber quem é o favorito aqui, aproxima: mandante venceu (favorito costuma ser mandante)
+    return gm > gv ? 'GREEN' : 'RED';
+  }
+  if (mercado === 'LAY GOLEADA MANDANTE'){
+    // lay goleada mandante: perde se o mandante golear (3+ de diferença)
+    return (gm - gv >= 3) ? 'RED' : 'GREEN';
+  }
+  if (mercado === 'LAY GOLEADA VISITANTE'){
+    return (gv - gm >= 3) ? 'RED' : 'GREEN';
   }
   return null;
 }
@@ -2641,34 +2661,50 @@ $('btn-topdia').addEventListener('click', async () => {
   }
 
   try{
-    const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao'), 'td-favoritas');
-    await carregarOddsMapa(data);
-    const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
-    if (!comOdds.length){
-      aviso($('td-aviso'), 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
-      b.disabled = false; return;
-    }
-    const pontuados = [];
     const situ = $('td-situacao') ? $('td-situacao').value : 'ocorrer';
-    const saoPassados = situ === 'ocorridos';
-    for (let i=0; i<comOdds.length; i+=4){
-      $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
-      const leva = comOdds.slice(i, i+4);
-      const res = await Promise.all(leva.map(async j => {
-        try{
-          const [em, ev] = await Promise.all([
-            estatisticasComCache(j.mandante, j.mandante_id, saoPassados),
-            estatisticasComCache(j.visitante, j.visitante_id, saoPassados),
-          ]);
-          if (!em || !ev) return null;
-          const nota = pontuarTD(mercado, oddsMap[j.fixture_id], em, ev);
-          if (nota == null) return null;
-          return { j, nota, em, ev, nm: em._nome||j.mandante, nv: ev._nome||j.visitante };
-        } catch(_){ return null; }
-      }));
-      res.filter(Boolean).forEach(x => pontuados.push(x));
+    const soFav = $('td-favoritas') && $('td-favoritas').checked;
+    const chaveCache = `${data}|${situ}|${soFav?'fav':'all'}`;
+    let jogosComStats;
+
+    // reusa o cache de sessão se a mesma data/situação/favoritas já foi processada
+    if (window._tdProcessado && window._tdProcessado.chave === chaveCache){
+      jogosComStats = window._tdProcessado.dados;
+      $('td-status').textContent = `⚡ Reusando ${jogosComStats.length} jogos já analisados (troca de mercado é instantânea).`;
+    } else {
+      const rg = await chamarEdge({ acao:'grade', data });
+      const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao'), 'td-favoritas');
+      await carregarOddsMapa(data);
+      const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+      if (!comOdds.length){
+        aviso($('td-aviso'), 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
+        b.disabled = false; return;
+      }
+      const saoPassados = situ === 'ocorridos';
+      jogosComStats = [];
+      for (let i=0; i<comOdds.length; i+=4){
+        $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
+        const leva = comOdds.slice(i, i+4);
+        const res = await Promise.all(leva.map(async j => {
+          try{
+            const [em, ev] = await Promise.all([
+              estatisticasComCache(j.mandante, j.mandante_id, saoPassados),
+              estatisticasComCache(j.visitante, j.visitante_id, saoPassados),
+            ]);
+            if (!em || !ev) return null;
+            return { j, em, ev, nm: em._nome||j.mandante, nv: ev._nome||j.visitante };
+          } catch(_){ return null; }
+        }));
+        res.filter(Boolean).forEach(x => jogosComStats.push(x));
+      }
+      window._tdProcessado = { chave: chaveCache, dados: jogosComStats };
     }
+
+    // pontua para o mercado escolhido (instantâneo, local)
+    const pontuados = [];
+    jogosComStats.forEach(x => {
+      const nota = pontuarTD(mercado, oddsMap[x.j.fixture_id], x.em, x.ev);
+      if (nota != null) pontuados.push({ ...x, nota });
+    });
     pontuados.sort((a,c) => c.nota - a.nota);
     const top = pontuados.slice(0, 10);
     if (!top.length){
@@ -2679,7 +2715,7 @@ $('btn-topdia').addEventListener('click', async () => {
       $('td-status').textContent = `✅ TOP ${top.length} de ${pontuados.length} jogos analisados.`;
       const cor = n => n >= 75 ? 'var(--green)' : n >= 55 ? 'var(--amber)' : 'var(--red)';
       // mapeia o mercado do TOP para o confereMercado (só os que dão pra apurar)
-      const mktConfere = { over05:'OVER 0.5', over15:'OVER 1.5', under35:'UNDER 3.5', btts:'BTTS', lay01:'LAY 0x1', lay10:'LAY 1x0', lay_zebra:'LAY ZEBRA' }[mercado];
+      const mktConfere = { back_fav:'BACK FAVORITO', over05:'OVER 0.5', over15:'OVER 1.5', under35:'UNDER 3.5', btts:'BTTS', lay01:'LAY 0x1', lay10:'LAY 1x0', lay_zebra:'LAY ZEBRA', lay_gol_mand:'LAY GOLEADA MANDANTE', lay_gol_vis:'LAY GOLEADA VISITANTE' }[mercado];
       const seloResultado = (x) => {
         const encerrado = ['FT','AET','PEN'].includes(x.j.status);
         if (!encerrado || !mktConfere) return '';
@@ -2700,6 +2736,17 @@ $('btn-topdia').addEventListener('click', async () => {
             <div style="flex:1">
               <div class="nome" style="font-size:17px;cursor:pointer" onclick="fichaJogo(${idx})">${i+1}. ${x.nm} x ${x.nv}</div>
               <div class="porque">${x.j.hora||''} · ${x.j.pais} — ${x.j.liga}</div>
+              ${(() => {
+                const o = oddsMap[x.j.fixture_id];
+                if (!o?.odd_home) return '';
+                const favEhCasa = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
+                const favNome = favEhCasa ? x.nm : x.nv;
+                const favOdd = favEhCasa ? o.odd_home : o.odd_away;
+                return `<div style="font-size:12.5px;color:var(--chalk-dim);margin-top:2px">
+                  Odds: <b style="color:var(--chalk)">${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b style="color:var(--chalk)">${fmtOdd(o.odd_away)}</b>
+                  &nbsp;|&nbsp; ⭐ Favorito: <b style="color:var(--amber)">${favNome}</b> (${fmtOdd(favOdd)})
+                </div>`;
+              })()}
               ${seloResultado(x)}
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
                 <button class="mini" onclick="event.stopPropagation();copiarPrompt('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
