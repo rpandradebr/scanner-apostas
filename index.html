@@ -519,7 +519,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.35";
+const APP_VERSAO = "v3.36";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1062,9 +1062,31 @@ function paramsHistorico(inputEl){
   return p;
 }
 
+// Busca estatísticas de gols de um time COM cache em banco (acelera TOP e Sugestões)
+// jogosOcorridos=true dura mais (o passado não muda); a ocorrer dura 6h
+async function estatisticasComCache(time, id, jogosSaoPassados){
+  const chave = id ? String(id) : (time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if (!chave) return null;
+  const validade = jogosSaoPassados ? 7*86400000 : 6*3600000; // passado: 7 dias; futuro: 6h
+  // 1) tenta o cache do banco
+  try{
+    const { data } = await db.from('cache_stats_gols').select('*').eq('time_chave', chave).limit(1);
+    if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < validade){
+      return data[0].stats_json;
+    }
+  }catch(_){}
+  // 2) busca na API e salva
+  const p = { acao:'historico', time }; if (id) p.id = id;
+  const r = await chamarEdge(p);
+  if ((r.jogos?.length??0) < 6) return null;
+  const st = estatisticas(r.jogos);
+  st._nome = r.time || time;
+  try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){}
+  return st;
+}
+window.estatisticasComCache = estatisticasComCache;
+
 function estatisticas(jogos, comoMandante){
-  // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
-  const encerrados = jogos.filter(j => j.gols_mandante !== null);
   let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0, over05=0, over15=0, under35=0, goleadaPro=0, goleadaContra=0;
   encerrados.forEach(j => {
     const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
@@ -1935,16 +1957,19 @@ async function gerarSugestoes(){
     }
 
     const sugestoes = [];
+    const situSu = $('su-situacao') ? $('su-situacao').value : 'ocorrer';
+    const suPassados = situSu === 'ocorridos';
     for (let i=0; i<candidatos.length; i+=3){
       aviso($('su-aviso'), `⏳ Analisando ${Math.min(i+3,candidatos.length)}/${candidatos.length}…`);
       const leva = candidatos.slice(i, i+3);
       const res = await Promise.all(leva.map(async c => {
         try{
-          const pm = { acao:'historico', time: c.j.mandante }; if (c.j.mandante_id) pm.id = c.j.mandante_id;
-          const pv = { acao:'historico', time: c.j.visitante }; if (c.j.visitante_id) pv.id = c.j.visitante_id;
-          const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
-          if ((rm.jogos?.length ?? 0) < 6 || (rv.jogos?.length ?? 0) < 6) return null;
-          return { ...c, em: estatisticas(rm.jogos), ev: estatisticas(rv.jogos), nm: rm.time ?? c.j.mandante, nv: rv.time ?? c.j.visitante };
+          const [em, ev] = await Promise.all([
+            estatisticasComCache(c.j.mandante, c.j.mandante_id, suPassados),
+            estatisticasComCache(c.j.visitante, c.j.visitante_id, suPassados),
+          ]);
+          if (!em || !ev) return null;
+          return { ...c, em, ev, nm: em._nome ?? c.j.mandante, nv: ev._nome ?? c.j.visitante };
         } catch(_){ return null; }
       }));
       res.filter(Boolean).forEach(c => {
@@ -2625,28 +2650,21 @@ $('btn-topdia').addEventListener('click', async () => {
       b.disabled = false; return;
     }
     const pontuados = [];
-    // cache de estatísticas por data (evita rebuscar ao trocar de mercado no mesmo dia)
-    if (window._tdCacheData !== data){ window._tdCacheStats = {}; window._tdCacheData = data; }
-    const cacheStats = window._tdCacheStats;
+    const situ = $('td-situacao') ? $('td-situacao').value : 'ocorrer';
+    const saoPassados = situ === 'ocorridos';
     for (let i=0; i<comOdds.length; i+=4){
       $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
       const leva = comOdds.slice(i, i+4);
       const res = await Promise.all(leva.map(async j => {
         try{
-          // reusa do cache se já buscou este jogo nesta data
-          let dados = cacheStats[j.fixture_id];
-          if (!dados){
-            const pm = { acao:'historico', time: j.mandante }; if (j.mandante_id) pm.id = j.mandante_id;
-            const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
-            const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
-            if ((rm.jogos?.length??0) < 6 || (rv.jogos?.length??0) < 6){ cacheStats[j.fixture_id] = null; return null; }
-            dados = { em: estatisticas(rm.jogos), ev: estatisticas(rv.jogos), nm: rm.time??j.mandante, nv: rv.time??j.visitante };
-            cacheStats[j.fixture_id] = dados;
-          }
-          if (!dados) return null;
-          const nota = pontuarTD(mercado, oddsMap[j.fixture_id], dados.em, dados.ev);
+          const [em, ev] = await Promise.all([
+            estatisticasComCache(j.mandante, j.mandante_id, saoPassados),
+            estatisticasComCache(j.visitante, j.visitante_id, saoPassados),
+          ]);
+          if (!em || !ev) return null;
+          const nota = pontuarTD(mercado, oddsMap[j.fixture_id], em, ev);
           if (nota == null) return null;
-          return { j, nota, em: dados.em, ev: dados.ev, nm: dados.nm, nv: dados.nv };
+          return { j, nota, em, ev, nm: em._nome||j.mandante, nv: ev._nome||j.visitante };
         } catch(_){ return null; }
       }));
       res.filter(Boolean).forEach(x => pontuados.push(x));
