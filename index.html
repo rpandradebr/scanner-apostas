@@ -289,6 +289,8 @@
       <div><label for="td-mercado">Mercado</label>
         <select id="td-mercado">
           <option value="back_fav">Back Favorito</option>
+          <option value="over05">Over 0.5 (sai gol)</option>
+          <option value="over15">Over 1.5</option>
           <option value="under35">Under 3.5</option>
           <option value="btts">Ambos Marcam</option>
           <option value="lay01">Lay 0x1</option>
@@ -296,6 +298,7 @@
           <option value="lay_zebra">Lay Zebra</option>
           <option value="lay_gol_mand">Lay Goleada Mandante</option>
           <option value="lay_gol_vis">Lay Goleada Visitante</option>
+          <option value="desarmes">🛡️ Desarmes (linha sugerida)</option>
         </select></div>
       <div style="align-self:end"><button class="acao" id="btn-topdia">Gerar TOP 10</button></div>
     </div>
@@ -488,7 +491,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.30";
+const APP_VERSAO = "v3.32";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2522,6 +2525,66 @@ $('btn-topdia').addEventListener('click', async () => {
   const data = $('td-data').value;
   const mercado = $('td-mercado').value;
   aviso($('td-aviso'), ''); $('td-lista').innerHTML='';
+
+  // ===== MODO DESARMES — linha sugerida por jogo (usa ligas favoritas) =====
+  if (mercado === 'desarmes'){
+    try{
+      const rg = await chamarEdge({ acao:'grade', data });
+      let jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status) && j.mandante_id && j.visitante_id);
+      // filtra pelas ligas favoritas (desarme só vale nas grandes ligas)
+      const fav = (typeof getLigasFav==='function') ? getLigasFav() : [];
+      if (fav.length){
+        const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        jogos = jogos.filter(j => { const nome = norm(`${j.pais} — ${j.liga}`); return fav.some(f => { const [p,l]=f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l||nome.includes(l.trim())); }); });
+      }
+      if (!jogos.length){ aviso($('td-aviso'), fav.length ? 'Nenhum jogo das suas ligas favoritas hoje. Marque ligas grandes (Premier, La Liga, Brasileirão) na aba Estatísticas, onde desarme tem cobertura.' : 'Marque suas ligas favoritas na aba Estatísticas primeiro (desarme só tem cobertura nas grandes ligas).', 'erro'); b.disabled=false; return; }
+      if (jogos.length > 20 && !confirm(`Isso vai calcular desarmes de ${jogos.length} jogos (2 buscas cada). Continuar?`)){ b.disabled=false; return; }
+
+      const buscaDes = async (id, liga, nome) => {
+        try{ const { data:d } = await db.from('stats_times').select('*').eq('time_id', id).limit(1);
+          if (d?.length && (Date.now()-new Date(d[0].atualizado_em).getTime())<86400000) return d[0]; }catch(_){}
+        const r = await chamarEdge({ acao:'stats_time', time_id:id, liga:liga||'', nome:nome||'', n:10 });
+        return r.ok ? r.registro : null;
+      };
+      const linhas = [];
+      for (let i=0;i<jogos.length;i++){
+        const j = jogos[i];
+        $('td-status').textContent = `⏳ Calculando desarmes ${i+1}/${jogos.length}…`;
+        const liga = `${j.pais} — ${j.liga}`;
+        const [dm, dv] = await Promise.all([ buscaDes(j.mandante_id, liga, j.mandante), buscaDes(j.visitante_id, liga, j.visitante) ]);
+        const desM = dm?.media_desarmes, desV = dv?.media_desarmes;
+        if (desM==null && desV==null) continue;
+        const total = (desM||0) + (desV||0);
+        linhas.push({ j, desM, desV, total, linha: Math.round(total*2)/2 });
+      }
+      linhas.sort((a,c)=>c.total-a.total);
+      if (!linhas.length){ aviso($('td-aviso'), 'Sem dados de desarmes para os jogos de hoje (mesmo nas favoritas, a API pode não ter coletado). Tente ligas top-5 europeias.', 'erro'); $('td-status').textContent=''; b.disabled=false; return; }
+      $('td-status').textContent = `✅ ${linhas.length} jogos com desarmes calculados.`;
+      $('td-lista').innerHTML = `<h3>🛡️ Desarmes — linha sugerida por jogo</h3>
+        <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">Ordenado por total de desarmes esperado. "Linha do jogo" = soma das médias das duas equipes. Compare com a linha da casa: se a casa oferece abaixo, over tem valor; acima, under.</p>` +
+        linhas.map((x,i) => {
+          const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
+          return `<div class="mercado" style="border-left-color:var(--amber);display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div style="flex:1">
+              <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirAnaliseCompleta(${idx})">${i+1}. ${x.j.mandante} x ${x.j.visitante}</div>
+              <div class="porque">${x.j.hora||''} · ${x.j.pais} — ${x.j.liga}</div>
+              <div style="font-size:13px;margin-top:4px;color:var(--chalk-dim)">
+                ${x.j.mandante}: <b style="color:var(--amber)">${x.desM!=null?x.desM.toFixed(1):'—'}</b> desarmes/jogo ·
+                ${x.j.visitante}: <b style="color:var(--amber)">${x.desV!=null?x.desV.toFixed(1):'—'}</b> desarmes/jogo
+              </div>
+            </div>
+            <div style="text-align:center;min-width:90px">
+              <div style="font-family:'Saira Condensed',sans-serif;font-size:26px;font-weight:800;color:var(--green)">${x.linha}</div>
+              <div style="font-size:10px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">LINHA DO JOGO</div>
+            </div>
+          </div>`;
+        }).join('') +
+        '<p style="font-size:12px;color:var(--chalk-dim);margin-top:12px">Desarme tem cobertura confiável só nas grandes ligas. A "linha do jogo" é o total esperado — a linha de aposta com valor costuma ser 0.5 a 1.5 abaixo dela para over, ou acima para under. Clique no jogo para a análise completa.</p>';
+    } catch(e){ aviso($('td-aviso'), 'Falha: ' + e.message, 'erro'); }
+    finally{ b.disabled = false; }
+    return;
+  }
+
   try{
     const rg = await chamarEdge({ acao:'grade', data });
     const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
