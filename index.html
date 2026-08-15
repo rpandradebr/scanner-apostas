@@ -479,7 +479,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.27";
+const APP_VERSAO = "v3.28";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2620,60 +2620,101 @@ function trocaAcSub(id){
   let html = '';
 
   if (id==='resumo'){
-    html = `<h3>Resumo da temporada</h3>
-      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
-      ${linhaComp('Jogos', tm.jogos??'—', tv.jogos??'—')}
-      ${linhaComp('Vitórias', tm.vitorias?.total??'—', tv.vitorias?.total??'—')}
-      ${linhaComp('Empates', tm.empates?.total??'—', tv.empates?.total??'—')}
-      ${linhaComp('Derrotas', tm.derrotas?.total??'—', tv.derrotas?.total??'—')}
-      ${linhaComp('Gols pró', tm.golsPro??'—', tv.golsPro??'—')}
-      ${linhaComp('Gols contra', tm.golsContra??'—', tv.golsContra??'—')}
-      ${linhaComp('Média gols pró', tm.mediaGolsPro??'—', tv.mediaGolsPro??'—')}
-      ${linhaComp('Média gols contra', tm.mediaGolsContra??'—', tv.mediaGolsContra??'—')}
-      ${linhaComp('Clean sheets', tm.cleanSheet??'—', tv.cleanSheet??'—')}
-      ${linhaComp('Não marcou (jogos)', tm.faltaMarcar??'—', tv.faltaMarcar??'—')}
-      ${linhaComp('Forma recente', tm.formaRecente?.slice(-8)??'—', tv.formaRecente?.slice(-8)??'—')}
+    const card = (rotulo, valM, valV) => `<tr>
+      <td class="valor" style="font-size:16px"><b>${valM}</b></td>
+      <td class="rotulo" style="text-align:center">${rotulo}</td>
+      <td class="valor" style="font-size:16px"><b>${valV}</b></td></tr>`;
+    html = `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div class="stat" style="flex:1;min-width:130px"><b>${tm.jogos??'—'}</b><span>jogos ${nm}</span></div>
+        <div class="stat" style="flex:1;min-width:130px"><b>${tv.jogos??'—'}</b><span>jogos ${nv}</span></div>
+      </div>
+      <h3>Campanha na temporada</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center">—</th><th style="text-align:center">${nv}</th></tr>
+      ${card('Vitórias', tm.vitorias?.total??'—', tv.vitorias?.total??'—')}
+      ${card('Empates', tm.empates?.total??'—', tv.empates?.total??'—')}
+      ${card('Derrotas', tm.derrotas?.total??'—', tv.derrotas?.total??'—')}
+      ${linhaComp('Gols marcados', tm.golsPro??'—', tv.golsPro??'—')}
+      ${linhaComp('Gols sofridos', tm.golsContra??'—', tv.golsContra??'—')}
+      ${linhaComp('Média gols marcados', `<b style="color:var(--amber)">${tm.mediaGolsPro??'—'}</b>`, `<b style="color:var(--amber)">${tv.mediaGolsPro??'—'}</b>`)}
+      ${linhaComp('Média gols sofridos', `<b style="color:var(--amber)">${tm.mediaGolsContra??'—'}</b>`, `<b style="color:var(--amber)">${tv.mediaGolsContra??'—'}</b>`)}
+      ${linhaComp('Jogos sem sofrer gol', tm.cleanSheet??'—', tv.cleanSheet??'—')}
+      ${linhaComp('Jogos sem marcar', tm.faltaMarcar??'—', tv.faltaMarcar??'—')}
+      ${linhaComp('Forma (recente)', `<span style="font-family:'IBM Plex Mono',monospace">${tm.formaRecente?.slice(-6)??'—'}</span>`, `<span style="font-family:'IBM Plex Mono',monospace">${tv.formaRecente?.slice(-6)??'—'}</span>`)}
       </table>
-      ${rec.m ? `<h3>Recorte recente (últimos 10)</h3>
-      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
-      ${linhaComp('% vitórias', (rm.pctVit||0)+'%', (rv.pctVit||0)+'%')}
-      ${linhaComp('% marcou', (rm.pctMarcou||0)+'%', (rv.pctMarcou||0)+'%')}
-      ${linhaComp('% sofreu gol', (rm.pctSofreu||0)+'%', (rv.pctSofreu||0)+'%')}
-      ${linhaComp('% ambas marcam', (rm.pctBtts||0)+'%', (rv.pctBtts||0)+'%')}
-      ${linhaComp('% over 2.5', (rm.pctOver||0)+'%', (rv.pctOver||0)+'%')}
-      ${linhaComp('% under 3.5', (rm.pctUnder35||0)+'%', (rv.pctUnder35||0)+'%')}
+      ${rec.m ? `<h3 style="margin-top:18px">Momento — últimos 10 jogos</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center"></th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('% de vitórias', (rm.pctVit||0)+'%', (rv.pctVit||0)+'%')}
+      ${linhaComp('% que marcou', (rm.pctMarcou||0)+'%', (rv.pctMarcou||0)+'%')}
+      ${linhaComp('% que sofreu gol', (rm.pctSofreu||0)+'%', (rv.pctSofreu||0)+'%')}
       </table>` : ''}`;
   }
 
   else if (id==='gols'){
-    const uo = (obj, linha) => obj?.[linha]?.over!=null ? `O ${obj[linha].over}/U ${obj[linha].under}` : '—';
-    html = `<h3>Gols — over/under na temporada</h3>
-      <p style="font-size:12.5px;color:var(--chalk-dim)">Contagem de jogos (over/under) por linha de gols marcados+sofridos.</p>
-      <table class="comp"><tr><th style="text-align:center">${nm} (pró)</th><th></th><th style="text-align:center">${nv} (pró)</th></tr>
-      ${linhaComp('Over/Under 0.5', uo(tm.golsProUnder,'0.5'), uo(tv.golsProUnder,'0.5'))}
-      ${linhaComp('Over/Under 1.5', uo(tm.golsProUnder,'1.5'), uo(tv.golsProUnder,'1.5'))}
-      ${linhaComp('Over/Under 2.5', uo(tm.golsProUnder,'2.5'), uo(tv.golsProUnder,'2.5'))}
-      ${linhaComp('Over/Under 3.5', uo(tm.golsProUnder,'3.5'), uo(tv.golsProUnder,'3.5'))}
+    // converte over/under em % de over (o que interessa pra decisão)
+    const overPct = (obj, linha) => {
+      const o = obj?.[linha]?.over, u = obj?.[linha]?.under;
+      if (o==null || u==null || (o+u)===0) return null;
+      return Math.round(o/(o+u)*100);
+    };
+    const barraDupla = (pctM, pctV) => {
+      const cor = p => p==null ? 'var(--chalk-dim)' : p>=70 ? 'var(--green)' : p>=45 ? 'var(--amber)' : 'var(--red)';
+      const cell = p => p==null ? '<span style="color:var(--chalk-dim)">sem dados</span>' :
+        `<div style="display:flex;align-items:center;gap:8px">
+           <div style="flex:1;background:rgba(237,234,224,.1);border-radius:4px;height:22px;position:relative;min-width:90px">
+             <div style="background:${cor(p)};width:${p}%;height:100%;border-radius:4px"></div>
+             <span style="position:absolute;top:0;left:8px;line-height:22px;font-size:12px;font-family:'IBM Plex Mono',monospace;font-weight:600">${p}%</span>
+           </div></div>`;
+      return { m: cell(pctM), v: cell(pctV) };
+    };
+    const linhaGol = (rotulo, campo) => {
+      const b = barraDupla(overPct(tm.golsProUnder,campo), overPct(tv.golsProUnder,campo));
+      return `<tr><td style="min-width:110px">${b.m}</td><td class="rotulo" style="text-align:center;white-space:nowrap">Over ${campo}</td><td style="min-width:110px">${b.v}</td></tr>`;
+    };
+    html = `<h3>Frequência de gols na temporada</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">Em quantos % dos jogos de cada equipe saíram <b>mais</b> gols que a linha. Verde = acontece muito (≥70%), vermelho = acontece pouco (&lt;45%).</p>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center">Linha</th><th style="text-align:center">${nv}</th></tr>
+      ${linhaGol('0.5','0.5')}
+      ${linhaGol('1.5','1.5')}
+      ${linhaGol('2.5','2.5')}
+      ${linhaGol('3.5','3.5')}
       </table>
-      ${rec.m ? `<h3>Recorte recente (últimos 10)</h3>
-      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
-      ${linhaComp('Média gols pró', rm.mediaPro??'—', rv.mediaPro??'—')}
-      ${linhaComp('Média gols contra', rm.mediaContra??'—', rv.mediaContra??'—')}
-      ${linhaComp('% over 0.5', (rm.pctOver05||0)+'%', (rv.pctOver05||0)+'%')}
-      ${linhaComp('% over 2.5', (rm.pctOver||0)+'%', (rv.pctOver||0)+'%')}
-      ${linhaComp('% under 2.5', (rm.pctUnder25||0)+'%', (rv.pctUnder25||0)+'%')}
+      <div style="background:var(--pitch);border-radius:8px;padding:10px 14px;margin-top:12px">
+        <b style="font-size:13px">Como ler:</b> <span style="font-size:13px;color:var(--chalk-dim)">"Over 2.5 = 30%" significa que em 30% dos jogos desse time saíram 3+ gols. Quanto <b>menor</b> esse número, mais o time tende ao <b>under</b> (bom para seus lays de gols).</span>
+      </div>
+      ${rec.m ? `<h3 style="margin-top:18px">Recorte recente (últimos 10 jogos)</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center"></th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('Média de gols que FAZ', `<b style="color:var(--amber)">${rm.mediaPro??'—'}</b>`, `<b style="color:var(--amber)">${rv.mediaPro??'—'}</b>`)}
+      ${linhaComp('Média de gols que SOFRE', `<b style="color:var(--amber)">${rm.mediaContra??'—'}</b>`, `<b style="color:var(--amber)">${rv.mediaContra??'—'}</b>`)}
+      ${linhaComp('Jogos com 3+ gols (over 2.5)', (rm.pctOver||0)+'%', (rv.pctOver||0)+'%')}
+      ${linhaComp('Jogos com até 2 gols (under 2.5)', (rm.pctUnder25||0)+'%', (rv.pctUnder25||0)+'%')}
+      ${linhaComp('Jogos com ambas marcando', (rm.pctBtts||0)+'%', (rv.pctBtts||0)+'%')}
       </table>` : ''}`;
   }
 
   else if (id==='tempo'){
-    const faixa = (obj, faixas) => faixas.map(f => `${f}: ${obj?.[f]?.total ?? 0}`).join(' · ');
     const faixas = ['0-15','16-30','31-45','46-60','61-75','76-90'];
-    html = `<h3>Gols por faixa de tempo (temporada)</h3>
-      <p style="font-size:12.5px;color:var(--chalk-dim)">Quantos gols cada equipe marcou em cada faixa de 15 minutos.</p>
-      <div style="margin-bottom:12px"><b>${nm} — marcados:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tm.golsProMinuto?faixa(tm.golsProMinuto,faixas):'sem dados'}</span></div>
-      <div style="margin-bottom:12px"><b>${nm} — sofridos:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tm.golsContraMinuto?faixa(tm.golsContraMinuto,faixas):'sem dados'}</span></div>
-      <div style="margin-bottom:12px"><b>${nv} — marcados:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tv.golsProMinuto?faixa(tv.golsProMinuto,faixas):'sem dados'}</span></div>
-      <div style="margin-bottom:12px"><b>${nv} — sofridos:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tv.golsContraMinuto?faixa(tv.golsContraMinuto,faixas):'sem dados'}</span></div>`;
+    const maxVal = (obj) => Math.max(1, ...faixas.map(f => obj?.[f]?.total ?? 0));
+    const barrasTime = (obj, cor) => {
+      if (!obj) return '<span style="color:var(--chalk-dim)">sem dados</span>';
+      const mx = maxVal(obj);
+      return `<div style="display:flex;flex-direction:column;gap:4px">` + faixas.map(f => {
+        const v = obj[f]?.total ?? 0;
+        return `<div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-family:'IBM Plex Mono',monospace;width:44px;color:var(--chalk-dim)">${f}'</span>
+          <div style="flex:1;background:rgba(237,234,224,.08);border-radius:3px;height:18px;position:relative">
+            <div style="background:${cor};width:${v/mx*100}%;height:100%;border-radius:3px"></div>
+            <span style="position:absolute;top:0;left:6px;line-height:18px;font-size:11px;font-family:'IBM Plex Mono',monospace">${v}</span>
+          </div></div>`;
+      }).join('') + `</div>`;
+    };
+    html = `<h3>Em que momento os gols saem</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:14px">Distribuição dos gols por faixa de 15 minutos na temporada. Útil pra ver se o time começa forte, se leva gol no fim, etc.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div><b style="color:var(--green)">${nm} — gols marcados ⚽</b>${barrasTime(tm.golsProMinuto,'var(--green)')}</div>
+        <div><b style="color:var(--red)">${nm} — gols sofridos 🥅</b>${barrasTime(tm.golsContraMinuto,'var(--red)')}</div>
+        <div style="margin-top:8px"><b style="color:var(--green)">${nv} — gols marcados ⚽</b>${barrasTime(tv.golsProMinuto,'var(--green)')}</div>
+        <div style="margin-top:8px"><b style="color:var(--red)">${nv} — gols sofridos 🥅</b>${barrasTime(tv.golsContraMinuto,'var(--red)')}</div>
+      </div>`;
   }
 
   else if (id==='cartoes'){
