@@ -510,9 +510,19 @@
       buscar os placares finais e marcar green ou red sozinho. Jogos ainda não encerrados ficam como "aguardando".
     </p>
     <div id="hs-config-alerta"></div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
       <button class="acao" id="btn-atualizar-res">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="hs-status"></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Ordenar por:
+        <select id="hs-ordem" style="width:auto;padding:4px 8px">
+          <option value="recente">Mais recentes primeiro</option>
+          <option value="hora">Hora do jogo (crescente)</option>
+          <option value="hora-desc">Hora do jogo (decrescente)</option>
+          <option value="nota">Maior nota</option>
+          <option value="mercado">Mercado (A-Z)</option>
+        </select>
+      </label>
     </div>
     <div id="hs-painel"></div>
     <div id="hs-aviso"></div>
@@ -546,7 +556,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.49";
+const APP_VERSAO = "v3.50";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2247,6 +2257,16 @@ async function listarHistSug(){
     '</div>';
 
   const pill = r => r==='GREEN' ? '<span class="pill g">GREEN</span>' : r==='RED' ? '<span class="pill r">RED</span>' : '<span class="pill n">aguardando</span>';
+  // ordenação escolhida
+  const ordem = $('hs-ordem') ? $('hs-ordem').value : 'recente';
+  const semHoraFim = '99:99'; // jogos sem hora vão para o fim
+  data.sort((a,b) => {
+    if (ordem === 'hora') return (a.hora_jogo||semHoraFim).localeCompare(b.hora_jogo||semHoraFim);
+    if (ordem === 'hora-desc') return (b.hora_jogo||'').localeCompare(a.hora_jogo||'');
+    if (ordem === 'nota') return (b.confianca||0) - (a.confianca||0);
+    if (ordem === 'mercado') return (a.mercado_sugerido||'').localeCompare(b.mercado_sugerido||'');
+    return 0; // recente = mantém ordem original (já vem por criado_em desc)
+  });
   $('hs-tabela').innerHTML =
     '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th></tr>' +
     data.map(a => `<tr>
@@ -2268,6 +2288,7 @@ async function marcarApostaFeita(id, feita){
 }
 window.marcarApostaFeita = marcarApostaFeita;
 
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem') listarHistSug(); });
 listarHistSug();
 
 
