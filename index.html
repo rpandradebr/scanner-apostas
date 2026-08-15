@@ -532,7 +532,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.46";
+const APP_VERSAO = "v3.47";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2180,6 +2180,24 @@ async function listarHistSug(){
     .eq('origem','sugestao').order('criado_em',{ascending:false}).limit(200);
   if (error){ aviso($('hs-aviso'), 'Erro: '+error.message,'erro'); return; }
   if (!data?.length){ $('hs-tabela').innerHTML=''; $('hs-painel').innerHTML='<p class="msg-vazia">Nenhuma sugestão salva ainda. Salve sugestões na aba 💡 Sugestões do dia.</p>'; return; }
+
+  // preenche a hora dos jogos que não têm (salvos antes da v3.46), cruzando com a grade do dia
+  const semHora = data.filter(a => !a.hora_jogo && a.data_jogo);
+  if (semHora.length){
+    const datas = [...new Set(semHora.map(a => a.data_jogo))];
+    for (const dia of datas.slice(0, 5)){ // no máximo 5 dias para não gastar muita requisição
+      try{
+        const rg = await chamarEdge({ acao:'grade', data: dia });
+        const jogosDia = rg.jogos || [];
+        const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+        semHora.filter(a => a.data_jogo === dia).forEach(a => {
+          const match = jogosDia.find(j => norm(j.mandante)===norm(a.mandante) && norm(j.visitante)===norm(a.visitante));
+          if (match?.hora){ a.hora_jogo = match.hora; /* salva no banco para não buscar de novo */
+            db.from('analises').update({ hora_jogo: match.hora }).eq('id', a.id).then(()=>{}); }
+        });
+      }catch(_){}
+    }
+  }
 
   // painel de taxa por mercado (só sugestões resolvidas)
   const mercados = {};
