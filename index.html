@@ -274,6 +274,9 @@
         <select id="su-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
       <div style="align-self:end"><button class="acao" id="btn-sugestoes">Gerar sugestões</button></div>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="su-favoritas" style="width:auto"> Só minhas ligas favoritas
+    </div>
     <div id="su-aviso"></div>
     <div id="su-lista"></div>
     <div id="su-rankings" style="margin-top:18px"></div>
@@ -304,6 +307,10 @@
         </select></div>
       <div><label for="td-situacao">Situação</label>
         <select id="td-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="td-favoritas" style="width:auto"> Só minhas ligas favoritas (marque-as na aba 📊 Estatísticas)
+    </label>
       <div style="align-self:end"><button class="acao" id="btn-topdia">Gerar TOP 10</button></div>
     </div>
     <div id="td-aviso"></div>
@@ -501,11 +508,18 @@ function filtraSituacao(jogos, situacaoId){
   if (sit === 'todos') return jogos;
   return jogos.filter(j => aVir(j.status)); // padrão: a ocorrer
 }
+function filtraFavoritas(jogos, checkboxId){
+  if (!$(checkboxId) || !$(checkboxId).checked) return jogos;
+  const fav = (typeof getLigasFav==='function') ? getLigasFav() : [];
+  if (!fav.length) return jogos;
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  return jogos.filter(j => { const nome = norm(`${j.pais} — ${j.liga}`); return fav.some(f => { const [p,l]=f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l||nome.includes(l.trim())); }); });
+}
 
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.33";
+const APP_VERSAO = "v3.34";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -715,6 +729,9 @@ function ultimos5(jogos){
 }
 async function fichaJogo(idx){
   const j = gradeJogos[idx];
+  if (!j) return;
+  // a ficha é renderizada na aba Grade — garante que estamos nela
+  irParaAba('grade');
   const alvo = $('grade-ficha');
   alvo.innerHTML = '<p class="msg-vazia">⏳ Montando a ficha do confronto…</p>';
   alvo.scrollIntoView({behavior:'smooth', block:'start'});
@@ -1895,7 +1912,7 @@ async function gerarSugestoes(){
   aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
   try{
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'su-situacao');
+    const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'su-situacao'), 'su-favoritas');
     await carregarOddsMapa(data);
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
     if (!comOdds.length){
@@ -2540,7 +2557,6 @@ $('btn-topdia').addEventListener('click', async () => {
   const mercado = $('td-mercado').value;
   aviso($('td-aviso'), ''); $('td-lista').innerHTML='';
 
-  // ===== MODO DESARMES — linha sugerida por jogo (usa ligas favoritas) =====
   if (mercado === 'desarmes'){
     try{
       const rg = await chamarEdge({ acao:'grade', data });
@@ -2601,7 +2617,7 @@ $('btn-topdia').addEventListener('click', async () => {
 
   try{
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao');
+    const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao'), 'td-favoritas');
     await carregarOddsMapa(data);
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
     if (!comOdds.length){
@@ -2635,6 +2651,21 @@ $('btn-topdia').addEventListener('click', async () => {
       const m = MERCADOS_TD[mercado];
       $('td-status').textContent = `✅ TOP ${top.length} de ${pontuados.length} jogos analisados.`;
       const cor = n => n >= 75 ? 'var(--green)' : n >= 55 ? 'var(--amber)' : 'var(--red)';
+      // mapeia o mercado do TOP para o confereMercado (só os que dão pra apurar)
+      const mktConfere = { over05:'OVER 0.5', over15:'OVER 1.5', under35:'UNDER 3.5', btts:'BTTS', lay01:'LAY 0x1', lay10:'LAY 1x0', lay_zebra:'LAY ZEBRA' }[mercado];
+      const seloResultado = (x) => {
+        const encerrado = ['FT','AET','PEN'].includes(x.j.status);
+        if (!encerrado || !mktConfere) return '';
+        // extrai placar
+        let gm, gv;
+        if (x.j.gols_mandante!=null){ gm = x.j.gols_mandante; gv = x.j.gols_visitante; }
+        else if (x.j.placar && x.j.placar.includes('x')){ [gm,gv] = x.j.placar.split('x').map(n=>parseInt(n)); }
+        if (gm==null || isNaN(gm)) return '';
+        const res = confereMercado(mktConfere, gm, gv);
+        if (!res) return `<span class="chip">placar ${gm}x${gv}</span>`;
+        const c = res==='GREEN' ? 'var(--green)' : 'var(--red)';
+        return `<span style="display:inline-block;background:${c};color:var(--pitch);padding:2px 10px;border-radius:6px;font-weight:700;font-size:13px;margin-top:4px">placar ${gm}x${gv} · ${res}</span>`;
+      };
       $('td-lista').innerHTML = `<h3>${m.nome} — ${m.dica}</h3>` +
         top.map((x,i) => {
           const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
@@ -2642,6 +2673,7 @@ $('btn-topdia').addEventListener('click', async () => {
             <div style="flex:1">
               <div class="nome" style="font-size:17px;cursor:pointer" onclick="fichaJogo(${idx})">${i+1}. ${x.nm} x ${x.nv}</div>
               <div class="porque">${x.j.hora||''} · ${x.j.pais} — ${x.j.liga}</div>
+              ${seloResultado(x)}
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
                 <button class="mini" onclick="event.stopPropagation();copiarPrompt('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
                 <button class="mini" onclick="event.stopPropagation();fichaJogo(${idx})">🔎 Ficha</button>
@@ -2654,7 +2686,7 @@ $('btn-topdia').addEventListener('click', async () => {
             </div>
           </div>`;
         }).join('') +
-        '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Pontuação combina odds e histórico das duas equipes. Verde ≥75 (forte), amarelo 55-74 (moderado), vermelho <55 (fraco). Clique no jogo para a ficha. Sempre confirme com a análise dos 13 pontos e a odd na exchange antes de operar.</p>';
+        '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Pontuação combina odds e histórico das duas equipes. Em jogos já ocorridos, o selo mostra o placar e se o mercado bateu (GREEN/RED). Sempre confirme com a análise dos 13 pontos antes de operar.</p>';
     }
   } catch(e){ aviso($('td-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
