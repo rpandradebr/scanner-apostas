@@ -155,6 +155,7 @@
     <button data-aba="importar" title="Importe planilhas de resultados (CSV do football-data.co.uk ou Excel combinado) direto para o banco, sem gastar requisição da API.">📥 Importar CSV</button>
     <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático. Clique em "Atualizar resultados" para o sistema apurar sozinho.">📋 Histórico de sugestões</button>
     <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
+    <button data-aba="analisecompleta" title="Central de análise: ao clicar num jogo, veja desempenho por tempo, gols, cartões e escanteios das duas equipes, temporada e recorte recente.">🔬 Análise completa</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -371,6 +372,18 @@
     <div id="imp-preview"></div>
   </section>
 
+  <!-- ================= ANÁLISE COMPLETA ================= -->
+  <section id="aba-analisecompleta">
+    <h2>🔬 Análise completa do confronto</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px" id="ac-instrucao">
+      Clique em qualquer jogo (na Grade, Sugestões, TOP do dia ou Ao vivo) e depois volte aqui — ou abra a ficha e use o botão "🔬 Análise completa". Mostra desempenho por tempo, gols, cartões e escanteios das duas equipes, com dados da temporada e do recorte recente.
+    </p>
+    <div id="ac-aviso"></div>
+    <div id="ac-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
+    <div id="ac-subabas" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div id="ac-conteudo"></div>
+  </section>
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -466,7 +479,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.26";
+const APP_VERSAO = "v3.27";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -867,6 +880,7 @@ async function fichaJogo(idx){
         <button class="mini" onclick="copiarPrompt('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt p/ análise completa</button>
         ${(j.fixture_id > 0 && ['FT','AET','PEN'].includes(j.status)) ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)</button>` : ''}
         <button class="mini" onclick="verArbitro('${j.fixture_id}', this)">⚖️ Média do árbitro</button>
+        <button class="mini" onclick="abrirAnaliseCompleta(${idx})" style="border-color:var(--amber);color:var(--amber)">🔬 Análise completa</button>
       </div>
       <div id="ficha-estats"></div>
       <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">As estatísticas detalhadas (chutes, cartões, desarmes, escanteios, notas, minuto dos gols) são buscadas sob demanda — 3 requisições por jogo. No plano grátis use com parcimônia; no Pro, à vontade.</p>
@@ -2537,6 +2551,157 @@ $('btn-topdia').addEventListener('click', async () => {
 });
 
 window.carregarAoVivo = window.carregarAoVivo || (()=>{});
+
+
+// ==========================================================
+// ANÁLISE COMPLETA — central de estatísticas do confronto
+// ==========================================================
+let acJogoAtual = null;
+
+async function abrirAnaliseCompleta(idx){
+  const j = gradeJogos[idx];
+  if (!j){ return; }
+  acJogoAtual = j;
+  irParaAba('analisecompleta');
+  $('ac-instrucao').style.display = 'none';
+  $('ac-subabas').style.display = 'none';
+  $('ac-conteudo').innerHTML = '';
+  aviso($('ac-aviso'), '');
+  $('ac-status').textContent = `⏳ Buscando estatísticas de ${j.mandante} x ${j.visitante}…`;
+
+  try{
+    // temporada (API teams/statistics) + recorte recente (últimos 10 que já usamos)
+    const params = (id) => { const p = { acao:'analise_completa', time_id: id }; if (j.liga_id) p.liga_id = j.liga_id; if (j.season) p.season = j.season; return p; };
+    const [tm, tv, rm, rv] = await Promise.all([
+      j.mandante_id ? chamarEdge(params(j.mandante_id)) : Promise.resolve({erro:'sem id'}),
+      j.visitante_id ? chamarEdge(params(j.visitante_id)) : Promise.resolve({erro:'sem id'}),
+      chamarEdge({ acao:'historico', time: j.mandante, ...(j.mandante_id?{id:j.mandante_id}:{}) }),
+      chamarEdge({ acao:'historico', time: j.visitante, ...(j.visitante_id?{id:j.visitante_id}:{}) }),
+    ]);
+    const temp = { m: tm.resumo, v: tv.resumo };
+    const rec = { m: rm.jogos?.length ? estatisticas(rm.jogos) : null, v: rv.jogos?.length ? estatisticas(rv.jogos) : null };
+    if (!temp.m && !rec.m){ aviso($('ac-aviso'), 'Sem dados suficientes para este confronto (times sem histórico no banco/API).', 'erro'); $('ac-status').textContent=''; return; }
+
+    acDados = { j, temp, rec, nm: j.mandante, nv: j.visitante };
+    $('ac-status').textContent = `${j.mandante} x ${j.visitante} · ${j.liga||''}`;
+    // sub-abas
+    const subs = [
+      {id:'resumo', nome:'📋 Resumo'},
+      {id:'gols', nome:'⚽ Gols'},
+      {id:'tempo', nome:'⏱️ Por tempo'},
+      {id:'cartoes', nome:'🟨 Cartões'},
+      {id:'casafora', nome:'🏠 Casa/Fora'},
+    ];
+    $('ac-subabas').style.display = 'flex';
+    $('ac-subabas').innerHTML = subs.map((s,i) => `<button class="mini" id="acsub-${s.id}" style="${i===0?'border-color:var(--amber);color:var(--amber)':''}" onclick="trocaAcSub('${s.id}')">${s.nome}</button>`).join('');
+    trocaAcSub('resumo');
+  } catch(e){ aviso($('ac-aviso'), 'Falha: ' + e.message, 'erro'); $('ac-status').textContent=''; }
+}
+window.abrirAnaliseCompleta = abrirAnaliseCompleta;
+
+let acDados = null;
+function barra(pct, cor){ // mini barra de porcentagem
+  const v = Math.max(0, Math.min(100, pct||0));
+  return `<div style="background:rgba(237,234,224,.1);border-radius:4px;height:20px;position:relative;min-width:120px">
+    <div style="background:${cor||'var(--amber)'};width:${v}%;height:100%;border-radius:4px"></div>
+    <span style="position:absolute;top:0;left:6px;line-height:20px;font-size:12px;font-family:'IBM Plex Mono',monospace">${v}%</span></div>`;
+}
+function linhaComp(rotulo, valM, valV){
+  return `<tr><td class="valor">${valM}</td><td class="rotulo" style="text-align:center">${rotulo}</td><td class="valor">${valV}</td></tr>`;
+}
+
+function trocaAcSub(id){
+  ['resumo','gols','tempo','cartoes','casafora'].forEach(x => {
+    const b = $('acsub-'+x); if (b){ b.style.borderColor = x===id?'var(--amber)':''; b.style.color = x===id?'var(--amber)':''; }
+  });
+  if (!acDados) return;
+  const { temp, rec, nm, nv } = acDados;
+  const tm = temp.m||{}, tv = temp.v||{}, rm = rec.m||{}, rv = rec.v||{};
+  let html = '';
+
+  if (id==='resumo'){
+    html = `<h3>Resumo da temporada</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('Jogos', tm.jogos??'—', tv.jogos??'—')}
+      ${linhaComp('Vitórias', tm.vitorias?.total??'—', tv.vitorias?.total??'—')}
+      ${linhaComp('Empates', tm.empates?.total??'—', tv.empates?.total??'—')}
+      ${linhaComp('Derrotas', tm.derrotas?.total??'—', tv.derrotas?.total??'—')}
+      ${linhaComp('Gols pró', tm.golsPro??'—', tv.golsPro??'—')}
+      ${linhaComp('Gols contra', tm.golsContra??'—', tv.golsContra??'—')}
+      ${linhaComp('Média gols pró', tm.mediaGolsPro??'—', tv.mediaGolsPro??'—')}
+      ${linhaComp('Média gols contra', tm.mediaGolsContra??'—', tv.mediaGolsContra??'—')}
+      ${linhaComp('Clean sheets', tm.cleanSheet??'—', tv.cleanSheet??'—')}
+      ${linhaComp('Não marcou (jogos)', tm.faltaMarcar??'—', tv.faltaMarcar??'—')}
+      ${linhaComp('Forma recente', tm.formaRecente?.slice(-8)??'—', tv.formaRecente?.slice(-8)??'—')}
+      </table>
+      ${rec.m ? `<h3>Recorte recente (últimos 10)</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('% vitórias', (rm.pctVit||0)+'%', (rv.pctVit||0)+'%')}
+      ${linhaComp('% marcou', (rm.pctMarcou||0)+'%', (rv.pctMarcou||0)+'%')}
+      ${linhaComp('% sofreu gol', (rm.pctSofreu||0)+'%', (rv.pctSofreu||0)+'%')}
+      ${linhaComp('% ambas marcam', (rm.pctBtts||0)+'%', (rv.pctBtts||0)+'%')}
+      ${linhaComp('% over 2.5', (rm.pctOver||0)+'%', (rv.pctOver||0)+'%')}
+      ${linhaComp('% under 3.5', (rm.pctUnder35||0)+'%', (rv.pctUnder35||0)+'%')}
+      </table>` : ''}`;
+  }
+
+  else if (id==='gols'){
+    const uo = (obj, linha) => obj?.[linha]?.over!=null ? `O ${obj[linha].over}/U ${obj[linha].under}` : '—';
+    html = `<h3>Gols — over/under na temporada</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim)">Contagem de jogos (over/under) por linha de gols marcados+sofridos.</p>
+      <table class="comp"><tr><th style="text-align:center">${nm} (pró)</th><th></th><th style="text-align:center">${nv} (pró)</th></tr>
+      ${linhaComp('Over/Under 0.5', uo(tm.golsProUnder,'0.5'), uo(tv.golsProUnder,'0.5'))}
+      ${linhaComp('Over/Under 1.5', uo(tm.golsProUnder,'1.5'), uo(tv.golsProUnder,'1.5'))}
+      ${linhaComp('Over/Under 2.5', uo(tm.golsProUnder,'2.5'), uo(tv.golsProUnder,'2.5'))}
+      ${linhaComp('Over/Under 3.5', uo(tm.golsProUnder,'3.5'), uo(tv.golsProUnder,'3.5'))}
+      </table>
+      ${rec.m ? `<h3>Recorte recente (últimos 10)</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('Média gols pró', rm.mediaPro??'—', rv.mediaPro??'—')}
+      ${linhaComp('Média gols contra', rm.mediaContra??'—', rv.mediaContra??'—')}
+      ${linhaComp('% over 0.5', (rm.pctOver05||0)+'%', (rv.pctOver05||0)+'%')}
+      ${linhaComp('% over 2.5', (rm.pctOver||0)+'%', (rv.pctOver||0)+'%')}
+      ${linhaComp('% under 2.5', (rm.pctUnder25||0)+'%', (rv.pctUnder25||0)+'%')}
+      </table>` : ''}`;
+  }
+
+  else if (id==='tempo'){
+    const faixa = (obj, faixas) => faixas.map(f => `${f}: ${obj?.[f]?.total ?? 0}`).join(' · ');
+    const faixas = ['0-15','16-30','31-45','46-60','61-75','76-90'];
+    html = `<h3>Gols por faixa de tempo (temporada)</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim)">Quantos gols cada equipe marcou em cada faixa de 15 minutos.</p>
+      <div style="margin-bottom:12px"><b>${nm} — marcados:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tm.golsProMinuto?faixa(tm.golsProMinuto,faixas):'sem dados'}</span></div>
+      <div style="margin-bottom:12px"><b>${nm} — sofridos:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tm.golsContraMinuto?faixa(tm.golsContraMinuto,faixas):'sem dados'}</span></div>
+      <div style="margin-bottom:12px"><b>${nv} — marcados:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tv.golsProMinuto?faixa(tv.golsProMinuto,faixas):'sem dados'}</span></div>
+      <div style="margin-bottom:12px"><b>${nv} — sofridos:</b><br><span style="font-size:13px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">${tv.golsContraMinuto?faixa(tv.golsContraMinuto,faixas):'sem dados'}</span></div>`;
+  }
+
+  else if (id==='cartoes'){
+    const somaCartoes = (obj) => { if (!obj) return null; return Object.values(obj).reduce((s,v)=>s+(v?.total||0),0); };
+    const amM = somaCartoes(tm.cartoesAmarelos), amV = somaCartoes(tv.cartoesAmarelos);
+    const veM = somaCartoes(tm.cartoesVermelhos), veV = somaCartoes(tv.cartoesVermelhos);
+    html = `<h3>Cartões na temporada</h3>
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('Amarelos (total)', amM??'—', amV??'—')}
+      ${linhaComp('Vermelhos (total)', veM??'—', veV??'—')}
+      ${linhaComp('Média amarelos/jogo', amM&&tm.jogos?(amM/tm.jogos).toFixed(2):'—', amV&&tv.jogos?(amV/tv.jogos).toFixed(2):'—')}
+      </table>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Para a média do árbitro (que pesa tanto quanto os times no cartão), use o botão ⚖️ na ficha do jogo.</p>`;
+  }
+
+  else if (id==='casafora'){
+    const cf = (o) => o ? `${o.j??0}j · ${o.v??0}V ${o.e??0}E ${o.d??0}D · ${o.gp??0} gp / ${o.gc??0} gc` : 'sem dados';
+    html = `<h3>Desempenho casa/fora (temporada)</h3>
+      <div style="margin-bottom:14px"><b>${nm} em casa:</b><br><span style="color:var(--chalk-dim)">${cf(tm.casa)}</span>
+        <br><small style="color:var(--chalk-dim)">Média gols pró casa: ${tm.mediaGolsProCasa??'—'} · contra: ${tm.mediaGolsContraCasa??'—'}</small></div>
+      <div style="margin-bottom:14px"><b>${nv} fora:</b><br><span style="color:var(--chalk-dim)">${cf(tv.fora)}</span>
+        <br><small style="color:var(--chalk-dim)">Média gols pró fora: ${tv.mediaGolsProFora??'—'} · contra: ${tv.mediaGolsContraFora??'—'}</small></div>
+      <p style="font-size:12.5px;color:var(--chalk-dim)">O confronto é ${nm} (mandante) x ${nv} (visitante) — por isso destaco casa do mandante e fora do visitante, que é o que vale para este jogo.</p>`;
+  }
+
+  $('ac-conteudo').innerHTML = html;
+}
+window.trocaAcSub = trocaAcSub;
 
 </script>
 </body>
