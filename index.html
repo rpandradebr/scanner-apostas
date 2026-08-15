@@ -276,7 +276,7 @@
     </div>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
       <input type="checkbox" id="su-favoritas" style="width:auto"> Só minhas ligas favoritas
-    </div>
+    </label>
     <div id="su-aviso"></div>
     <div id="su-lista"></div>
     <div id="su-rankings" style="margin-top:18px"></div>
@@ -519,7 +519,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.34";
+const APP_VERSAO = "v3.35";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2625,19 +2625,28 @@ $('btn-topdia').addEventListener('click', async () => {
       b.disabled = false; return;
     }
     const pontuados = [];
+    // cache de estatísticas por data (evita rebuscar ao trocar de mercado no mesmo dia)
+    if (window._tdCacheData !== data){ window._tdCacheStats = {}; window._tdCacheData = data; }
+    const cacheStats = window._tdCacheStats;
     for (let i=0; i<comOdds.length; i+=4){
       $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
       const leva = comOdds.slice(i, i+4);
       const res = await Promise.all(leva.map(async j => {
         try{
-          const pm = { acao:'historico', time: j.mandante }; if (j.mandante_id) pm.id = j.mandante_id;
-          const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
-          const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
-          if ((rm.jogos?.length??0) < 6 || (rv.jogos?.length??0) < 6) return null;
-          const em = estatisticas(rm.jogos), ev = estatisticas(rv.jogos);
-          const nota = pontuarTD(mercado, oddsMap[j.fixture_id], em, ev);
+          // reusa do cache se já buscou este jogo nesta data
+          let dados = cacheStats[j.fixture_id];
+          if (!dados){
+            const pm = { acao:'historico', time: j.mandante }; if (j.mandante_id) pm.id = j.mandante_id;
+            const pv = { acao:'historico', time: j.visitante }; if (j.visitante_id) pv.id = j.visitante_id;
+            const [rm, rv] = await Promise.all([chamarEdge(pm), chamarEdge(pv)]);
+            if ((rm.jogos?.length??0) < 6 || (rv.jogos?.length??0) < 6){ cacheStats[j.fixture_id] = null; return null; }
+            dados = { em: estatisticas(rm.jogos), ev: estatisticas(rv.jogos), nm: rm.time??j.mandante, nv: rv.time??j.visitante };
+            cacheStats[j.fixture_id] = dados;
+          }
+          if (!dados) return null;
+          const nota = pontuarTD(mercado, oddsMap[j.fixture_id], dados.em, dados.ev);
           if (nota == null) return null;
-          return { j, nota, em, ev, nm: rm.time??j.mandante, nv: rv.time??j.visitante };
+          return { j, nota, em: dados.em, ev: dados.ev, nm: dados.nm, nv: dados.nv };
         } catch(_){ return null; }
       }));
       res.filter(Boolean).forEach(x => pontuados.push(x));
@@ -2678,6 +2687,7 @@ $('btn-topdia').addEventListener('click', async () => {
                 <button class="mini" onclick="event.stopPropagation();copiarPrompt('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
                 <button class="mini" onclick="event.stopPropagation();fichaJogo(${idx})">🔎 Ficha</button>
                 <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="event.stopPropagation();abrirAnaliseCompleta(${idx})">🔬 Análise completa</button>
+                ${mktConfere ? `<button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${mktConfere}',${(x.nota/10).toFixed(1)},'TOP do dia ${m.nome}: ${x.nota} pontos', this)">💾 Salvar</button>` : ''}
               </div>
             </div>
             <div style="text-align:center;min-width:70px;cursor:pointer" onclick="abrirAnaliseCompleta(${idx})">
