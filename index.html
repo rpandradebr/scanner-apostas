@@ -519,7 +519,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.37";
+const APP_VERSAO = "v3.39";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2540,8 +2540,11 @@ const MERCADOS_TD = {
 
 // pontua um jogo (0-100) para um mercado, usando odds (o) e stats das duas equipes (em/ev)
 function pontuarTD(mercado, o, em, ev){
+  o = o || {}; // pode não ter odds (jogo já ocorrido) — usamos histórico como fallback
+  const temOdds = o.odd_home != null;
   const menorOdd = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
-  const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
+  // favorito: pela odd se houver; senão pelo aproveitamento/vitórias do histórico
+  const favEhMandante = temOdds ? ((o.odd_home ?? 99) <= (o.odd_away ?? 99)) : ((em.pctVit||0) >= (ev.pctVit||0));
   const favStats = favEhMandante ? em : ev;
   const zebraStats = favEhMandante ? ev : em;
   const overComb = (em.pctOver + ev.pctOver) / 2;
@@ -2553,11 +2556,17 @@ function pontuarTD(mercado, o, em, ev){
 
   switch(mercado){
     case 'back_fav': {
-      if (menorOdd > 2.2) return null; // sem favorito claro
-      // quanto menor a odd e maior a forma do favorito, melhor
-      const base = (2.2 - menorOdd) / 1.2 * 60; // odd
-      const forma = favStats.pctVit * 0.4; // forma
-      return clamp(base + forma);
+      if (temOdds){
+        if (menorOdd > 2.2) return null; // sem favorito claro
+        const base = (2.2 - menorOdd) / 1.2 * 60; // odd
+        const forma = favStats.pctVit * 0.4; // forma
+        return clamp(base + forma);
+      } else {
+        // sem odds: usa só a diferença de aproveitamento das equipes
+        const dif = (favStats.pctVit||0) - (zebraStats.pctVit||0);
+        if (dif < 20) return null; // sem favorito claro pelo histórico
+        return clamp(favStats.pctVit * 0.7 + dif * 0.5);
+      }
     }
     case 'over05':
       return clamp(over05Comb);
@@ -2579,11 +2588,17 @@ function pontuarTD(mercado, o, em, ev){
       return clamp(bttsComb * 0.6 + overComb * 0.4);
     }
     case 'lay_zebra': {
-      if (menorOdd > 1.7) return null; // precisa de favorito
-      // favorito forte e em boa forma = zebra improvável
-      const oddScore = (1.7 - menorOdd) / 0.55 * 55;
-      const formaScore = favStats.pctVit * 0.3 + (100 - zebraStats.pctVit) * 0.15;
-      return clamp(oddScore + formaScore);
+      if (temOdds){
+        if (menorOdd > 1.7) return null; // precisa de favorito
+        const oddScore = (1.7 - menorOdd) / 0.55 * 55;
+        const formaScore = favStats.pctVit * 0.3 + (100 - zebraStats.pctVit) * 0.15;
+        return clamp(oddScore + formaScore);
+      } else {
+        // sem odds: favorito forte pelo histórico e zebra fraca
+        const dif = (favStats.pctVit||0) - (zebraStats.pctVit||0);
+        if (dif < 25) return null; // sem favorito claro
+        return clamp(favStats.pctVit * 0.4 + (100 - zebraStats.pctVit) * 0.3);
+      }
     }
     case 'lay_gol_mand': {
       // goleada do mandante improvável: mandante não goleia E visitante não leva goleada
@@ -2669,17 +2684,20 @@ $('btn-topdia').addEventListener('click', async () => {
     // reusa o cache de sessão se a mesma data/situação/favoritas já foi processada
     if (window._tdProcessado && window._tdProcessado.chave === chaveCache){
       jogosComStats = window._tdProcessado.dados;
+      await carregarOddsMapa(data); // garante odds carregadas mesmo reusando stats
       $('td-status').textContent = `⚡ Reusando ${jogosComStats.length} jogos já analisados (troca de mercado é instantânea).`;
     } else {
       const rg = await chamarEdge({ acao:'grade', data });
       const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao'), 'td-favoritas');
       await carregarOddsMapa(data);
-      const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+      const saoPassados = situ === 'ocorridos';
+      // jogos ocorridos frequentemente não têm mais odds (casas removem após o fim) —
+      // então só exigimos odds para jogos a ocorrer; ocorridos usam histórico (Under/Over/BTTS funcionam sem odds)
+      const comOdds = saoPassados ? jogos : jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
       if (!comOdds.length){
-        aviso($('td-aviso'), 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
+        aviso($('td-aviso'), saoPassados ? 'Nenhum jogo encerrado nesta data/filtro. Tente outra data ou desmarque favoritas.' : 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
         b.disabled = false; return;
       }
-      const saoPassados = situ === 'ocorridos';
       jogosComStats = [];
       for (let i=0; i<comOdds.length; i+=4){
         $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
@@ -2708,7 +2726,16 @@ $('btn-topdia').addEventListener('click', async () => {
     pontuados.sort((a,c) => c.nota - a.nota);
     const top = pontuados.slice(0, 10);
     if (!top.length){
-      aviso($('td-aviso'), 'Nenhum jogo qualificado para este mercado hoje.', 'erro');
+      const situTxt = situ === 'ocorridos' ? 'já ocorridos' : situ === 'ocorrer' ? 'a ocorrer' : '';
+      let msg;
+      if (!jogosComStats.length){
+        msg = soFav
+          ? `Nenhum jogo ${situTxt} das suas ligas favoritas com histórico suficiente nesta data. ${situ==='ocorridos' ? 'As ligas grandes costumam jogar à noite — talvez ainda não tenham terminado hoje.' : 'Tente desmarcar "só favoritas" ou outra data.'}`
+          : `Nenhum jogo ${situTxt} com histórico e odds nesta data.`;
+      } else {
+        msg = `Analisei ${jogosComStats.length} jogos, mas nenhum se qualificou para ${MERCADOS_TD[mercado].nome}. Este mercado exige um perfil específico (ex.: Back Favorito precisa de favorito claro). Tente outro mercado — os jogos já estão carregados, a troca é instantânea.`;
+      }
+      aviso($('td-aviso'), msg, 'erro');
       $('td-status').textContent = '';
     } else {
       const m = MERCADOS_TD[mercado];
