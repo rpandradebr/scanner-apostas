@@ -196,6 +196,10 @@
       <input type="checkbox" id="grade-base" style="width:auto">
       <label for="grade-base" style="margin:0;cursor:pointer">Mostrar categorias de base (sub-17/20, youth, reservas) — ocultas por padrão</label>
     </div>
+    <div class="linha" style="grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" id="grade-obscura" style="width:auto" checked>
+      <label for="grade-obscura" style="margin:0;cursor:pointer">Ocultar ligas amadoras/divisões inferiores (economiza requisições) — recomendado</label>
+    </div>
     <button class="acao" id="btn-grade">Carregar grade</button>
     <div id="grade-aviso"></div>
     <div id="grade-grupos"></div>
@@ -528,7 +532,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.43";
+const APP_VERSAO = "v3.44";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -593,8 +597,25 @@ function ehCategoriaDeBase(j){
       || /sub-?\s?(1[5-9]|2[0-3])/i.test(texto)             // Sub-17, Sub20…
       || /\b(youth|juvenil|juveniles|primavera|reserves?|reserve league|srl|academy)\b/i.test(texto);
 }
+// identifica ligas amadoras/divisões inferiores/regionais (submundo) — economiza requisições
+function ehLigaObscura(j){
+  const liga = (j.liga ?? '').toLowerCase();
+  return /\b(amateur|amador|regional|oberliga|regionalliga|landesliga|kreisliga|verbandsliga|bezirksliga|county|district|division 3|division 4|division 5|3\.? liga|4\.? liga|5\.? liga|tercera|cuarta|quinta|serie d|serie c2|non league|non-league|counties|feeder|reserve|veterans|futsal|beach|women'?s? amateur)\b/i.test(liga)
+      || /\b(iii liga|iv liga|v liga|3rd division|4th division|5th division|segunda b|primera b metropolitana|primera c|primera d)\b/i.test(liga);
+}
 function semBase(jogos){
-  return $('grade-base')?.checked ? jogos : jogos.filter(j => !ehCategoriaDeBase(j));
+  let r = $('grade-base')?.checked ? jogos : jogos.filter(j => !ehCategoriaDeBase(j));
+  // filtro de ligas amadoras/inferiores (marcado por padrão) — economiza requisições
+  const ocultarObscura = $('grade-obscura') ? $('grade-obscura').checked : true;
+  if (ocultarObscura) r = r.filter(j => !ehLigaObscura(j));
+  return r;
+}
+// para TOP/Sugestões/Favoritos: exclui base E ligas obscuras (economiza crédito)
+function jogoValido(j){
+  if (ehCategoriaDeBase(j)) return false;
+  const ocultarObscura = $('grade-obscura') ? $('grade-obscura').checked : true;
+  if (ocultarObscura && ehLigaObscura(j)) return false;
+  return true;
 }
 
 let gradeJogos = [];
@@ -611,7 +632,7 @@ $('btn-grade').addEventListener('click', carregarGrade);
 $('grade-liga').addEventListener('change', desenharGrade);
 $('grade-time').addEventListener('input', desenharGrade);
 if ($('grade-status')) $('grade-status').addEventListener('change', desenharGrade);
-document.addEventListener('change', e => { if (e.target?.id === 'grade-base'){ desenharGrade();
+document.addEventListener('change', e => { if (e.target?.id === 'grade-base' || e.target?.id === 'grade-obscura'){ desenharGrade();
   const ligas = [...new Set(semBase(gradeJogos).map(j => j.liga))].sort();
   $('grade-liga').innerHTML = '<option value="">Todos</option>' + ligas.map(l => `<option>${l}</option>`).join('');
 }});
@@ -1454,7 +1475,7 @@ $('btn-rodada').addEventListener('click', async () => {
   aviso($('ro-aviso'), ''); $('ro-analise').innerHTML='';
   try{
     const r = await chamarEdge({ acao:'grade', data: $('ro-data').value });
-    rodadaJogos = (r.jogos || []).filter(j => !ehCategoriaDeBase(j));
+    rodadaJogos = (r.jogos || []).filter(j => jogoValido(j));
     if (r.aviso) aviso($('ro-aviso'), r.aviso, 'erro');
     const ligas = [...new Set(rodadaJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
     $('ro-liga').innerHTML = '<option value="">Escolha o campeonato</option>' +
@@ -1774,7 +1795,7 @@ $('btn-odds').addEventListener('click', async () => {
     $('fav-status').textContent = `✅ ${total} jogos com odds.`;
     await carregarOddsMapa(data);
     const rg = await chamarEdge({ acao:'grade', data });
-    favJogosComOdds = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && !ehCategoriaDeBase(j));
+    favJogosComOdds = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && jogoValido(j));
     desenharFavoritos(favJogosComOdds);
     desenharGols(favJogosComOdds);
   } catch(e){ aviso($('fav-aviso'), 'Falha: ' + e.message, 'erro'); }
@@ -1949,7 +1970,7 @@ async function gerarSugestoes(){
   aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
   try{
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'su-situacao'), 'su-favoritas');
+    const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j)), 'su-situacao'), 'su-favoritas');
     await carregarOddsMapa(data);
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
     if (!comOdds.length){
@@ -2330,7 +2351,7 @@ $('btn-carregar-es').addEventListener('click', async () => {
   aviso($('es-aviso'), ''); $('es-resultado').innerHTML='';
   try{
     const r = await chamarEdge({ acao:'grade', data: $('es-data').value });
-    esJogos = (r.jogos ?? []).filter(j => !ehCategoriaDeBase(j));
+    esJogos = (r.jogos ?? []).filter(j => jogoValido(j));
     const ligas = [...new Set(esJogos.map(j => `${j.pais} — ${j.liga}`))].sort();
     $('es-liga').innerHTML = '<option value="">Escolha o campeonato</option>' +
       ligas.map(l => `<option>${l}</option>`).join('');
@@ -2635,7 +2656,7 @@ $('btn-topdia').addEventListener('click', async () => {
   if (mercado === 'desarmes'){
     try{
       const rg = await chamarEdge({ acao:'grade', data });
-      let jogos = filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && j.mandante_id && j.visitante_id), 'td-situacao');
+      let jogos = filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j) && j.mandante_id && j.visitante_id), 'td-situacao');
       // filtra pelas ligas favoritas (desarme só vale nas grandes ligas)
       const fav = (typeof getLigasFav==='function') ? getLigasFav() : [];
       if (fav.length){
@@ -2703,7 +2724,7 @@ $('btn-topdia').addEventListener('click', async () => {
       $('td-status').textContent = `⚡ Reusando ${jogosComStats.length} jogos já analisados (troca de mercado é instantânea).`;
     } else {
       const rg = await chamarEdge({ acao:'grade', data });
-      const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao'), 'td-favoritas');
+      const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j)), 'td-situacao'), 'td-favoritas');
       await carregarOddsMapa(data);
       const saoPassados = situ === 'ocorridos';
       // jogos ocorridos frequentemente não têm mais odds (casas removem após o fim) —
