@@ -488,7 +488,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.29";
+const APP_VERSAO = "v3.30";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1810,6 +1810,7 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
   else if (mercado === 'UNDER 3.5') reg.over_under = 'UNDER 3.5';
   else if (mercado === 'OVER 2.5') reg.over_under = 'OVER 2.5';
   else if (mercado === 'OVER 0.5') reg.over_under = 'OVER 0.5';
+  else if (mercado === 'OVER 1.5') reg.over_under = 'OVER 1.5';
   else if (mercado === 'BTTS') reg.over_under = 'BTTS';
   else if (mercado === 'LAY ZEBRA'){ reg.lay_zebra = 'VIAVEL'; }
   const { error } = await db.from('analises').insert(reg);
@@ -1828,6 +1829,7 @@ function desenharRankingsSug(){
   const mercadosRank = [
     { id:'btts',    titulo:'🤝 Ambas marcam',   campo:'pctBtts',    dica:'Maior % de BTTS no histórico das duas equipes' },
     { id:'o05',     titulo:'⚽ Over 0.5 (sai gol)', campo:'pctOver05', dica:'Chance de pelo menos 1 gol — mercado mais seguro de over' },
+    { id:'o15',     titulo:'⚽ Over 1.5',        campo:'pctOver15', dica:'Chance de saírem 2+ gols no jogo' },
     { id:'o25',     titulo:'🔥 Over 2.5',        campo:'pctOver',    dica:'Jogos de muitos gols (3+)' },
     { id:'u35',     titulo:'🔒 Under 3.5',       campo:'pctUnder35', dica:'Jogos que dificilmente passam de 3 gols' },
     { id:'u25',     titulo:'🛡️ Under 2.5',       campo:'pctUnder25', dica:'Jogos travados (até 2 gols)' },
@@ -1845,7 +1847,7 @@ function desenharRankingsSug(){
       <tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>${m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th><th>Salvar</th></tr>
       ${lista.map(x => {
         const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
-        const mktSist = {btts:'BTTS', o05:'OVER 0.5', o25:'OVER 2.5', u35:'UNDER 3.5', u25:'UNDER 2.5'}[m.id];
+        const mktSist = {btts:'BTTS', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', u35:'UNDER 3.5', u25:'UNDER 2.5'}[m.id];
         return `<tr class="clicavel">
           <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td onclick="fichaJogo(${idx})">${x.c.j.liga||''}</td>
           <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
@@ -1861,7 +1863,7 @@ function desenharRankingsSug(){
     <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">Ranking estatístico pelo histórico — clique no jogo para a ficha completa e confira as odds antes de operar.</p>`;
 }
 function trocaRanking(id){
-  ['btts','o05','o25','u35','u25'].forEach(x => {
+  ['btts','o05','o15','o25','u35','u25'].forEach(x => {
     const btn = $('rk-'+x), corpo = $('rkc-'+x);
     if (btn){ btn.style.borderColor = x===id?'var(--amber)':''; btn.style.color = x===id?'var(--amber)':''; }
     if (corpo) corpo.style.display = x===id?'block':'none';
@@ -1982,6 +1984,7 @@ function confereMercado(mercado, gm, gv){
   if (mercado === 'UNDER 3.5') return total <= 3 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 2.5')  return total >= 3 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 0.5')  return total >= 1 ? 'GREEN' : 'RED';
+  if (mercado === 'OVER 1.5')  return total >= 2 ? 'GREEN' : 'RED';
   if (mercado === 'BTTS')      return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
   if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
@@ -2445,6 +2448,8 @@ $('td-data').value = hojeISO();
 
 const MERCADOS_TD = {
   back_fav: { nome:'Back Favorito', dica:'Apostar no favorito para vencer' },
+  over05: { nome:'Over 0.5', dica:'Sai pelo menos 1 gol no jogo' },
+  over15: { nome:'Over 1.5', dica:'Saem pelo menos 2 gols no jogo' },
   under35: { nome:'Under 3.5', dica:'Menos de 4 gols no jogo' },
   btts: { nome:'Ambos Marcam', dica:'As duas equipes marcam' },
   lay01: { nome:'Lay 0x1', dica:'Contra o placar exato 0x1' },
@@ -2461,6 +2466,8 @@ function pontuarTD(mercado, o, em, ev){
   const favStats = favEhMandante ? em : ev;
   const zebraStats = favEhMandante ? ev : em;
   const overComb = (em.pctOver + ev.pctOver) / 2;
+  const over05Comb = ((em.pctOver05 ?? 0) + (ev.pctOver05 ?? 0)) / 2;
+  const over15Comb = ((em.pctOver15 ?? 0) + (ev.pctOver15 ?? 0)) / 2;
   const under35Comb = (em.pctUnder35 + ev.pctUnder35) / 2;
   const bttsComb = (em.pctBtts + ev.pctBtts) / 2;
   const clamp = (x) => Math.max(0, Math.min(100, Math.round(x)));
@@ -2473,6 +2480,10 @@ function pontuarTD(mercado, o, em, ev){
       const forma = favStats.pctVit * 0.4; // forma
       return clamp(base + forma);
     }
+    case 'over05':
+      return clamp(over05Comb);
+    case 'over15':
+      return clamp(over15Comb);
     case 'under35': {
       // odd de under e histórico de poucos gols
       const oddBonus = o.odd_under35 ? Math.max(0, (2.0 - o.odd_under35) * 25) : 0;
@@ -2612,6 +2623,7 @@ async function abrirAnaliseCompleta(idx){
       {id:'gols', nome:'⚽ Gols'},
       {id:'tempo', nome:'⏱️ Por tempo'},
       {id:'cartoes', nome:'🟨 Cartões'},
+      {id:'desarmes', nome:'🛡️ Desarmes'},
       {id:'casafora', nome:'🏠 Casa/Fora'},
     ];
     $('ac-subabas').style.display = 'flex';
@@ -2633,7 +2645,7 @@ function linhaComp(rotulo, valM, valV){
 }
 
 function trocaAcSub(id){
-  ['resumo','gols','tempo','cartoes','casafora'].forEach(x => {
+  ['resumo','gols','tempo','cartoes','desarmes','casafora'].forEach(x => {
     const b = $('acsub-'+x); if (b){ b.style.borderColor = x===id?'var(--amber)':''; b.style.color = x===id?'var(--amber)':''; }
   });
   if (!acDados) return;
@@ -2752,6 +2764,12 @@ function trocaAcSub(id){
       <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Para a média do árbitro (que pesa tanto quanto os times no cartão), use o botão ⚖️ na ficha do jogo.</p>`;
   }
 
+  else if (id==='desarmes'){
+    html = `<h3>Desarmes por jogo — linha de valor sugerida</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:12px">Média de desarmes das duas equipes (últimos 10 jogos). A linha sugerida é calculada pela soma das médias. Desarme tem cobertura confiável só nas grandes ligas.</p>
+      <div id="ac-desarmes-conteudo"><button class="acao" id="btn-carregar-desarmes" onclick="carregarDesarmes()">🛡️ Calcular desarmes das equipes</button></div>`;
+  }
+
   else if (id==='casafora'){
     const cf = (o) => o ? `${o.j??0}j · ${o.v??0}V ${o.e??0}E ${o.d??0}D · ${o.gp??0} gp / ${o.gc??0} gc` : 'sem dados';
     html = `<h3>Desempenho casa/fora (temporada)</h3>
@@ -2765,6 +2783,50 @@ function trocaAcSub(id){
   $('ac-conteudo').innerHTML = html;
 }
 window.trocaAcSub = trocaAcSub;
+
+async function carregarDesarmes(){
+  if (!acDados) return;
+  const { j, nm, nv } = acDados;
+  const alvo = $('ac-desarmes-conteudo');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Calculando desarmes das duas equipes…</p>';
+  try{
+    const busca = async (id, liga, nome) => {
+      if (!id) return null;
+      // tenta cache do banco
+      try{
+        const { data } = await db.from('stats_times').select('*').eq('time_id', id).limit(1);
+        if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < 86400000) return data[0];
+      }catch(_){}
+      const r = await chamarEdge({ acao:'stats_time', time_id:id, liga:liga||'', nome:nome||'', n:10 });
+      return r.ok ? r.registro : null;
+    };
+    const liga = `${j.pais} — ${j.liga}`;
+    const [dm, dv] = await Promise.all([ busca(j.mandante_id, liga, nm), busca(j.visitante_id, liga, nv) ]);
+    const desM = dm?.media_desarmes, desV = dv?.media_desarmes;
+    if (desM==null && desV==null){
+      alvo.innerHTML = '<div class="aviso">Sem dados de desarmes para estas equipes. A estatística de desarme por jogador só tem cobertura consistente nas grandes ligas (Premier, La Liga, Bundesliga, Ligue 1, Brasileirão, Serie A).</div>';
+      return;
+    }
+    const somaLinha = (desM||0) + (desV||0);
+    // linha de valor: um pouco abaixo da soma das médias (0.5 típico de mercado)
+    const linhaSugerida = somaLinha ? (Math.floor(somaLinha) + 0.5) : null;
+    const linhaValor = somaLinha ? (Math.round(somaLinha*2)/2) : null; // arredonda para .0 ou .5
+    alvo.innerHTML = `
+      <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center">Desarmes/jogo</th><th style="text-align:center">${nv}</th></tr>
+        <tr><td class="valor" style="font-size:18px"><b>${desM!=null?desM.toFixed(1):'—'}</b></td>
+            <td class="rotulo" style="text-align:center">média (últimos ${dm?.jogos_amostra||'?'} / ${dv?.jogos_amostra||'?'})</td>
+            <td class="valor" style="font-size:18px"><b>${desV!=null?desV.toFixed(1):'—'}</b></td></tr>
+      </table>
+      ${linhaSugerida ? `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:14px">
+        <div class="stat" style="flex:1;min-width:150px"><b style="color:var(--amber)">${somaLinha.toFixed(1)}</b><span>total esperado (soma das médias)</span></div>
+        <div class="stat" style="flex:1;min-width:150px"><b style="color:var(--green)">${linhaSugerida}</b><span>linha sugerida (over/under)</span></div>
+      </div>
+      <div style="background:var(--pitch);border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:var(--chalk-dim)">
+        <b>Como usar:</b> a soma das médias é <b>${somaLinha.toFixed(1)}</b> desarmes esperados no jogo. Se a casa oferecer linha <b>abaixo</b> de ${somaLinha.toFixed(1)} (ex.: ${(Math.floor(somaLinha)-0.5).toFixed(1)}), o <b>over</b> tem valor. Se oferecer <b>acima</b> (ex.: ${(Math.ceil(somaLinha)+1.5).toFixed(1)}), o <b>under</b> tem valor. A linha ${linhaSugerida} é o ponto de equilíbrio aproximado.
+      </div>` : ''}`;
+  } catch(e){ alvo.innerHTML = `<div class="aviso erro">Falha: ${e.message}</div>`; }
+}
+window.carregarDesarmes = carregarDesarmes;
 
 </script>
 </body>
