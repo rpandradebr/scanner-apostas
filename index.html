@@ -200,7 +200,15 @@
       <input type="checkbox" id="grade-obscura" style="width:auto" checked>
       <label for="grade-obscura" style="margin:0;cursor:pointer">Ocultar ligas amadoras/divisões inferiores (economiza requisições) — recomendado</label>
     </div>
-    <button class="acao" id="btn-grade">Carregar grade</button>
+    <div class="linha" style="grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" id="grade-so-fav" style="width:auto">
+      <label for="grade-so-fav" style="margin:0;cursor:pointer">Mostrar só meus campeonatos escolhidos (ignora todo o resto)</label>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="acao" id="btn-grade">Carregar grade</button>
+      <button class="mini" id="btn-gerenciar-ligas" style="border-color:var(--amber);color:var(--amber)">⚙️ Escolher meus campeonatos</button>
+    </div>
+    <div id="grade-gerenciador" style="display:none;background:var(--pitch);border:1px solid rgba(237,234,224,.15);border-radius:10px;padding:14px;margin-bottom:12px"></div>
     <div id="grade-aviso"></div>
     <div id="grade-grupos"></div>
     <div id="grade-ficha"></div>
@@ -281,6 +289,9 @@
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
       <input type="checkbox" id="su-favoritas" style="width:auto"> Só minhas ligas favoritas
     </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="su-meuscamp" style="width:auto"> Só meus campeonatos escolhidos (⚙️ configure na aba Grade do dia)
+    </label>
     <div id="su-aviso"></div>
     <div id="su-lista"></div>
     <div id="su-rankings" style="margin-top:18px"></div>
@@ -314,6 +325,9 @@
     </div>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
       <input type="checkbox" id="td-favoritas" style="width:auto"> Só minhas ligas favoritas (marque-as na aba 📊 Estatísticas)
+    </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="td-meuscamp" style="width:auto"> Só meus campeonatos escolhidos (⚙️ configure na aba Grade do dia)
     </label>
     <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chalk-dim);margin-bottom:10px;flex-wrap:wrap">
       <label style="margin:0">Máximo de jogos a analisar (economiza requisições):</label>
@@ -532,7 +546,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.47";
+const APP_VERSAO = "v3.49";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -616,6 +630,8 @@ function semBase(jogos){
   // filtro de ligas amadoras/inferiores (marcado por padrão) — economiza requisições
   const ocultarObscura = $('grade-obscura') ? $('grade-obscura').checked : true;
   if (ocultarObscura) r = r.filter(j => !ehLigaObscura(j));
+  // whitelist: se "só meus campeonatos" ligado, mostra só os escolhidos
+  if ($('grade-so-fav') && $('grade-so-fav').checked) r = r.filter(j => estaNaWhitelist(j));
   return r;
 }
 // para TOP/Sugestões/Favoritos: exclui base E ligas obscuras (economiza crédito)
@@ -623,6 +639,9 @@ function jogoValido(j){
   if (ehCategoriaDeBase(j)) return false;
   const ocultarObscura = $('grade-obscura') ? $('grade-obscura').checked : true;
   if (ocultarObscura && ehLigaObscura(j)) return false;
+  // whitelist de campeonatos escolhidos (ligável na Grade, TOP ou Sugestões — qualquer um vale)
+  const querWhitelist = ($('grade-so-fav')?.checked) || ($('td-meuscamp')?.checked) || ($('su-meuscamp')?.checked);
+  if (querWhitelist && !estaNaWhitelist(j)) return false;
   return true;
 }
 
@@ -637,10 +656,11 @@ async function carregarOddsMapa(data){
 }
 const fmtOdd = v => v ? Number(v).toFixed(2) : '—';
 $('btn-grade').addEventListener('click', carregarGrade);
+if ($('btn-gerenciar-ligas')) $('btn-gerenciar-ligas').addEventListener('click', abrirGerenciadorLigas);
 $('grade-liga').addEventListener('change', desenharGrade);
 $('grade-time').addEventListener('input', desenharGrade);
 if ($('grade-status')) $('grade-status').addEventListener('change', desenharGrade);
-document.addEventListener('change', e => { if (e.target?.id === 'grade-base' || e.target?.id === 'grade-obscura'){ desenharGrade();
+document.addEventListener('change', e => { if (e.target?.id === 'grade-base' || e.target?.id === 'grade-obscura' || e.target?.id === 'grade-so-fav'){ desenharGrade();
   const ligas = [...new Set(semBase(gradeJogos).map(j => j.liga))].sort();
   $('grade-liga').innerHTML = '<option value="">Todos</option>' + ligas.map(l => `<option>${l}</option>`).join('');
 }});
@@ -2339,6 +2359,61 @@ const LIGAS_PRESET = [
 ];
 function getLigasFav(){ try{ return JSON.parse(localStorage.getItem('ligasFav')||'[]'); }catch(_){ return []; } }
 function setLigasFav(arr){ localStorage.setItem('ligasFav', JSON.stringify(arr)); }
+// minha whitelist de campeonatos escolhidos (separada das favoritas do ranking)
+function getMeusCamp(){ try{ return JSON.parse(localStorage.getItem('meusCampeonatos')||'[]'); }catch(_){ return []; } }
+function setMeusCamp(arr){ localStorage.setItem('meusCampeonatos', JSON.stringify(arr)); }
+
+// abre o gerenciador: lista todas as ligas do dia carregado para marcar
+function abrirGerenciadorLigas(){
+  const alvo = $('grade-gerenciador');
+  if (alvo.style.display === 'block'){ alvo.style.display = 'none'; return; }
+  alvo.style.display = 'block';
+  if (!gradeJogos.length){
+    alvo.innerHTML = '<p class="msg-vazia" style="margin:0">Carregue a grade de um dia primeiro (botão "Carregar grade"), aí as ligas aparecem aqui para você marcar.</p>';
+    return;
+  }
+  // lista única de ligas do dia (pais — liga)
+  const ligas = [...new Set(gradeJogos.filter(j => !ehCategoriaDeBase(j)).map(j => `${j.pais} — ${j.liga}`))].sort();
+  const marcadas = getMeusCamp();
+  alvo.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <b style="color:var(--amber)">⚙️ Escolha os campeonatos que você quer (${ligas.length} disponíveis hoje)</b>
+      <div style="display:flex;gap:6px">
+        <button class="mini" onclick="marcarTodosCamp(true)">Marcar todos</button>
+        <button class="mini" onclick="marcarTodosCamp(false)">Limpar</button>
+        <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="$('grade-gerenciador').style.display='none'">✓ Pronto</button>
+      </div>
+    </div>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">Marque só os campeonatos que você aposta. Depois ligue "Mostrar só meus campeonatos escolhidos" — o sistema ignora todo o resto e economiza requisições.</p>
+    <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
+      ${ligas.map(l => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:4px 6px;border-radius:6px">
+        <input type="checkbox" class="camp-check" value="${l.replace(/"/g,'&quot;')}" style="width:auto" ${marcadas.includes(l)?'checked':''} onchange="toggleCamp(this)"> ${l}
+      </label>`).join('')}
+    </div>`;
+}
+window.abrirGerenciadorLigas = abrirGerenciadorLigas;
+function toggleCamp(el){
+  let m = getMeusCamp();
+  const v = el.value;
+  if (el.checked){ if (!m.includes(v)) m.push(v); }
+  else { m = m.filter(x => x !== v); }
+  setMeusCamp(m);
+}
+window.toggleCamp = toggleCamp;
+function marcarTodosCamp(marcar){
+  if (marcar){
+    const ligas = [...new Set(gradeJogos.filter(j => !ehCategoriaDeBase(j)).map(j => `${j.pais} — ${j.liga}`))];
+    setMeusCamp(ligas);
+  } else { setMeusCamp([]); }
+  abrirGerenciadorLigas(); abrirGerenciadorLigas(); // redesenha
+}
+window.marcarTodosCamp = marcarTodosCamp;
+// checa se um jogo está na minha whitelist de campeonatos
+function estaNaWhitelist(j){
+  const m = getMeusCamp();
+  if (!m.length) return true; // sem whitelist = passa tudo
+  return m.includes(`${j.pais} — ${j.liga}`);
+}
 function desenharFavLigas(ligas){
   const fav = getLigasFav();
   if (!ligas.length){ $('es-favligas').innerHTML = '<span class="msg-vazia" style="font-size:13px">Carregue os jogos de um dia para escolher suas ligas.</span>'; return; }
