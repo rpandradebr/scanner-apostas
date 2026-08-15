@@ -519,7 +519,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.39";
+const APP_VERSAO = "v3.40";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1078,7 +1078,7 @@ async function estatisticasComCache(time, id, jogosSaoPassados){
   // 2) busca na API e salva
   const p = { acao:'historico', time }; if (id) p.id = id;
   const r = await chamarEdge(p);
-  if ((r.jogos?.length??0) < 6) return null;
+  if ((r.jogos?.length??0) < 4) return null;
   const st = estatisticas(r.jogos);
   st._nome = r.time || time;
   try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){}
@@ -2681,8 +2681,8 @@ $('btn-topdia').addEventListener('click', async () => {
     const chaveCache = `${data}|${situ}|${soFav?'fav':'all'}`;
     let jogosComStats;
 
-    // reusa o cache de sessão se a mesma data/situação/favoritas já foi processada
-    if (window._tdProcessado && window._tdProcessado.chave === chaveCache){
+    // reusa o cache de sessão se a mesma data/situação/favoritas já foi processada (e não está vazio)
+    if (window._tdProcessado && window._tdProcessado.chave === chaveCache && window._tdProcessado.dados.length){
       jogosComStats = window._tdProcessado.dados;
       await carregarOddsMapa(data); // garante odds carregadas mesmo reusando stats
       $('td-status').textContent = `⚡ Reusando ${jogosComStats.length} jogos já analisados (troca de mercado é instantânea).`;
@@ -2695,9 +2695,10 @@ $('btn-topdia').addEventListener('click', async () => {
       // então só exigimos odds para jogos a ocorrer; ocorridos usam histórico (Under/Over/BTTS funcionam sem odds)
       const comOdds = saoPassados ? jogos : jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
       if (!comOdds.length){
-        aviso($('td-aviso'), saoPassados ? 'Nenhum jogo encerrado nesta data/filtro. Tente outra data ou desmarque favoritas.' : 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
+        aviso($('td-aviso'), saoPassados ? `Nenhum jogo encerrado nesta data/filtro (${jogos.length} jogos no filtro). Tente outra data ou desmarque favoritas.` : 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
         b.disabled = false; return;
       }
+      window._tdDebug = { noFiltro: comOdds.length, comHistorico: 0 };
       jogosComStats = [];
       for (let i=0; i<comOdds.length; i+=4){
         $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
@@ -2709,6 +2710,7 @@ $('btn-topdia').addEventListener('click', async () => {
               estatisticasComCache(j.visitante, j.visitante_id, saoPassados),
             ]);
             if (!em || !ev) return null;
+            if (window._tdDebug) window._tdDebug.comHistorico++;
             return { j, em, ev, nm: em._nome||j.mandante, nv: ev._nome||j.visitante };
           } catch(_){ return null; }
         }));
@@ -2729,9 +2731,11 @@ $('btn-topdia').addEventListener('click', async () => {
       const situTxt = situ === 'ocorridos' ? 'já ocorridos' : situ === 'ocorrer' ? 'a ocorrer' : '';
       let msg;
       if (!jogosComStats.length){
+        const dbg = window._tdDebug;
+        const detalhe = dbg ? ` (${dbg.noFiltro} jogos no filtro, ${dbg.comHistorico} com histórico no banco)` : '';
         msg = soFav
-          ? `Nenhum jogo ${situTxt} das suas ligas favoritas com histórico suficiente nesta data. ${situ==='ocorridos' ? 'As ligas grandes costumam jogar à noite — talvez ainda não tenham terminado hoje.' : 'Tente desmarcar "só favoritas" ou outra data.'}`
-          : `Nenhum jogo ${situTxt} com histórico e odds nesta data.`;
+          ? `Nenhum jogo ${situTxt} das suas ligas favoritas com histórico suficiente${detalhe}. ${situ==='ocorridos' ? 'As ligas grandes jogam à noite — talvez ainda não terminaram, ou o histórico dos times não está no banco.' : 'Tente desmarcar "só favoritas" ou outra data.'}`
+          : `Nenhum jogo ${situTxt} com histórico no banco${detalhe}. ${dbg && dbg.noFiltro > 0 ? 'Os jogos existem, mas os times não têm histórico salvo — rode o backfill ou "colher resultados" para preencher.' : 'Tente outra data.'}`;
       } else {
         msg = `Analisei ${jogosComStats.length} jogos, mas nenhum se qualificou para ${MERCADOS_TD[mercado].nome}. Este mercado exige um perfil específico (ex.: Back Favorito precisa de favorito claro). Tente outro mercado — os jogos já estão carregados, a troca é instantânea.`;
       }
