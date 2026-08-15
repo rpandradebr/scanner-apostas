@@ -466,7 +466,7 @@
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.25";
+const APP_VERSAO = "v3.26";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1775,13 +1775,17 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
   if (mercado === 'LAY 1x0') reg.lay_1x0 = 'VIAVEL';
   else if (mercado === 'LAY 0x1') reg.lay_0x1 = 'VIAVEL';
   else if (mercado === 'UNDER 2.5') reg.over_under = 'UNDER 2.5';
+  else if (mercado === 'UNDER 3.5') reg.over_under = 'UNDER 3.5';
   else if (mercado === 'OVER 2.5') reg.over_under = 'OVER 2.5';
+  else if (mercado === 'OVER 0.5') reg.over_under = 'OVER 0.5';
+  else if (mercado === 'BTTS') reg.over_under = 'BTTS';
   else if (mercado === 'LAY ZEBRA'){ reg.lay_zebra = 'VIAVEL'; }
   const { error } = await db.from('analises').insert(reg);
   if (error){ botao.textContent = '❌ erro'; return; }
-  botao.textContent = '✅ salvo em Minhas Análises';
+  botao.textContent = '✅ salvo';
   botao.disabled = true;
-  listarAnalises();
+  if (typeof listarAnalises === 'function') listarAnalises();
+  if (typeof listarHistSug === 'function') listarHistSug();
 }
 window.salvarSugestao = salvarSugestao;
 
@@ -1806,14 +1810,16 @@ function desenharRankingsSug(){
     corpo += `<div class="rk-corpo" id="rkc-${m.id}" style="display:${i===0?'block':'none'}">
       <p style="font-size:12.5px;color:var(--chalk-dim);margin:6px 0">${m.dica} · média dos últimos 10 jogos de cada equipe.</p>
       <div class="tabela-scroll"><table>
-      <tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>${m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th></tr>
+      <tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>${m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th><th>Salvar</th></tr>
       ${lista.map(x => {
         const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
-        return `<tr class="clicavel" onclick="fichaJogo(${idx})">
-          <td>${x.c.j.hora||''}</td><td>${x.c.j.liga||''}</td>
-          <td><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
-          <td style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${x.v}%</b></td>
-          <td style="font-size:12px;color:var(--chalk-dim)">${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%</td>
+        const mktSist = {btts:'BTTS', o05:'OVER 0.5', o25:'OVER 2.5', u35:'UNDER 3.5', u25:'UNDER 2.5'}[m.id];
+        return `<tr class="clicavel">
+          <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td onclick="fichaJogo(${idx})">${x.c.j.liga||''}</td>
+          <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
+          <td onclick="fichaJogo(${idx})" style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${x.v}%</b></td>
+          <td onclick="fichaJogo(${idx})" style="font-size:12px;color:var(--chalk-dim)">${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%</td>
+          <td><button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.c.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${x.v/10},'Ranking ${mktSist}: ${x.v}% no histórico', this)">💾</button></td>
         </tr>`;
       }).join('')}
       </table></div></div>`;
@@ -1941,12 +1947,13 @@ listarAnalises();
 function confereMercado(mercado, gm, gv){
   const total = gm + gv;
   if (mercado === 'UNDER 2.5') return total <= 2 ? 'GREEN' : 'RED';
+  if (mercado === 'UNDER 3.5') return total <= 3 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 2.5')  return total >= 3 ? 'GREEN' : 'RED';
+  if (mercado === 'OVER 0.5')  return total >= 1 ? 'GREEN' : 'RED';
+  if (mercado === 'BTTS')      return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
   if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
   if (mercado === 'LAY ZEBRA'){
-    // zebra = quem tinha odd maior; sem guardar lado, usamos heurística:
-    // lay zebra ganha se NÃO houve vitória do visitante por 2+ (aprox.) -> melhor: green se mandante venceu ou empate
     return gm >= gv ? 'GREEN' : 'RED';
   }
   return null;
@@ -2022,7 +2029,18 @@ async function listarHistSug(){
     mercados[m] = mercados[m] || {g:0,r:0};
     if (a.resultado_auto==='GREEN') mercados[m].g++; else mercados[m].r++;
   });
-  $('hs-painel').innerHTML = '<div class="placar-box">' +
+  // taxa só das apostas que você realmente pegou
+  let pegasG=0, pegasR=0;
+  data.forEach(a => {
+    if (a.aposta_feita && a.resultado_auto){
+      if (a.resultado_auto==='GREEN') pegasG++; else pegasR++;
+    }
+  });
+  const totalPegas = pegasG + pegasR;
+  const painelPegas = totalPegas
+    ? `<div class="aviso" style="margin-bottom:10px"><b>💰 Suas apostas de verdade (marcadas como "peguei"):</b> ${totalPegas} apostas · ${pegasG} green / ${pegasR} red · <b style="color:${pegasG/totalPegas>=0.5?'var(--green)':'var(--red)'}">${Math.round(pegasG/totalPegas*100)}% de acerto</b></div>`
+    : '';
+  $('hs-painel').innerHTML = painelPegas + '<p style="font-size:13px;color:var(--chalk-dim);margin-bottom:4px">Taxa geral por mercado (todas as sugestões salvas):</p><div class="placar-box">' +
     Object.entries(mercados).map(([m,v]) => {
       const t = v.g+v.r;
       return `<div class="stat"><b>${t?Math.round(v.g/t*100):0}%</b><span>${m} · ${v.g}G/${v.r}R</span></div>`;
@@ -2032,7 +2050,7 @@ async function listarHistSug(){
 
   const pill = r => r==='GREEN' ? '<span class="pill g">GREEN</span>' : r==='RED' ? '<span class="pill r">RED</span>' : '<span class="pill n">aguardando</span>';
   $('hs-tabela').innerHTML =
-    '<tr><th>Data</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th></tr>' +
+    '<tr><th>Data</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th></tr>' +
     data.map(a => `<tr>
       <td>${a.data_jogo ?? ''}</td>
       <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
@@ -2040,8 +2058,16 @@ async function listarHistSug(){
       <td>${a.confianca ?? ''}</td>
       <td>${a.placar_final ?? '—'}</td>
       <td>${pill(a.resultado_auto)}</td>
+      <td><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--chalk-dim)">
+        <input type="checkbox" style="width:auto" ${a.aposta_feita?'checked':''} onchange="marcarApostaFeita(${a.id}, this.checked)"> ${a.aposta_feita?'sim':'não'}
+      </label></td>
     </tr>`).join('');
 }
+async function marcarApostaFeita(id, feita){
+  try{ await db.from('analises').update({ aposta_feita: feita }).eq('id', id); listarHistSug(); }
+  catch(e){ alert('Erro ao marcar: ' + e.message); }
+}
+window.marcarApostaFeita = marcarApostaFeita;
 
 listarHistSug();
 
