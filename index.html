@@ -270,6 +270,8 @@
       <div><label for="su-data">Data</label><input type="date" id="su-data"></div>
       <div><label for="su-corte">Nota mínima</label>
         <select id="su-corte"><option value="6.5">6.5 (padrão)</option><option value="6">6.0 (mais jogos)</option><option value="7.5">7.5 (só a nata)</option></select></div>
+      <div><label for="su-situacao">Situação</label>
+        <select id="su-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
       <div style="align-self:end"><button class="acao" id="btn-sugestoes">Gerar sugestões</button></div>
     </div>
     <div id="su-aviso"></div>
@@ -300,6 +302,8 @@
           <option value="lay_gol_vis">Lay Goleada Visitante</option>
           <option value="desarmes">🛡️ Desarmes (linha sugerida)</option>
         </select></div>
+      <div><label for="td-situacao">Situação</label>
+        <select id="td-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
       <div style="align-self:end"><button class="acao" id="btn-topdia">Gerar TOP 10</button></div>
     </div>
     <div id="td-aviso"></div>
@@ -488,10 +492,20 @@
 </div>
 
 <script>
+
+function filtraSituacao(jogos, situacaoId){
+  const sit = $(situacaoId) ? $(situacaoId).value : 'ocorrer';
+  const encerrado = s => ['FT','AET','PEN'].includes(s);
+  const aVir = s => ['NS','TBD','PST'].includes(s);
+  if (sit === 'ocorridos') return jogos.filter(j => encerrado(j.status));
+  if (sit === 'todos') return jogos;
+  return jogos.filter(j => aVir(j.status)); // padrão: a ocorrer
+}
+
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.32";
+const APP_VERSAO = "v3.33";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1881,7 +1895,7 @@ async function gerarSugestoes(){
   aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
   try{
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
+    const jogos = filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'su-situacao');
     await carregarOddsMapa(data);
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
     if (!comOdds.length){
@@ -2530,7 +2544,7 @@ $('btn-topdia').addEventListener('click', async () => {
   if (mercado === 'desarmes'){
     try{
       const rg = await chamarEdge({ acao:'grade', data });
-      let jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status) && j.mandante_id && j.visitante_id);
+      let jogos = filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && j.mandante_id && j.visitante_id), 'td-situacao');
       // filtra pelas ligas favoritas (desarme só vale nas grandes ligas)
       const fav = (typeof getLigasFav==='function') ? getLigasFav() : [];
       if (fav.length){
@@ -2587,7 +2601,7 @@ $('btn-topdia').addEventListener('click', async () => {
 
   try{
     const rg = await chamarEdge({ acao:'grade', data });
-    const jogos = (rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j) && ['NS','TBD'].includes(j.status));
+    const jogos = filtraSituacao((rg.jogos ?? []).filter(j => !ehCategoriaDeBase(j)), 'td-situacao');
     await carregarOddsMapa(data);
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
     if (!comOdds.length){
