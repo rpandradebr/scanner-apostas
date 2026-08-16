@@ -342,7 +342,10 @@
         <option value="9999">Todos (gasta mais)</option>
       </select>
     </div>
-    <div style="margin-bottom:10px"><button class="acao" id="btn-topdia">Gerar TOP 10</button></div>
+    <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="acao" id="btn-topdia">Gerar TOP 10</button>
+      <button class="mini" id="btn-topdia-zero" title="Ignora o cache e busca tudo de novo (use quando mudar as ligas)">🔄 Recarregar do zero</button>
+    </div>
     <div id="td-aviso"></div>
     <div id="td-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
     <div id="td-lista"></div>
@@ -602,7 +605,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.53";
+const APP_VERSAO = "v3.54";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2914,7 +2917,10 @@ $('btn-topdia').addEventListener('click', async () => {
     const soFav = $('td-favoritas') && $('td-favoritas').checked;
     const soMeus = $('td-meuscamp') && $('td-meuscamp').checked;
     const limiteAtual = $('td-limite') ? $('td-limite').value : '100';
-    const chaveCache = `${data}|${situ}|${soFav?'fav':''}|${soMeus?'meus':''}|${limiteAtual}`;
+    // inclui o CONTEÚDO das listas na chave — assim mudar as ligas invalida o cache
+    const assinaturaCamp = soMeus ? (getMeusCamp().sort().join(',')) : '';
+    const assinaturaFav = soFav ? (getLigasFav().sort().join(',')) : '';
+    const chaveCache = `${data}|${situ}|${soFav?'fav':''}|${soMeus?'meus':''}|${limiteAtual}|${assinaturaCamp}|${assinaturaFav}`;
     let jogosComStats;
 
     // reusa o cache de sessão se a mesma data/situação/favoritas já foi processada (e não está vazio)
@@ -3045,6 +3051,9 @@ $('btn-topdia').addEventListener('click', async () => {
   } catch(e){ aviso($('td-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 });
+
+// botão recarregar do zero: limpa o cache de sessão e dispara o gerar
+if ($("btn-topdia-zero")) $("btn-topdia-zero").addEventListener("click", () => { window._tdProcessado = null; $("btn-topdia").click(); });
 
 window.carregarAoVivo = window.carregarAoVivo || (()=>{});
 
