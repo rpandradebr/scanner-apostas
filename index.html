@@ -706,7 +706,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.64";
+const APP_VERSAO = "v3.65";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2572,7 +2572,7 @@ async function listarHistSug(){
     return 0;
   });
   $('hs-tabela').innerHTML =
-    '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th></tr>' +
+    '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th><th>Banca</th></tr>' +
     dataFiltrada.map(a => `<tr>
       <td>${a.data_jogo ?? ''}</td>
       <td style="font-family:'IBM Plex Mono',monospace">${a.hora_jogo ?? '—'}</td>
@@ -2584,6 +2584,7 @@ async function listarHistSug(){
       <td><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--chalk-dim)">
         <input type="checkbox" style="width:auto" ${a.aposta_feita?'checked':''} onchange="marcarApostaFeita(${a.id}, this.checked)"> ${a.aposta_feita?'sim':'não'}
       </label></td>
+      <td><button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button></td>
     </tr>`).join('');
 }
 async function marcarApostaFeita(id, feita){
@@ -2591,6 +2592,89 @@ async function marcarApostaFeita(id, feita){
   catch(e){ alert('Erro ao marcar: ' + e.message); }
 }
 window.marcarApostaFeita = marcarApostaFeita;
+
+// integra uma sugestão salva para a Gestão de Banca (abre modal pré-preenchido)
+async function integrarBanca(idAnalise){
+  try{
+    const { data } = await db.from('analises').select('*').eq('id', idAnalise).limit(1);
+    if (!data?.length){ alert('Sugestão não encontrada.'); return; }
+    const a = data[0];
+    // busca casas e bancas já usadas para o autocomplete
+    let casas = [], bancas = [];
+    try{
+      const { data: bd } = await db.from('banca').select('casa_aposta,nome_banca').limit(500);
+      casas = [...new Set((bd||[]).map(x=>x.casa_aposta).filter(Boolean))].sort();
+      bancas = [...new Set((bd||[]).map(x=>x.nome_banca).filter(Boolean))].sort();
+    }catch(_){}
+    const modal = document.createElement('div');
+    modal.id = 'modal-integrar';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.innerHTML = `
+      <div style="background:var(--felt);border:2px solid var(--amber);border-radius:14px;padding:22px;max-width:460px;width:100%;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <b style="color:var(--amber);font-size:16px">💰 Integrar à Gestão de banca</b>
+          <button onclick="document.getElementById('modal-integrar').remove()" style="background:none;border:none;color:var(--chalk-dim);font-size:22px;cursor:pointer">×</button>
+        </div>
+        <p style="font-size:13px;color:var(--chalk-dim);margin-bottom:14px"><b>${a.mandante}</b> x <b>${a.visitante}</b><br>${a.mercado_sugerido||''} · ${a.campeonato||''}</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Casa de aposta</label><input id="int-casa" placeholder="Betfair, Bet365..." list="int-lista-casas"></div>
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Nome da banca/pessoa</label><input id="int-banca" placeholder="Minha banca, João..." list="int-lista-bancas"></div>
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Valor (R$)</label><input type="number" id="int-valor" placeholder="0,00" step="0.01"></div>
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Odd de entrada</label><input type="number" id="int-odd" placeholder="0,00" step="0.01"></div>
+          <div style="grid-column:1/3"><label style="font-size:12px;color:var(--chalk-dim)">Resultado</label>
+            <select id="int-resultado" style="width:100%;padding:6px 8px">
+              <option value="pendente">Pendente</option>
+              <option value="green"${a.resultado_auto==='GREEN'?' selected':''}>✅ Green</option>
+              <option value="red"${a.resultado_auto==='RED'?' selected':''}>❌ Red</option>
+              <option value="cashout">💸 Cashout</option>
+            </select></div>
+          <div style="grid-column:1/3;display:none" id="int-cashout-box"><label style="font-size:12px;color:var(--chalk-dim)">Odd de saída (cashout)</label><input type="number" id="int-odd-saida" placeholder="0,00" step="0.01" style="width:100%"></div>
+        </div>
+        <datalist id="int-lista-casas">${casas.map(c=>`<option value="${c}">`).join('')}</datalist>
+        <datalist id="int-lista-bancas">${bancas.map(b=>`<option value="${b}">`).join('')}</datalist>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+          <button class="mini" onclick="document.getElementById('modal-integrar').remove()">Cancelar</button>
+          <button class="acao" onclick="confirmarIntegracao(${a.id})">Adicionar à banca</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    // guarda os dados da análise para usar na confirmação
+    window._intDados = { jogo: `${a.mandante} x ${a.visitante}`, campeonato: a.campeonato||'', mercado: a.mercado_sugerido||'', data_jogo: a.data_jogo, hora_jogo: a.hora_jogo };
+    // toggle cashout
+    document.getElementById('int-resultado').addEventListener('change', e => {
+      document.getElementById('int-cashout-box').style.display = e.target.value==='cashout' ? 'block' : 'none';
+    });
+  }catch(e){ alert('Erro: '+e.message); }
+}
+window.integrarBanca = integrarBanca;
+
+async function confirmarIntegracao(idAnalise){
+  const d = window._intDados || {};
+  const valor = parseFloat(document.getElementById('int-valor').value);
+  const odd = parseFloat(document.getElementById('int-odd').value);
+  if (!valor || !odd){ alert('Preencha ao menos Valor e Odd.'); return; }
+  const resultado = document.getElementById('int-resultado').value;
+  const oddSaida = resultado==='cashout' ? (parseFloat(document.getElementById('int-odd-saida').value)||null) : null;
+  if (resultado==='cashout' && !oddSaida){ alert('Para cashout, informe a odd de saída.'); return; }
+  const reg = {
+    data_aposta: d.data_jogo || new Date().toISOString().slice(0,10),
+    jogo: d.jogo, campeonato: d.campeonato, mercado: d.mercado,
+    casa_aposta: document.getElementById('int-casa').value.trim(),
+    nome_banca: document.getElementById('int-banca').value.trim(),
+    valor, odd, resultado, odd_saida: oddSaida,
+  };
+  reg.lucro = calcLucro(reg);
+  try{
+    await db.from('banca').insert(reg);
+    // marca a sugestão como "peguei" também
+    await db.from('analises').update({ aposta_feita: true }).eq('id', idAnalise);
+    document.getElementById('modal-integrar').remove();
+    alert('✅ Aposta adicionada à Gestão de banca!');
+    listarHistSug();
+  }catch(e){ alert('Erro ao salvar: '+e.message); }
+}
+window.confirmarIntegracao = confirmarIntegracao;
+
 
 document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao') listarHistSug(); });
 listarHistSug();
