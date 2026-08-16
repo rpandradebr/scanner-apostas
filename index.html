@@ -575,15 +575,18 @@ function filtraSituacao(jogos, situacaoId){
   const aVir = s => ['NS','TBD','PST'].includes(s);
   if (sit === 'ocorridos') return jogos.filter(j => encerrado(j.status));
   if (sit === 'todos') return jogos;
-  // "a ocorrer": status futuro E (se tiver hora e data de hoje) a hora ainda não passou
-  const hoje = new Date().toISOString().slice(0,10);
-  const agoraMin = new Date().getHours()*60 + new Date().getMinutes();
+  // "a ocorrer": status futuro E a hora ainda não passou.
+  // A hora do jogo vem em horário da Bahia (Edge usa timezone=America/Bahia).
+  // Calculamos o "agora" na Bahia de forma robusta (funciona mesmo com VPN/fuso diferente no aparelho).
+  const agoraBahia = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bahia' }));
+  const hoje = `${agoraBahia.getFullYear()}-${String(agoraBahia.getMonth()+1).padStart(2,'0')}-${String(agoraBahia.getDate()).padStart(2,'0')}`;
+  const agoraMin = agoraBahia.getHours()*60 + agoraBahia.getMinutes();
   return jogos.filter(j => {
     if (!aVir(j.status)) return false;
-    // se é jogo de hoje e a hora já passou há mais de 2h, provavelmente já ocorreu (status desatualizado)
+    if (j.data_jogo && j.data_jogo < hoje) return false; // data passada travada em NS
     if (j.data_jogo === hoje && j.hora){
       const [h,m] = (j.hora||'').split(':').map(Number);
-      if (!isNaN(h)){ const jogoMin = h*60 + (m||0); if (agoraMin > jogoMin + 120) return false; }
+      if (!isNaN(h)){ const jogoMin = h*60 + (m||0); if (agoraMin > jogoMin + 15) return false; }
     }
     return true;
   });
@@ -599,7 +602,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.52";
+const APP_VERSAO = "v3.53";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
