@@ -139,7 +139,10 @@
 <div class="wrap">
   <header>
     <h1>Scanner <span>de Apostas</span></h1>
-    <div class="versao" id="versao"></div>
+    <div style="text-align:right">
+      <div class="versao" id="versao"></div>
+      <div id="cota-medidor" style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--chalk-dim);margin-top:4px;cursor:pointer" onclick="atualizarCota()" title="Clique para atualizar">📊 cota: —</div>
+    </div>
   </header>
 
   <nav>
@@ -156,6 +159,7 @@
     <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático. Clique em "Atualizar resultados" para o sistema apurar sozinho.">📋 Histórico de sugestões</button>
     <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
     <button data-aba="analisecompleta" title="Central de análise: ao clicar num jogo, veja desempenho por tempo, gols, cartões e escanteios das duas equipes, temporada e recorte recente.">🔬 Análise completa</button>
+    <button data-aba="relatorios" title="Relatórios de desempenho: montante de green/red das apostas que você pegou, taxa por mercado, evolução e mais.">📈 Relatórios</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -433,6 +437,29 @@
     <div id="ac-conteudo"></div>
   </section>
 
+  <!-- ================= RELATÓRIOS ================= -->
+  <section id="aba-relatorios">
+    <h2>📈 Relatórios de desempenho</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Desempenho das apostas que você marcou como "peguei" no Histórico de Sugestões. Mostra acertos, taxa por mercado e evolução. Marque os jogos que realmente operou para o relatório refletir sua performance real.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <button class="acao" id="btn-gerar-relatorio">📊 Gerar relatório</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Período:
+        <select id="rel-periodo" style="width:auto;padding:4px 8px">
+          <option value="tudo">Tudo</option>
+          <option value="7">Últimos 7 dias</option>
+          <option value="30">Últimos 30 dias</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        <input type="checkbox" id="rel-so-pegas" style="width:auto" checked> Só apostas que peguei
+      </label>
+    </div>
+    <div id="rel-conteudo"><p class="msg-vazia">Clique em "Gerar relatório" para ver seu desempenho.</p></div>
+  </section>
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -514,6 +541,11 @@
       <button class="acao" id="btn-atualizar-res">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="hs-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Data:
+        <input type="date" id="hs-filtro-data" style="width:auto;padding:4px 8px">
+        <button class="mini" onclick="$('hs-filtro-data').value='';listarHistSug()">limpar</button>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Ordenar por:
         <select id="hs-ordem" style="width:auto;padding:4px 8px">
           <option value="recente">Mais recentes primeiro</option>
@@ -543,7 +575,18 @@ function filtraSituacao(jogos, situacaoId){
   const aVir = s => ['NS','TBD','PST'].includes(s);
   if (sit === 'ocorridos') return jogos.filter(j => encerrado(j.status));
   if (sit === 'todos') return jogos;
-  return jogos.filter(j => aVir(j.status)); // padrão: a ocorrer
+  // "a ocorrer": status futuro E (se tiver hora e data de hoje) a hora ainda não passou
+  const hoje = new Date().toISOString().slice(0,10);
+  const agoraMin = new Date().getHours()*60 + new Date().getMinutes();
+  return jogos.filter(j => {
+    if (!aVir(j.status)) return false;
+    // se é jogo de hoje e a hora já passou há mais de 2h, provavelmente já ocorreu (status desatualizado)
+    if (j.data_jogo === hoje && j.hora){
+      const [h,m] = (j.hora||'').split(':').map(Number);
+      if (!isNaN(h)){ const jogoMin = h*60 + (m||0); if (agoraMin > jogoMin + 120) return false; }
+    }
+    return true;
+  });
 }
 function filtraFavoritas(jogos, checkboxId){
   if (!$(checkboxId) || !$(checkboxId).checked) return jogos;
@@ -556,7 +599,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.50";
+const APP_VERSAO = "v3.52";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -588,6 +631,22 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ---------- utilidades ----------
 const $ = id => document.getElementById(id);
+// medidor de cota da API (não gasta requisição de dados)
+async function atualizarCota(){
+  const el = $('cota-medidor'); if (!el) return;
+  el.textContent = '📊 cota: consultando…';
+  try{
+    const r = await chamarEdge({ acao:'status' });
+    if (r.ok){
+      const usadas = r.usadas_dia ?? 0, limite = r.limite_dia ?? 7500;
+      const pct = Math.round(usadas/limite*100);
+      const cor = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--green)';
+      el.innerHTML = `📊 cota: <b style="color:${cor}">${usadas}/${limite}</b> (${pct}%) · zera 21h`;
+    } else { el.textContent = '📊 cota: indisponível'; }
+  }catch(_){ el.textContent = '📊 cota: —'; }
+}
+window.atualizarCota = atualizarCota;
+setTimeout(atualizarCota, 2000); // consulta ao carregar
 // config dos alertas de horário (declarado cedo pois listarHistSug usa)
 let _alertaConfig = { antecedencia: 15, ligado: true };
 let _jaAlertados = new Set();
@@ -607,7 +666,14 @@ async function chamarEdge(params){
   const url = EDGE_URL + '?' + new URLSearchParams(params).toString();
   const res = await fetch(url, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }});
   if (!res.ok) throw new Error('Edge Function respondeu ' + res.status);
-  return res.json();
+  const dados = await res.json();
+  // detecta limite diário da API e traduz para mensagem amigável
+  const txt = JSON.stringify(dados||{});
+  if (txt.includes('reached the request limit')){
+    if ($('cota-medidor')) $('cota-medidor').innerHTML = '📊 cota: <b style="color:var(--red)">LIMITE ATINGIDO</b> · zera 21h';
+    throw new Error('Limite diário de requisições da API atingido. A cota zera às 21h (horário de Brasília/Salvador). Até lá, os dados já salvos no banco continuam funcionando. Dica: ative os filtros de economia (só meus campeonatos, ocultar amadoras) para o próximo dia.');
+  }
+  return dados;
 }
 
 // ---------- navegação por abas ----------
@@ -1133,14 +1199,16 @@ function paramsHistorico(inputEl){
 // Busca estatísticas de gols de um time COM cache em banco (acelera TOP e Sugestões)
 // jogosOcorridos=true dura mais (o passado não muda); a ocorrer dura 6h
 async function estatisticasComCache(time, id, jogosSaoPassados){
-  const chave = id ? String(id) : (time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const chave = id ? ('id'+String(id)) : ('nm'+(time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''));
   // 1) tenta o cache do banco (acelerador — se falhar, segue pra API normalmente)
   if (chave){
     try{
       const validade = jogosSaoPassados ? 7*86400000 : 6*3600000;
       const { data } = await db.from('cache_stats_gols').select('*').eq('time_chave', chave).limit(1);
       if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < validade && data[0].stats_json){
-        return data[0].stats_json;
+        // clona e força o nome correto (nunca reusa _nome de outro time)
+        const st = { ...data[0].stats_json, _nome: time };
+        return st;
       }
     }catch(_){}
   }
@@ -1153,7 +1221,7 @@ async function estatisticasComCache(time, id, jogosSaoPassados){
     st._nome = r.time || time;
     // salva no cache pra acelerar próximas vezes (se falhar, não tem problema)
     if (chave){ try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){} }
-    return st;
+    return { ...st }; // retorna cópia para não compartilhar referência entre times
   }catch(_){ return null; }
 }
 window.estatisticasComCache = estatisticasComCache;
@@ -2259,17 +2327,19 @@ async function listarHistSug(){
   const pill = r => r==='GREEN' ? '<span class="pill g">GREEN</span>' : r==='RED' ? '<span class="pill r">RED</span>' : '<span class="pill n">aguardando</span>';
   // ordenação escolhida
   const ordem = $('hs-ordem') ? $('hs-ordem').value : 'recente';
+  const filtroData = $('hs-filtro-data') ? $('hs-filtro-data').value : '';
+  let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
   const semHoraFim = '99:99'; // jogos sem hora vão para o fim
-  data.sort((a,b) => {
+  dataFiltrada.sort((a,b) => {
     if (ordem === 'hora') return (a.hora_jogo||semHoraFim).localeCompare(b.hora_jogo||semHoraFim);
     if (ordem === 'hora-desc') return (b.hora_jogo||'').localeCompare(a.hora_jogo||'');
     if (ordem === 'nota') return (b.confianca||0) - (a.confianca||0);
     if (ordem === 'mercado') return (a.mercado_sugerido||'').localeCompare(b.mercado_sugerido||'');
-    return 0; // recente = mantém ordem original (já vem por criado_em desc)
+    return 0;
   });
   $('hs-tabela').innerHTML =
     '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th></tr>' +
-    data.map(a => `<tr>
+    dataFiltrada.map(a => `<tr>
       <td>${a.data_jogo ?? ''}</td>
       <td style="font-family:'IBM Plex Mono',monospace">${a.hora_jogo ?? '—'}</td>
       <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
@@ -2288,7 +2358,7 @@ async function marcarApostaFeita(id, feita){
 }
 window.marcarApostaFeita = marcarApostaFeita;
 
-document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem') listarHistSug(); });
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data') listarHistSug(); });
 listarHistSug();
 
 
@@ -2839,7 +2909,9 @@ $('btn-topdia').addEventListener('click', async () => {
   try{
     const situ = $('td-situacao') ? $('td-situacao').value : 'ocorrer';
     const soFav = $('td-favoritas') && $('td-favoritas').checked;
-    const chaveCache = `${data}|${situ}|${soFav?'fav':'all'}`;
+    const soMeus = $('td-meuscamp') && $('td-meuscamp').checked;
+    const limiteAtual = $('td-limite') ? $('td-limite').value : '100';
+    const chaveCache = `${data}|${situ}|${soFav?'fav':''}|${soMeus?'meus':''}|${limiteAtual}`;
     let jogosComStats;
 
     // reusa o cache de sessão se a mesma data/situação/favoritas já foi processada (e não está vazio)
@@ -3300,6 +3372,102 @@ setInterval(() => { const h = new Date().getHours(); if (h === 0){ _jaAlertados.
 const _styleAlerta = document.createElement('style');
 _styleAlerta.textContent = '@keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
 document.head.appendChild(_styleAlerta);
+
+
+
+// ==========================================================
+// RELATÓRIOS DE DESEMPENHO
+// ==========================================================
+async function gerarRelatorio(){
+  const alvo = $('rel-conteudo');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Analisando suas apostas…</p>';
+  try{
+    const { data } = await db.from('analises').select('*').eq('origem','sugestao').order('data_jogo',{ascending:false}).limit(1000);
+    if (!data?.length){ alvo.innerHTML = '<p class="msg-vazia">Nenhuma sugestão salva ainda.</p>'; return; }
+
+    const soPegas = $('rel-so-pegas')?.checked;
+    const periodo = $('rel-periodo')?.value || 'tudo';
+    let apostas = data.filter(a => a.resultado_auto); // só as resolvidas (green/red)
+    if (soPegas) apostas = apostas.filter(a => a.aposta_feita);
+    if (periodo !== 'tudo'){
+      const limite = new Date(); limite.setDate(limite.getDate() - parseInt(periodo));
+      apostas = apostas.filter(a => a.data_jogo && new Date(a.data_jogo) >= limite);
+    }
+    if (!apostas.length){ alvo.innerHTML = `<div class="aviso">Nenhuma aposta ${soPegas?'marcada como "peguei" ':''}com resultado apurado neste período. ${soPegas?'Marque os jogos que você operou no Histórico de Sugestões, ou desmarque "só apostas que peguei".':'Clique em "Atualizar resultados" no Histórico de Sugestões primeiro.'}</div>`; return; }
+
+    // ===== métricas gerais =====
+    const g = apostas.filter(a => a.resultado_auto==='GREEN').length;
+    const r = apostas.filter(a => a.resultado_auto==='RED').length;
+    const total = g + r;
+    const taxa = total ? Math.round(g/total*100) : 0;
+    // ===== por mercado =====
+    const porMercado = {};
+    apostas.forEach(a => {
+      const m = a.mercado_sugerido || '?';
+      porMercado[m] = porMercado[m] || {g:0,r:0};
+      if (a.resultado_auto==='GREEN') porMercado[m].g++; else porMercado[m].r++;
+    });
+    // ===== por dia (evolução) =====
+    const porDia = {};
+    apostas.forEach(a => {
+      const d = a.data_jogo || '?';
+      porDia[d] = porDia[d] || {g:0,r:0};
+      if (a.resultado_auto==='GREEN') porDia[d].g++; else porDia[d].r++;
+    });
+    // ===== sequências =====
+    const ordenadas = [...apostas].sort((a,b) => (a.data_jogo||'').localeCompare(b.data_jogo||''));
+    let maiorSeqG = 0, maiorSeqR = 0, seqG = 0, seqR = 0;
+    ordenadas.forEach(a => {
+      if (a.resultado_auto==='GREEN'){ seqG++; seqR=0; maiorSeqG=Math.max(maiorSeqG,seqG); }
+      else { seqR++; seqG=0; maiorSeqR=Math.max(maiorSeqR,seqR); }
+    });
+
+    const corTaxa = taxa >= 60 ? 'var(--green)' : taxa >= 45 ? 'var(--amber)' : 'var(--red)';
+    const barra = (gg, rr) => { const t = gg+rr; const p = t?Math.round(gg/t*100):0; const c = p>=60?'var(--green)':p>=45?'var(--amber)':'var(--red)';
+      return `<div style="background:rgba(237,234,224,.1);border-radius:4px;height:20px;position:relative;min-width:140px">
+        <div style="background:${c};width:${p}%;height:100%;border-radius:4px"></div>
+        <span style="position:absolute;top:0;left:8px;line-height:20px;font-size:12px;font-family:'IBM Plex Mono',monospace">${p}% (${gg}G/${rr}R)</span></div>`; };
+
+    let html = `
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+        <div class="stat" style="flex:1;min-width:120px"><b style="font-size:26px">${total}</b><span>apostas ${soPegas?'operadas':'apuradas'}</span></div>
+        <div class="stat" style="flex:1;min-width:120px"><b style="font-size:26px;color:var(--green)">${g}</b><span>greens ✅</span></div>
+        <div class="stat" style="flex:1;min-width:120px"><b style="font-size:26px;color:var(--red)">${r}</b><span>reds ❌</span></div>
+        <div class="stat" style="flex:1;min-width:120px"><b style="font-size:26px;color:${corTaxa}">${taxa}%</b><span>taxa de acerto</span></div>
+      </div>
+
+      <h3>🎯 Desempenho por mercado</h3>
+      <table class="comp" style="margin-bottom:20px">
+        <tr><th style="text-align:left">Mercado</th><th>Aproveitamento</th></tr>
+        ${Object.entries(porMercado).sort((a,b)=>{const ta=a[1].g/(a[1].g+a[1].r),tb=b[1].g/(b[1].g+b[1].r);return tb-ta;}).map(([m,v]) =>
+          `<tr><td style="text-align:left"><b>${m}</b></td><td>${barra(v.g,v.r)}</td></tr>`).join('')}
+      </table>
+
+      <h3>🔥 Sequências</h3>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+        <div class="stat" style="flex:1;min-width:150px"><b style="color:var(--green)">${maiorSeqG}</b><span>maior sequência de greens</span></div>
+        <div class="stat" style="flex:1;min-width:150px"><b style="color:var(--red)">${maiorSeqR}</b><span>maior sequência de reds</span></div>
+      </div>
+
+      <h3>📅 Evolução por dia</h3>
+      <table class="comp">
+        <tr><th style="text-align:left">Data</th><th>Resultado do dia</th></tr>
+        ${Object.entries(porDia).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,30).map(([d,v]) => {
+          const t=v.g+v.r; const p=t?Math.round(v.g/t*100):0;
+          return `<tr><td style="text-align:left;font-family:'IBM Plex Mono',monospace">${d}</td><td>${barra(v.g,v.r)}</td></tr>`;
+        }).join('')}
+      </table>
+
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:16px">
+        ${soPegas ? 'Mostrando só apostas marcadas como "peguei" — seu desempenho real operando.' : 'Mostrando todas as sugestões apuradas (incluindo as que você não pegou) — desempenho teórico do sistema.'}
+        A diferença entre os dois te diz se suas decisões de entrada estão ajudando ou atrapalhando.
+      </p>`;
+    alvo.innerHTML = html;
+  }catch(e){ alvo.innerHTML = `<div class="aviso erro">Erro: ${e.message}</div>`; }
+}
+window.gerarRelatorio = gerarRelatorio;
+if ($('btn-gerar-relatorio')) $('btn-gerar-relatorio').addEventListener('click', gerarRelatorio);
+document.addEventListener('change', e => { if (e.target?.id === 'rel-periodo' || e.target?.id === 'rel-so-pegas') gerarRelatorio(); });
 
 </script>
 </body>
