@@ -133,6 +133,15 @@
   .chip b{color:var(--amber)}
   .ultimos{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim);margin:4px 0 8px}
   footer{margin-top:26px;font-size:12px;color:var(--chalk-dim);max-width:75ch}
+
+.ajuda-card { background: var(--pitch); border-radius: 10px; padding: 18px 20px; }
+.ajuda-card h3 { margin-top: 0; }
+.ajuda-card h4 { color: var(--amber); margin: 16px 0 8px; }
+.fluxo { border-left: 3px solid var(--amber); padding-left: 14px; margin-bottom: 18px; }
+.fluxo ol { margin: 6px 0; padding-left: 20px; }
+.fluxo li { margin-bottom: 8px; line-height: 1.5; }
+.ajuda-dl dt { color: var(--amber); font-weight: 600; margin-top: 12px; }
+.ajuda-dl dd { margin: 2px 0 0 0; color: var(--chalk-dim); line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -160,6 +169,7 @@
     <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
     <button data-aba="analisecompleta" title="Central de análise: ao clicar num jogo, veja desempenho por tempo, gols, cartões e escanteios das duas equipes, temporada e recorte recente.">🔬 Análise completa</button>
     <button data-aba="relatorios" title="Relatórios de desempenho: montante de green/red das apostas que você pegou, taxa por mercado, evolução e mais.">📈 Relatórios</button>
+    <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -463,6 +473,20 @@
     <div id="rel-conteudo"><p class="msg-vazia">Clique em "Gerar relatório" para ver seu desempenho.</p></div>
   </section>
 
+  <!-- ================= AJUDA ================= -->
+  <section id="aba-ajuda">
+    <h2>❓ Ajuda — Manual do Scanner de Apostas</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">Aqui você aprende o que cada tela faz e o passo a passo dos principais fluxos. Clique nas abas abaixo.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="mini" id="ajsub-fluxos" style="border-color:var(--amber);color:var(--amber)" onclick="trocaAjuda('fluxos')">🚦 Passo a passo</button>
+      <button class="mini" id="ajsub-telas" onclick="trocaAjuda('telas')">🗂️ O que é cada tela</button>
+      <button class="mini" id="ajsub-mercados" onclick="trocaAjuda('mercados')">🎯 Mercados explicados</button>
+      <button class="mini" id="ajsub-economia" onclick="trocaAjuda('economia')">💡 Economizar requisições</button>
+      <button class="mini" id="ajsub-duvidas" onclick="trocaAjuda('duvidas')">💬 Dúvidas comuns</button>
+    </div>
+    <div id="ajuda-conteudo"></div>
+  </section>
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -605,7 +629,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.57";
+const APP_VERSAO = "v3.58";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -752,6 +776,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
   b.classList.add('on');
   $('aba-' + b.dataset.aba).classList.add('on');
+  // carrega o conteúdo da ajuda ao abrir a aba
+  if (b.dataset.aba === 'ajuda' && typeof trocaAjuda === 'function' && !$('ajuda-conteudo').innerHTML){ trocaAjuda('fluxos'); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -3545,6 +3571,143 @@ async function gerarRelatorio(){
 window.gerarRelatorio = gerarRelatorio;
 if ($('btn-gerar-relatorio')) $('btn-gerar-relatorio').addEventListener('click', gerarRelatorio);
 document.addEventListener('change', e => { if (e.target?.id === 'rel-periodo' || e.target?.id === 'rel-so-pegas') gerarRelatorio(); });
+
+
+
+// ==========================================================
+// AJUDA — manual do sistema
+// ==========================================================
+const AJUDA_CONTEUDO = {
+  fluxos: `
+    <div class="ajuda-card">
+      <h3>🚦 Fluxos passo a passo</h3>
+      <p style="color:var(--chalk-dim);font-size:13.5px">Os caminhos mais comuns para chegar numa análise. Siga na ordem.</p>
+
+      <div class="fluxo">
+        <h4>📋 Fluxo 1 — Encontrar as melhores apostas do dia (o principal)</h4>
+        <ol>
+          <li><b>Grade do dia</b> → escolha a data → <b>Carregar grade</b>. Isso traz todos os jogos do dia.</li>
+          <li>(Opcional, recomendado) Clique em <b>⚙️ Escolher meus campeonatos</b> e marque só as ligas que você aposta. Ligue <b>"Só meus campeonatos escolhidos"</b>.</li>
+          <li>Vá em <b>⭐ Favoritos do dia</b> → <b>Buscar odds do dia</b>. Isso carrega as odds (necessário para o TOP e Sugestões pontuarem).</li>
+          <li>Vá em <b>🏆 TOP do dia</b> → escolha o <b>mercado</b> (ex.: Under 3.5) → <b>Gerar TOP 10</b>. Ele mostra os 10 jogos mais promissores para aquele mercado, com nota de 0 a 100.</li>
+          <li>Nos jogos que gostar: clique em <b>🔬 Análise completa</b> para ver as estatísticas, ou <b>🧠 Prompt</b> para copiar o texto dos 13 pontos, ou <b>💾 Salvar</b> para acompanhar depois.</li>
+        </ol>
+      </div>
+
+      <div class="fluxo">
+        <h4>💡 Fluxo 2 — Ver sugestões automáticas por mercado</h4>
+        <ol>
+          <li><b>Favoritos do dia</b> → <b>Buscar odds do dia</b> (se ainda não fez hoje).</li>
+          <li><b>💡 Sugestões do dia</b> → escolha a nota mínima e a situação → <b>Gerar sugestões</b>.</li>
+          <li>O sistema lista os jogos que passam no critério, com nota e motivo. Use os rankings por mercado (Ambas marcam, Over, Under...) para focar num tipo de aposta.</li>
+          <li>Clique em <b>💾 Salvar no histórico</b> nos que quiser acompanhar.</li>
+        </ol>
+      </div>
+
+      <div class="fluxo">
+        <h4>🔍 Fluxo 3 — Analisar um jogo específico a fundo</h4>
+        <ol>
+          <li><b>Grade do dia</b> → <b>Carregar grade</b> → clique no jogo. Abre a <b>ficha</b> com histórico das duas equipes, matriz de placares e H2H.</li>
+          <li>Na ficha, clique em <b>🔬 Análise completa</b> para ver desempenho por tempo, gols, cartões, desarmes e casa/fora.</li>
+          <li>Clique em <b>⚖️ Média do árbitro</b> para os cartões (útil em mercados de cartão).</li>
+          <li>Clique em <b>🧠 Copiar prompt</b> e cole no chat para a análise completa dos 13 pontos.</li>
+        </ol>
+      </div>
+
+      <div class="fluxo">
+        <h4>📈 Fluxo 4 — Acompanhar seu desempenho (auditoria)</h4>
+        <ol>
+          <li>Ao salvar sugestões (nos fluxos acima), elas vão para <b>📋 Histórico de sugestões</b>.</li>
+          <li>No dia seguinte, clique em <b>🔄 Atualizar resultados</b> — o sistema busca os placares e marca <b>green/red</b> automático.</li>
+          <li>Marque a caixinha <b>"Peguei?"</b> nos jogos que você realmente apostou.</li>
+          <li>Vá em <b>📈 Relatórios</b> → <b>Gerar relatório</b> para ver sua taxa real de acerto, por mercado, sequências e evolução.</li>
+        </ol>
+      </div>
+    </div>`,
+
+  telas: `
+    <div class="ajuda-card">
+      <h3>🗂️ O que é cada tela</h3>
+      <dl class="ajuda-dl">
+        <dt>🔴 Ao vivo</dt><dd>Jogos em andamento agora, com placar e minuto. Clique num jogo para abrir a ficha.</dd>
+        <dt>📅 Grade do dia</dt><dd>Todos os jogos de uma data, agrupados por país/liga. É o ponto de partida — clique em qualquer jogo para a ficha. Aqui você também escolhe seus campeonatos e filtra amadoras.</dd>
+        <dt>🎯 Scanner de mercados</dt><dd>Busca jogos que batem critérios específicos de um mercado.</dd>
+        <dt>🏆 Análise da rodada</dt><dd>Análise com projeção de Poisson (probabilidade de placares) para os jogos do dia.</dd>
+        <dt>⭐ Favoritos do dia</dt><dd>Onde você busca as <b>odds do dia</b> (passo necessário antes do TOP e Sugestões). Mostra os favoritos por odds.</dd>
+        <dt>💡 Sugestões do dia</dt><dd>Sugestões automáticas por mercado, com nota e motivo, filtradas pela nota mínima que você escolher.</dd>
+        <dt>🏆 TOP do dia</dt><dd>Os 10 melhores jogos para um mercado escolhido, com nota de 0 a 100 cruzando odds e histórico. Sua ferramenta principal de decisão.</dd>
+        <dt>📊 Histórico 10 jogos</dt><dd>Os últimos 10 jogos de um time, para ver a forma recente.</dd>
+        <dt>💾 Minhas análises</dt><dd>Análises manuais que você salvou.</dd>
+        <dt>📥 Importar CSV</dt><dd>Importa jogos/dados de uma planilha.</dd>
+        <dt>📋 Histórico de sugestões</dt><dd>Todas as sugestões que você salvou, com green/red automático. Marque "Peguei?" no que operou. Tem alertas de horário e filtros por data/ordem.</dd>
+        <dt>📊 Estatísticas por jogo</dt><dd>Rankings de estatísticas (cartões, chutes, desarmes, faltas) por time. Aqui também marca suas ligas favoritas.</dd>
+        <dt>🔬 Análise completa</dt><dd>Central de estatísticas de um confronto: desempenho por tempo, gols, cartões, desarmes, casa/fora — temporada e recorte recente.</dd>
+        <dt>📈 Relatórios</dt><dd>Seu desempenho: taxa de acerto, por mercado, sequências e evolução. Foca nas apostas que você marcou como "peguei".</dd>
+      </dl>
+    </div>`,
+
+  mercados: `
+    <div class="ajuda-card">
+      <h3>🎯 Mercados explicados</h3>
+      <dl class="ajuda-dl">
+        <dt>Under 3.5</dt><dd>Ganha se o jogo tiver <b>até 3 gols</b> (0 a 3). Perde com 4+.</dd>
+        <dt>Under 2.5</dt><dd>Ganha com <b>até 2 gols</b>. Perde com 3+.</dd>
+        <dt>Over 0.5 / 1.5 / 2.5</dt><dd>Ganha se sair <b>pelo menos 1 / 2 / 3 gols</b>, respectivamente.</dd>
+        <dt>Ambas marcam (BTTS)</dt><dd>Ganha se <b>as duas equipes</b> marcarem.</dd>
+        <dt>Lay 0x1</dt><dd>Aposta <b>contra</b> o placar exato 0x1. Ganha em qualquer resultado que não seja 0x1.</dd>
+        <dt>Lay 1x0</dt><dd>Aposta <b>contra</b> o placar exato 1x0. Ganha em qualquer resultado diferente de 1x0.</dd>
+        <dt>Lay Zebra</dt><dd>Aposta <b>contra o azarão</b> vencer. Ganha se o favorito vencer ou empatar.</dd>
+        <dt>Lay Goleada</dt><dd>Aposta <b>contra</b> uma equipe vencer por 3+ de diferença.</dd>
+        <dt>Back Favorito</dt><dd>Aposta <b>a favor</b> do favorito vencer.</dd>
+        <dt>🛡️ Desarmes</dt><dd>Linha de desarmes esperados no jogo. Some as médias das equipes; se a casa oferece linha abaixo, o over tem valor. Só confiável nas grandes ligas.</dd>
+      </dl>
+      <div style="background:var(--pitch);border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:var(--chalk-dim)">
+        <b>Nota 0-100 no TOP:</b> combina as odds e o histórico das duas equipes. Verde ≥75 (forte), amarelo 55-74 (moderado), vermelho abaixo de 55 (fraco). É um sinal, não garantia — sempre confirme com a análise dos 13 pontos e a odd na exchange.
+      </div>
+    </div>`,
+
+  economia: `
+    <div class="ajuda-card">
+      <h3>💡 Como economizar requisições da API</h3>
+      <p style="color:var(--chalk-dim);font-size:13.5px">Sua cota é de 7.500 requisições por dia (reseta às 21h de Salvador). Cada jogo analisado gasta requisições. Use estas ferramentas para não estourar:</p>
+      <ol>
+        <li><b>Ocultar ligas amadoras</b> (já vem ligado na Grade) — corta divisões inferiores e regionais automaticamente.</li>
+        <li><b>Escolher meus campeonatos</b> (na Grade) — marque só as ligas que você aposta e ligue "Só meus campeonatos". O sistema ignora todo o resto.</li>
+        <li><b>Máximo de jogos a analisar</b> (no TOP) — limite de 50 ou 100 jogos em vez de "Todos".</li>
+        <li><b>Cache</b> — dados já buscados ficam salvos. Rodar de novo no mesmo dia é mais rápido e barato.</li>
+        <li><b>Medidor de cota</b> (canto superior direito) — mostra quanto já usou e quanto falta pro reset. Avisa aos 80% e 95%.</li>
+      </ol>
+      <div style="background:var(--pitch);border-radius:8px;padding:12px 14px;margin-top:12px;font-size:13px;color:var(--chalk-dim)">
+        <b>Receita recomendada:</b> deixe "ocultar amadoras" e "só meus campeonatos" ligados, e o limite em 100. Assim você gasta uma fração da cota e foca no que interessa.
+      </div>
+    </div>`,
+
+  duvidas: `
+    <div class="ajuda-card">
+      <h3>💬 Dúvidas comuns</h3>
+      <dl class="ajuda-dl">
+        <dt>O TOP não traz jogos / diz "sem odds"</dt><dd>Rode <b>Buscar odds do dia</b> na aba Favoritos primeiro. O TOP precisa das odds para pontuar (exceto em jogos já ocorridos).</dd>
+        <dt>Aparecem jogos que já começaram em "a ocorrer"</dt><dd>O status do banco pode estar velho. O sistema já filtra por horário (remove jogos cuja hora passou). Se persistir, use o botão <b>🔄 Recarregar do zero</b>.</dd>
+        <dt>Mudei as ligas e o TOP traz os mesmos jogos</dt><dd>É o cache. Clique em <b>🔄 Recarregar do zero</b> para forçar busca limpa.</dd>
+        <dt>O medidor de cota fica "consultando"</dt><dd>A Edge Function precisa estar atualizada (deploy no Supabase). Sem isso, o status não funciona.</dd>
+        <dt>"Limite de requisições atingido"</dt><dd>Você usou as 7.500 do dia. Reseta às 21h (Salvador). Até lá, os dados salvos no banco continuam funcionando.</dd>
+        <dt>Green/red não aparece</dt><dd>Clique em <b>🔄 Atualizar resultados</b> no Histórico de sugestões. Jogos não encerrados ficam como "aguardando".</dd>
+        <dt>Desarmes diz "sem dados"</dt><dd>Desarme só tem cobertura confiável nas grandes ligas (Premier, La Liga, Bundesliga, Ligue 1, Brasileirão, Serie A).</dd>
+      </dl>
+    </div>`,
+};
+
+function trocaAjuda(id){
+  ['fluxos','telas','mercados','economia','duvidas'].forEach(x => {
+    const b = $('ajsub-'+x); if (b){ b.style.borderColor = x===id?'var(--amber)':''; b.style.color = x===id?'var(--amber)':''; }
+  });
+  const alvo = $('ajuda-conteudo');
+  if (alvo) alvo.innerHTML = AJUDA_CONTEUDO[id] || '';
+}
+window.trocaAjuda = trocaAjuda;
+// mostra o primeiro conteúdo quando a aba abre
+document.addEventListener('DOMContentLoaded', () => { if ($('ajuda-conteudo')) trocaAjuda('fluxos'); });
+setTimeout(() => { if ($('ajuda-conteudo') && !$('ajuda-conteudo').innerHTML) trocaAjuda('fluxos'); }, 500);
 
 </script>
 </body>
