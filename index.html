@@ -605,7 +605,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.54";
+const APP_VERSAO = "v3.56";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -638,6 +638,15 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ---------- utilidades ----------
 const $ = id => document.getElementById(id);
 // medidor de cota da API (não gasta requisição de dados)
+function tempoAteReset(){
+  // reset da cota é 00:00 UTC. Calcula quanto falta a partir de agora.
+  const agora = new Date();
+  const proximoReset = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()+1, 0, 0, 0));
+  const diffMs = proximoReset - agora;
+  const h = Math.floor(diffMs / 3600000);
+  const m = Math.floor((diffMs % 3600000) / 60000);
+  return `${h}h${String(m).padStart(2,'0')}min`;
+}
 async function atualizarCota(){
   const el = $('cota-medidor'); if (!el) return;
   el.textContent = '📊 cota: consultando…';
@@ -647,12 +656,57 @@ async function atualizarCota(){
       const usadas = r.usadas_dia ?? 0, limite = r.limite_dia ?? 7500;
       const pct = Math.round(usadas/limite*100);
       const cor = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--green)';
-      el.innerHTML = `📊 cota: <b style="color:${cor}">${usadas}/${limite}</b> (${pct}%) · zera 21h`;
-    } else { el.textContent = '📊 cota: indisponível'; }
+      const restantes = limite - usadas;
+      window._cotaInfo = { usadas, limite, pct };
+      el.innerHTML = `📊 <b style="color:${cor}">${usadas}/${limite}</b> (${pct}%) · ${restantes} restantes · reseta em ${tempoAteReset()}`;
+      // alerta automático ao cruzar limiares (avisa uma vez por limiar por dia)
+      checarAlertaCota(pct, restantes);
+    } else { el.textContent = '📊 cota: indisponível (deploy a Edge v3.51+)'; }
   }catch(_){ el.textContent = '📊 cota: —'; }
 }
 window.atualizarCota = atualizarCota;
+
+// avisa quando a cota cruza 80% e 95% — uma vez por limiar a cada dia
+function checarAlertaCota(pct, restantes){
+  const hoje = new Date().toISOString().slice(0,10);
+  let avisados = {};
+  try{ avisados = JSON.parse(localStorage.getItem('cota_avisos')||'{}'); }catch(_){}
+  if (avisados.dia !== hoje){ avisados = { dia: hoje, l80:false, l95:false }; }
+  if (pct >= 95 && !avisados.l95){
+    avisados.l95 = true; avisados.l80 = true;
+    mostrarAlertaCota('🔴 Cota quase no limite!', `Você já usou ${pct}% da cota diária. Restam só ${restantes} requisições. Freie o uso ou ative "só meus campeonatos" para não estourar. Reseta em ${tempoAteReset()}.`, 'var(--red)');
+  } else if (pct >= 80 && !avisados.l80){
+    avisados.l80 = true;
+    mostrarAlertaCota('🟡 Atenção: cota em 80%', `Você já usou ${pct}% da cota diária (${restantes} requisições restantes). Considere ativar os filtros de economia. Reseta em ${tempoAteReset()}.`, 'var(--amber)');
+  }
+  try{ localStorage.setItem('cota_avisos', JSON.stringify(avisados)); }catch(_){}
+}
+
+function mostrarAlertaCota(titulo, texto, cor){
+  const div = document.createElement('div');
+  div.style.cssText = `position:fixed;top:20px;right:20px;z-index:9999;background:var(--pitch);border:2px solid ${cor};border-radius:12px;padding:16px 20px;max-width:360px;box-shadow:0 8px 30px rgba(0,0,0,.5)`;
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+      <div>
+        <div style="color:${cor};font-weight:700;font-size:15px;margin-bottom:6px">${titulo}</div>
+        <div style="color:var(--chalk);font-size:13px;line-height:1.5">${texto}</div>
+      </div>
+      <button onclick="this.closest('div').parentNode.remove()" style="background:none;border:none;color:var(--chalk-dim);font-size:20px;cursor:pointer;line-height:1">×</button>
+    </div>`;
+  document.body.appendChild(div);
+  try{ const ac = new (window.AudioContext||window.webkitAudioContext)(); const o = ac.createOscillator(); const g = ac.createGain(); o.connect(g); g.connect(ac.destination); o.frequency.value=660; g.gain.value=0.1; o.start(); setTimeout(()=>o.stop(), 400); }catch(_){}
+  setTimeout(()=>{ if (div.parentNode) div.remove(); }, 20000);
+}
 setTimeout(atualizarCota, 2000); // consulta ao carregar
+// atualiza a contagem regressiva a cada minuto (sem gastar requisição — só recalcula o tempo)
+setInterval(() => {
+  const el = $('cota-medidor');
+  if (el && window._cotaInfo){
+    const { usadas, limite, pct } = window._cotaInfo;
+    const cor = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--green)';
+    el.innerHTML = `📊 <b style="color:${cor}">${usadas}/${limite}</b> (${pct}%) · ${limite-usadas} restantes · reseta em ${tempoAteReset()}`;
+  }
+}, 60000);
 // config dos alertas de horário (declarado cedo pois listarHistSug usa)
 let _alertaConfig = { antecedencia: 15, ligado: true };
 let _jaAlertados = new Set();
@@ -676,8 +730,8 @@ async function chamarEdge(params){
   // detecta limite diário da API e traduz para mensagem amigável
   const txt = JSON.stringify(dados||{});
   if (txt.includes('reached the request limit')){
-    if ($('cota-medidor')) $('cota-medidor').innerHTML = '📊 cota: <b style="color:var(--red)">LIMITE ATINGIDO</b> · zera 21h';
-    throw new Error('Limite diário de requisições da API atingido. A cota zera às 21h (horário de Brasília/Salvador). Até lá, os dados já salvos no banco continuam funcionando. Dica: ative os filtros de economia (só meus campeonatos, ocultar amadoras) para o próximo dia.');
+    if ($('cota-medidor')) $('cota-medidor').innerHTML = `📊 <b style="color:var(--red)">LIMITE ATINGIDO</b> · reseta em ${tempoAteReset()}`;
+    throw new Error(`Limite diário de requisições da API atingido. A cota reseta em ${tempoAteReset()} (às 21h horário de Salvador). Até lá, os dados já salvos no banco continuam funcionando. Dica: ative os filtros de economia (só meus campeonatos, ocultar amadoras) para o próximo dia.`);
   }
   return dados;
 }
@@ -2998,6 +3052,7 @@ $('btn-topdia').addEventListener('click', async () => {
     } else {
       const m = MERCADOS_TD[mercado];
       $('td-status').textContent = `✅ TOP ${top.length} de ${pontuados.length} jogos analisados.`;
+      setTimeout(atualizarCota, 1000); // atualiza o medidor de cota após a análise
       const cor = n => n >= 75 ? 'var(--green)' : n >= 55 ? 'var(--amber)' : 'var(--red)';
       // mapeia o mercado do TOP para o confereMercado (só os que dão pra apurar)
       const mktConfere = { back_fav:'BACK FAVORITO', over05:'OVER 0.5', over15:'OVER 1.5', under35:'UNDER 3.5', btts:'BTTS', lay01:'LAY 0x1', lay10:'LAY 1x0', lay_zebra:'LAY ZEBRA', lay_gol_mand:'LAY GOLEADA MANDANTE', lay_gol_vis:'LAY GOLEADA VISITANTE' }[mercado];
