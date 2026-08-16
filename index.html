@@ -169,6 +169,7 @@
     <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
     <button data-aba="analisecompleta" title="Central de análise: ao clicar num jogo, veja desempenho por tempo, gols, cartões e escanteios das duas equipes, temporada e recorte recente.">🔬 Análise completa</button>
     <button data-aba="relatorios" title="Relatórios de desempenho: montante de green/red das apostas que você pegou, taxa por mercado, evolução e mais.">📈 Relatórios</button>
+    <button data-aba="banca" title="Gestão de banca: controle suas apostas reais com valor, odd, green/red/cashout e acompanhe o lucro e a evolução do saldo.">💰 Gestão de banca</button>
     <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
   </nav>
 
@@ -497,6 +498,47 @@
     <div id="ajuda-conteudo"></div>
   </section>
 
+  <!-- ================= GESTÃO DE BANCA ================= -->
+  <section id="aba-banca">
+    <h2>💰 Gestão de banca</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">Registre suas apostas reais com valor e odd. Acompanhe lucro, ROI e a evolução do saldo. Marque green, red ou cashout (informando a odd de saída).</p>
+
+    <div style="background:var(--pitch);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <b style="color:var(--amber)">Saldo inicial (banca):</b>
+        <input type="number" id="banca-saldo-inicial" placeholder="0,00" step="0.01" style="width:120px;padding:5px 8px">
+        <button class="mini" id="btn-salvar-saldo">Salvar</button>
+      </div>
+      <div id="banca-resumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px"></div>
+    </div>
+
+    <div style="background:var(--pitch);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <b style="color:var(--amber);display:block;margin-bottom:10px">➕ Nova aposta</b>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Jogo</label><input id="ba-jogo" placeholder="Time A x Time B"></div>
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Campeonato</label><input id="ba-camp" placeholder="Liga"></div>
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Mercado</label><input id="ba-mercado" placeholder="Under 3.5, Lay 0x1..."></div>
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Valor (R$)</label><input type="number" id="ba-valor" placeholder="0,00" step="0.01"></div>
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Odd de entrada</label><input type="number" id="ba-odd" placeholder="0,00" step="0.01"></div>
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Data</label><input type="date" id="ba-data"></div>
+      </div>
+      <div style="display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-top:10px">
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Resultado</label>
+          <select id="ba-resultado" style="width:auto;padding:5px 8px">
+            <option value="pendente">Pendente</option>
+            <option value="green">✅ Green</option>
+            <option value="red">❌ Red</option>
+            <option value="cashout">💸 Cashout</option>
+          </select></div>
+        <div id="ba-cashout-box" style="display:none"><label style="font-size:12px;color:var(--chalk-dim)">Odd de saída (cashout)</label><input type="number" id="ba-odd-saida" placeholder="0,00" step="0.01" style="width:130px"></div>
+        <button class="acao" id="btn-add-aposta">Adicionar aposta</button>
+      </div>
+    </div>
+
+    <div id="banca-aviso"></div>
+    <div class="tabela-scroll"><table id="banca-tabela"></table></div>
+  </section>
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -588,6 +630,9 @@
         <input type="date" id="hs-filtro-data" style="width:auto;padding:4px 8px">
         <button class="mini" onclick="$('hs-filtro-data').value='';listarHistSug()">limpar</button>
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="hs-filtro-pegas" style="width:auto"> Só apostas que peguei
+      </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Ordenar por:
         <select id="hs-ordem" style="width:auto;padding:4px 8px">
@@ -645,7 +690,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.61";
+const APP_VERSAO = "v3.62";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2484,6 +2529,7 @@ async function listarHistSug(){
   const filtroMercado = selMerc ? selMerc.value : '';
   let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
   if (filtroMercado) dataFiltrada = dataFiltrada.filter(a => a.mercado_sugerido === filtroMercado);
+  if ($('hs-filtro-pegas') && $('hs-filtro-pegas').checked) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
   const semHoraFim = '99:99'; // jogos sem hora vão para o fim
   dataFiltrada.sort((a,b) => {
     if (ordem === 'hora') return (a.hora_jogo||semHoraFim).localeCompare(b.hora_jogo||semHoraFim);
@@ -2513,7 +2559,7 @@ async function marcarApostaFeita(id, feita){
 }
 window.marcarApostaFeita = marcarApostaFeita;
 
-document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado') listarHistSug(); });
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas') listarHistSug(); });
 listarHistSug();
 
 
@@ -3789,6 +3835,143 @@ window.trocaAjuda = trocaAjuda;
 // mostra o primeiro conteúdo quando a aba abre
 document.addEventListener('DOMContentLoaded', () => { if ($('ajuda-conteudo')) trocaAjuda('fluxos'); });
 setTimeout(() => { if ($('ajuda-conteudo') && !$('ajuda-conteudo').innerHTML) trocaAjuda('fluxos'); }, 500);
+
+
+
+// ==========================================================
+// GESTÃO DE BANCA
+// ==========================================================
+// calcula o lucro/prejuízo de uma aposta
+function calcLucro(reg){
+  const valor = +reg.valor || 0;
+  const odd = +reg.odd || 0;
+  if (reg.resultado === 'green') return +(valor * (odd - 1)).toFixed(2);
+  if (reg.resultado === 'red') return -valor;
+  if (reg.resultado === 'cashout'){
+    // cashout: você saiu com a odd de saída. Lucro = valor * (odd_entrada/odd_saida - 1)
+    // aproximação padrão de cashout em exchange/casa
+    const oddSaida = +reg.odd_saida || 0;
+    if (!oddSaida) return 0;
+    return +(valor * (odd/oddSaida - 1)).toFixed(2);
+  }
+  return 0; // pendente
+}
+
+async function carregarBanca(){
+  const alvo = $('banca-tabela');
+  try{
+    // saldo inicial
+    let saldoInicial = 0;
+    try{
+      const { data: cfg } = await db.from('banca_config').select('*').eq('id',1).limit(1);
+      if (cfg?.length){ saldoInicial = +cfg[0].saldo_inicial || 0; if ($('banca-saldo-inicial') && !$('banca-saldo-inicial').value) $('banca-saldo-inicial').value = saldoInicial; }
+    }catch(_){}
+
+    const { data, error } = await db.from('banca').select('*').order('data_aposta',{ascending:false}).order('id',{ascending:false}).limit(500);
+    if (error){ aviso($('banca-aviso'), 'Erro: '+error.message,'erro'); return; }
+
+    // resumo
+    let totalApostado=0, lucroTotal=0, greens=0, reds=0, cashouts=0, pendentes=0;
+    (data||[]).forEach(a => {
+      const l = calcLucro(a);
+      if (a.resultado !== 'pendente'){ totalApostado += (+a.valor||0); lucroTotal += l; }
+      if (a.resultado==='green') greens++; else if (a.resultado==='red') reds++;
+      else if (a.resultado==='cashout') cashouts++; else pendentes++;
+    });
+    const roi = totalApostado ? (lucroTotal/totalApostado*100) : 0;
+    const saldoAtual = saldoInicial + lucroTotal;
+    const corLucro = lucroTotal >= 0 ? 'var(--green)' : 'var(--red)';
+    const resolvidas = greens + reds + cashouts;
+    const taxaAcerto = (greens+reds) ? Math.round(greens/(greens+reds)*100) : 0;
+
+    $('banca-resumo').innerHTML = `
+      <div class="stat" style="flex:1;min-width:130px"><b style="font-size:22px">R$ ${saldoAtual.toFixed(2)}</b><span>saldo atual</span></div>
+      <div class="stat" style="flex:1;min-width:130px"><b style="font-size:22px;color:${corLucro}">R$ ${lucroTotal.toFixed(2)}</b><span>lucro/prejuízo</span></div>
+      <div class="stat" style="flex:1;min-width:130px"><b style="font-size:22px;color:${roi>=0?'var(--green)':'var(--red)'}">${roi.toFixed(1)}%</b><span>ROI</span></div>
+      <div class="stat" style="flex:1;min-width:130px"><b style="font-size:22px">${taxaAcerto}%</b><span>acerto (${greens}G/${reds}R)</span></div>
+      <div class="stat" style="flex:1;min-width:130px"><b style="font-size:22px">R$ ${totalApostado.toFixed(2)}</b><span>total apostado</span></div>`;
+
+    if (!data?.length){ alvo.innerHTML=''; aviso($('banca-aviso'), 'Nenhuma aposta registrada ainda. Adicione a primeira acima.'); return; }
+    aviso($('banca-aviso'), '');
+
+    const selo = (res) => {
+      if (res==='green') return '<span style="background:var(--green);color:var(--pitch);padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700">GREEN</span>';
+      if (res==='red') return '<span style="background:var(--red);color:var(--pitch);padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700">RED</span>';
+      if (res==='cashout') return '<span style="background:var(--amber);color:var(--pitch);padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700">CASHOUT</span>';
+      return '<span style="color:var(--chalk-dim);font-size:12px">pendente</span>';
+    };
+    alvo.innerHTML = `<tr><th>Data</th><th>Jogo</th><th>Mercado</th><th>Valor</th><th>Odd</th><th>Resultado</th><th>Lucro</th><th></th></tr>` +
+      data.map(a => {
+        const l = calcLucro(a);
+        const corL = a.resultado==='pendente' ? 'var(--chalk-dim)' : (l>=0?'var(--green)':'var(--red)');
+        const oddTxt = a.resultado==='cashout' && a.odd_saida ? `${fmtOdd(a.odd)}→${fmtOdd(a.odd_saida)}` : fmtOdd(a.odd);
+        return `<tr>
+          <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${a.data_aposta??''}</td>
+          <td><b>${a.jogo||''}</b><br><small style="color:var(--chalk-dim)">${a.campeonato||''}</small></td>
+          <td>${a.mercado||''}</td>
+          <td>R$ ${(+a.valor||0).toFixed(2)}</td>
+          <td style="font-family:'IBM Plex Mono',monospace">${oddTxt}</td>
+          <td>${selo(a.resultado)}</td>
+          <td style="color:${corL};font-weight:600">${a.resultado==='pendente'?'—':'R$ '+l.toFixed(2)}</td>
+          <td><button class="mini" onclick="excluirAposta(${a.id})" title="Excluir">🗑️</button></td>
+        </tr>`;
+      }).join('');
+  }catch(e){ aviso($('banca-aviso'), 'Erro: '+e.message,'erro'); }
+}
+window.carregarBanca = carregarBanca;
+
+async function excluirAposta(id){
+  if (!confirm('Excluir esta aposta?')) return;
+  try{ await db.from('banca').delete().eq('id', id); carregarBanca(); }
+  catch(e){ alert('Erro: '+e.message); }
+}
+window.excluirAposta = excluirAposta;
+
+// mostra/esconde o campo de odd de saída conforme o resultado
+document.addEventListener('change', e => {
+  if (e.target?.id === 'ba-resultado'){
+    const box = $('ba-cashout-box');
+    if (box) box.style.display = e.target.value === 'cashout' ? 'block' : 'none';
+  }
+});
+
+// salvar saldo inicial
+if ($('btn-salvar-saldo')) $('btn-salvar-saldo').addEventListener('click', async () => {
+  const v = parseFloat($('banca-saldo-inicial').value) || 0;
+  try{
+    await db.from('banca_config').upsert({ id:1, saldo_inicial:v, atualizado_em:new Date().toISOString() }, { onConflict:'id' });
+    carregarBanca();
+  }catch(e){ alert('Erro: '+e.message); }
+});
+
+// adicionar aposta
+if ($('btn-add-aposta')) $('btn-add-aposta').addEventListener('click', async () => {
+  const jogo = $('ba-jogo').value.trim();
+  const valor = parseFloat($('ba-valor').value);
+  const odd = parseFloat($('ba-odd').value);
+  if (!jogo || !valor || !odd){ alert('Preencha ao menos Jogo, Valor e Odd.'); return; }
+  const resultado = $('ba-resultado').value;
+  const oddSaida = resultado==='cashout' ? (parseFloat($('ba-odd-saida').value)||null) : null;
+  if (resultado==='cashout' && !oddSaida){ alert('Para cashout, informe a odd de saída.'); return; }
+  const reg = {
+    data_aposta: $('ba-data').value || new Date().toISOString().slice(0,10),
+    jogo, campeonato: $('ba-camp').value.trim(), mercado: $('ba-mercado').value.trim(),
+    valor, odd, resultado, odd_saida: oddSaida,
+  };
+  reg.lucro = calcLucro(reg);
+  try{
+    await db.from('banca').insert(reg);
+    // limpa campos
+    ['ba-jogo','ba-camp','ba-mercado','ba-valor','ba-odd','ba-odd-saida'].forEach(id => { if($(id)) $(id).value=''; });
+    $('ba-resultado').value = 'pendente'; $('ba-cashout-box').style.display = 'none';
+    carregarBanca();
+  }catch(e){ alert('Erro ao salvar: '+e.message); }
+});
+
+// carrega a banca quando a aba abre
+document.querySelectorAll('nav button').forEach(b => {
+  if (b.dataset.aba === 'banca') b.addEventListener('click', () => { if (typeof carregarBanca==='function') carregarBanca(); });
+});
 
 </script>
 </body>
