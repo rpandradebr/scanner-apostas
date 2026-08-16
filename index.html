@@ -503,6 +503,20 @@
     <h2>💰 Gestão de banca</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">Registre suas apostas reais com valor e odd. Acompanhe lucro, ROI e a evolução do saldo. Marque green, red ou cashout (informando a odd de saída).</p>
 
+    <details style="background:var(--pitch);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+      <summary style="cursor:pointer;color:var(--amber);font-weight:700">🏦 Minhas bancas (criar/gerenciar)</summary>
+      <div style="margin-top:12px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:10px">
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Nome da banca</label><input id="nb-nome" placeholder="Minha banca, João..."></div>
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Casa de aposta</label><input id="nb-casa" placeholder="Betfair, Bet365..."></div>
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Saldo inicial (R$)</label><input type="number" id="nb-saldo" placeholder="0,00" step="0.01"></div>
+          <div><label style="font-size:12px;color:var(--chalk-dim)">Comissão padrão (%)</label><input type="number" id="nb-comissao" placeholder="0" step="0.1"></div>
+        </div>
+        <button class="acao" id="btn-criar-banca">Criar banca</button>
+        <div id="bancas-lista" style="margin-top:12px"></div>
+      </div>
+    </details>
+
     <div style="background:var(--pitch);border-radius:10px;padding:14px 16px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
         <b style="color:var(--amber)">Saldo inicial (banca):</b>
@@ -526,6 +540,7 @@
         <div><label style="font-size:12px;color:var(--chalk-dim)">Nome da banca</label><input id="ba-nomebanca" placeholder="Minha banca, João..." list="lista-bancas"></div>
         <div><label style="font-size:12px;color:var(--chalk-dim)">Valor (R$)</label><input type="number" id="ba-valor" placeholder="0,00" step="0.01"></div>
         <div><label style="font-size:12px;color:var(--chalk-dim)">Odd de entrada</label><input type="number" id="ba-odd" placeholder="0,00" step="0.01"></div>
+        <div><label style="font-size:12px;color:var(--chalk-dim)">Comissão casa (%)</label><input type="number" id="ba-comissao" placeholder="0" step="0.1" title="Taxa que a exchange cobra sobre o lucro (ex: Betfair ~6.5%)"></div>
         <div><label style="font-size:12px;color:var(--chalk-dim)">Data</label><input type="date" id="ba-data"></div>
       </div>
       <datalist id="lista-casas"></datalist>
@@ -706,7 +721,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.65";
+const APP_VERSAO = "v3.66";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3962,20 +3977,27 @@ setTimeout(() => { if ($('ajuda-conteudo') && !$('ajuda-conteudo').innerHTML) tr
 function calcLucro(reg){
   const valor = +reg.valor || 0;
   const odd = +reg.odd || 0;
-  if (reg.resultado === 'green') return +(valor * (odd - 1)).toFixed(2);
+  const comissao = +reg.comissao || 0; // % que a casa cobra sobre o lucro (exchange)
+  if (reg.resultado === 'green'){
+    const lucroBruto = valor * (odd - 1);
+    const lucroLiquido = lucroBruto * (1 - comissao/100); // desconta a comissão
+    return +lucroLiquido.toFixed(2);
+  }
   if (reg.resultado === 'red') return -valor;
   if (reg.resultado === 'cashout'){
-    // cashout: você saiu com a odd de saída. Lucro = valor * (odd_entrada/odd_saida - 1)
-    // aproximação padrão de cashout em exchange/casa
     const oddSaida = +reg.odd_saida || 0;
     if (!oddSaida) return 0;
-    return +(valor * (odd/oddSaida - 1)).toFixed(2);
+    const lucroBruto = valor * (odd/oddSaida - 1);
+    // comissão só incide se o cashout foi lucrativo
+    const lucroLiquido = lucroBruto > 0 ? lucroBruto * (1 - comissao/100) : lucroBruto;
+    return +lucroLiquido.toFixed(2);
   }
   return 0; // pendente
 }
 
 async function carregarBanca(){
   const alvo = $('banca-tabela');
+  if (typeof carregarBancasCadastro === 'function') carregarBancasCadastro();
   try{
     // saldo inicial
     let saldoInicial = 0;
@@ -3987,9 +4009,15 @@ async function carregarBanca(){
     const { data, error } = await db.from('banca').select('*').order('data_aposta',{ascending:false}).order('id',{ascending:false}).limit(500);
     if (error){ aviso($('banca-aviso'), 'Erro: '+error.message,'erro'); return; }
 
-    // popula datalists (sugestões de casas e bancas já usadas) e o filtro
-    const casas = [...new Set((data||[]).map(a=>a.casa_aposta).filter(Boolean))].sort();
-    const bancas = [...new Set((data||[]).map(a=>a.nome_banca).filter(Boolean))].sort();
+    // popula datalists (sugestões de casas e bancas: das apostas + do cadastro) e o filtro
+    let casasCad = [], bancasCad = [];
+    try{
+      const { data: bc } = await db.from('bancas_cadastro').select('nome,casa_aposta');
+      casasCad = (bc||[]).map(x=>x.casa_aposta).filter(Boolean);
+      bancasCad = (bc||[]).map(x=>x.nome).filter(Boolean);
+    }catch(_){}
+    const casas = [...new Set([...(data||[]).map(a=>a.casa_aposta), ...casasCad].filter(Boolean))].sort();
+    const bancas = [...new Set([...(data||[]).map(a=>a.nome_banca), ...bancasCad].filter(Boolean))].sort();
     if ($('lista-casas')) $('lista-casas').innerHTML = casas.map(c=>`<option value="${c}">`).join('');
     if ($('lista-bancas')) $('lista-bancas').innerHTML = bancas.map(b=>`<option value="${b}">`).join('');
     if ($('banca-filtro')){
@@ -4052,6 +4080,48 @@ async function carregarBanca(){
 }
 window.carregarBanca = carregarBanca;
 
+// ---------- CADASTRO DE BANCAS ----------
+async function carregarBancasCadastro(){
+  const alvo = $('bancas-lista'); if (!alvo) return;
+  try{
+    const { data } = await db.from('bancas_cadastro').select('*').order('nome');
+    if (!data?.length){ alvo.innerHTML = '<p style="font-size:12.5px;color:var(--chalk-dim)">Nenhuma banca cadastrada. Crie uma acima para reusar nos lançamentos.</p>'; return; }
+    alvo.innerHTML = '<table style="width:100%"><tr><th>Banca</th><th>Casa</th><th>Saldo inicial</th><th>Comissão</th><th></th></tr>' +
+      data.map(b => `<tr>
+        <td><b>${b.nome}</b></td>
+        <td>${b.casa_aposta||'—'}</td>
+        <td>R$ ${(+b.saldo_inicial||0).toFixed(2)}</td>
+        <td>${(+b.comissao_padrao||0)}%</td>
+        <td><button class="mini" onclick="excluirBancaCad(${b.id})" title="Excluir">🗑️</button></td>
+      </tr>`).join('') + '</table>';
+  }catch(e){ alvo.innerHTML = `<p style="color:var(--red);font-size:12.5px">Erro: ${e.message}</p>`; }
+}
+window.carregarBancasCadastro = carregarBancasCadastro;
+
+async function excluirBancaCad(id){
+  if (!confirm('Excluir esta banca do cadastro? (as apostas já lançadas não são afetadas)')) return;
+  try{ await db.from('bancas_cadastro').delete().eq('id', id); carregarBancasCadastro(); }
+  catch(e){ alert('Erro: '+e.message); }
+}
+window.excluirBancaCad = excluirBancaCad;
+
+if ($('btn-criar-banca')) $('btn-criar-banca').addEventListener('click', async () => {
+  const nome = $('nb-nome').value.trim();
+  if (!nome){ alert('Informe o nome da banca.'); return; }
+  const reg = {
+    nome, casa_aposta: $('nb-casa').value.trim(),
+    saldo_inicial: parseFloat($('nb-saldo').value) || 0,
+    comissao_padrao: parseFloat($('nb-comissao').value) || 0,
+  };
+  try{
+    await db.from('bancas_cadastro').insert(reg);
+    ['nb-nome','nb-casa','nb-saldo','nb-comissao'].forEach(id => { if($(id)) $(id).value=''; });
+    carregarBancasCadastro();
+    carregarBanca(); // atualiza os selects
+  }catch(e){ alert('Erro: '+e.message); }
+});
+
+
 async function excluirAposta(id){
   if (!confirm('Excluir esta aposta?')) return;
   try{ await db.from('banca').delete().eq('id', id); carregarBanca(); }
@@ -4090,12 +4160,13 @@ if ($('btn-add-aposta')) $('btn-add-aposta').addEventListener('click', async () 
     jogo, campeonato: $('ba-camp').value.trim(), mercado: $('ba-mercado').value.trim(),
     casa_aposta: $('ba-casa').value.trim(), nome_banca: $('ba-nomebanca').value.trim(),
     valor, odd, resultado, odd_saida: oddSaida,
+    comissao: parseFloat($('ba-comissao').value) || 0,
   };
   reg.lucro = calcLucro(reg);
   try{
     await db.from('banca').insert(reg);
     // limpa campos (mantém casa e banca para facilitar múltiplas apostas da mesma banca)
-    ['ba-jogo','ba-camp','ba-mercado','ba-valor','ba-odd','ba-odd-saida'].forEach(id => { if($(id)) $(id).value=''; });
+    ['ba-jogo','ba-camp','ba-mercado','ba-valor','ba-odd','ba-odd-saida','ba-comissao'].forEach(id => { if($(id)) $(id).value=''; });
     $('ba-resultado').value = 'pendente'; $('ba-cashout-box').style.display = 'none';
     carregarBanca();
   }catch(e){ alert('Erro ao salvar: '+e.message); }
