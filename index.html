@@ -645,7 +645,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.60";
+const APP_VERSAO = "v3.61";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1729,6 +1729,21 @@ $('ro-liga').addEventListener('change', () => {
 // Poisson
 const FAT = [1,1,2,6,24,120,720];
 const pois = (k,l) => Math.exp(-l) * Math.pow(l,k) / FAT[k];
+// estima a odd justa de Over 0.5 e Lay 0x0 a partir das médias de gols das equipes
+// Over 0.5 e Lay 0x0 são o mesmo evento: ganham se sair pelo menos 1 gol (não for 0x0)
+function oddsJustasZero(em, ev){
+  if (!em || !ev) return null;
+  const clampL = (x,mn,mx) => Math.max(mn, Math.min(mx, x));
+  const lC = clampL(((+em.mediaPro)+(+ev.mediaContra))/2*1.12, .2, 4.2);
+  const lF = clampL(((+ev.mediaPro)+(+em.mediaContra))/2*0.92, .15, 4.0);
+  const p00 = Math.exp(-lC) * Math.exp(-lF); // P(0 gols casa) * P(0 gols fora)
+  const pAoMenos1 = 1 - p00; // probabilidade de sair pelo menos 1 gol
+  if (pAoMenos1 <= 0) return null;
+  const oddOver05 = 1 / pAoMenos1;      // odd justa de back Over 0.5
+  const oddLay00 = 1 / pAoMenos1;        // Lay 0x0 ganha no mesmo evento
+  return { prob00: Math.round(p00*100), probOver05: Math.round(pAoMenos1*100), oddOver05: oddOver05.toFixed(2), oddLay00: oddLay00.toFixed(2) };
+}
+window.oddsJustasZero = oddsJustasZero;
 const pct = x => Math.round(x*100);
 
 // ---- Ponte para a análise completa (13 pontos) no Claude ----
@@ -2264,6 +2279,13 @@ async function gerarSugestoes(){
             return `<div style="font-size:12px;color:var(--chalk-dim);margin-top:4px">
               Odds: <b>${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b>${fmtOdd(o.odd_away)}</b> | ${favNome} (${fmtOdd(favOdd)}) ${selo}</div>`;
           })()}
+          ${(() => {
+            const oz = oddsJustasZero(s.em, s.ev);
+            if (!oz) return '';
+            const o = oddsMap[s.j.fixture_id];
+            const over05Real = o?.odd_over05 ? ` · Over 0.5 casa: <b style="color:var(--green)">${fmtOdd(o.odd_over05)}</b>` : '';
+            return `<div style="font-size:11.5px;color:var(--chalk-dim);margin-top:3px">🎯 Sai gol: <b style="color:var(--green)">${oz.probOver05}%</b> · Lay 0x0 justa: <b style="color:var(--amber)">${oz.oddLay00}</b>${over05Real}</div>`;
+          })()}
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
             <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
@@ -2317,6 +2339,7 @@ function confereMercado(mercado, gm, gv){
   if (mercado === 'UNDER 3.5') return total <= 3 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 2.5')  return total >= 3 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 0.5')  return total >= 1 ? 'GREEN' : 'RED';
+  if (mercado === 'LAY 0x0')   return (gm===0 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'OVER 1.5')  return total >= 2 ? 'GREEN' : 'RED';
   if (mercado === 'BTTS')      return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
   if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
@@ -3170,6 +3193,15 @@ $('btn-topdia').addEventListener('click', async () => {
                 return `<div style="font-size:12.5px;color:var(--chalk-dim);margin-top:2px">
                   Odds: <b style="color:var(--chalk)">${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b style="color:var(--chalk)">${fmtOdd(o.odd_away)}</b>
                   &nbsp;|&nbsp; ${favNome} (${fmtOdd(favOdd)}) ${selo}
+                </div>`;
+              })()}
+              ${(() => {
+                const oz = oddsJustasZero(x.em, x.ev);
+                const o = oddsMap[x.j.fixture_id];
+                const over05Real = o?.odd_over05 ? ` · Over 0.5 casa: <b style="color:var(--green)">${fmtOdd(o.odd_over05)}</b>` : '';
+                if (!oz) return '';
+                return `<div style="font-size:12px;color:var(--chalk-dim);margin-top:3px">
+                  🎯 Sai gol: <b style="color:var(--green)">${oz.probOver05}%</b> · Lay 0x0 justa: <b style="color:var(--amber)">${oz.oddLay00}</b> · Over 0.5 justa: <b style="color:var(--amber)">${oz.oddOver05}</b>${over05Real}
                 </div>`;
               })()}
               ${seloResultado(x)}
