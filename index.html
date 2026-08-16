@@ -605,7 +605,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.56";
+const APP_VERSAO = "v3.57";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -651,18 +651,28 @@ async function atualizarCota(){
   const el = $('cota-medidor'); if (!el) return;
   el.textContent = '📊 cota: consultando…';
   try{
-    const r = await chamarEdge({ acao:'status' });
-    if (r.ok){
+    // timeout de 12s para não ficar preso se a Edge não responder
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 12000));
+    const r = await Promise.race([ chamarEdge({ acao:'status' }), timeout ]);
+    if (r && r.ok){
       const usadas = r.usadas_dia ?? 0, limite = r.limite_dia ?? 7500;
       const pct = Math.round(usadas/limite*100);
       const cor = pct >= 90 ? 'var(--red)' : pct >= 70 ? 'var(--amber)' : 'var(--green)';
       const restantes = limite - usadas;
       window._cotaInfo = { usadas, limite, pct };
       el.innerHTML = `📊 <b style="color:${cor}">${usadas}/${limite}</b> (${pct}%) · ${restantes} restantes · reseta em ${tempoAteReset()}`;
-      // alerta automático ao cruzar limiares (avisa uma vez por limiar por dia)
       checarAlertaCota(pct, restantes);
-    } else { el.textContent = '📊 cota: indisponível (deploy a Edge v3.51+)'; }
-  }catch(_){ el.textContent = '📊 cota: —'; }
+    } else {
+      // Edge respondeu mas sem os dados esperados = rota status não existe (Edge antiga)
+      el.innerHTML = '📊 cota: <span style="color:var(--amber)">deploy a Edge nova</span>';
+    }
+  }catch(e){
+    if (e.message === 'timeout'){
+      el.innerHTML = '📊 cota: <span style="color:var(--chalk-dim)">sem resposta (clique p/ tentar)</span>';
+    } else {
+      el.innerHTML = '📊 cota: <span style="color:var(--chalk-dim)">indisponível (clique p/ tentar)</span>';
+    }
+  }
 }
 window.atualizarCota = atualizarCota;
 
