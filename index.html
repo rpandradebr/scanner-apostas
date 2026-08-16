@@ -298,7 +298,7 @@
       <div><label for="su-corte">Nota mínima</label>
         <select id="su-corte"><option value="6.5">6.5 (padrão)</option><option value="6">6.0 (mais jogos)</option><option value="7.5">7.5 (só a nata)</option></select></div>
       <div><label for="su-situacao">Situação</label>
-        <select id="su-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
+        <select id="su-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="vivo_ocorrer">🔴 Ao vivo + a ocorrer (para live)</option><option value="aovivo">🔴 Só ao vivo</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
       <div style="align-self:end"><button class="acao" id="btn-sugestoes">Gerar sugestões</button></div>
     </div>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
@@ -336,7 +336,7 @@
           <option value="desarmes">🛡️ Desarmes (linha sugerida)</option>
         </select></div>
       <div><label for="td-situacao">Situação</label>
-        <select id="td-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
+        <select id="td-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="vivo_ocorrer">🔴 Ao vivo + a ocorrer (para live)</option><option value="aovivo">🔴 Só ao vivo</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
     </div>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
       <input type="checkbox" id="td-favoritas" style="width:auto"> Só minhas ligas favoritas (marque-as na aba 📊 Estatísticas)
@@ -692,23 +692,27 @@ function filtraSituacao(jogos, situacaoId){
   const sit = $(situacaoId) ? $(situacaoId).value : 'ocorrer';
   const encerrado = s => ['FT','AET','PEN'].includes(s);
   const aVir = s => ['NS','TBD','PST'].includes(s);
+  const aoVivo = s => ['1H','2H','HT','ET','P','BT','LIVE','INT'].includes(s);
   if (sit === 'ocorridos') return jogos.filter(j => encerrado(j.status));
+  if (sit === 'aovivo') return jogos.filter(j => aoVivo(j.status));
   if (sit === 'todos') return jogos;
   // "a ocorrer": status futuro E a hora ainda não passou.
   // A hora do jogo vem em horário da Bahia (Edge usa timezone=America/Bahia).
-  // Calculamos o "agora" na Bahia de forma robusta (funciona mesmo com VPN/fuso diferente no aparelho).
   const agoraBahia = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bahia' }));
   const hoje = `${agoraBahia.getFullYear()}-${String(agoraBahia.getMonth()+1).padStart(2,'0')}-${String(agoraBahia.getDate()).padStart(2,'0')}`;
   const agoraMin = agoraBahia.getHours()*60 + agoraBahia.getMinutes();
-  return jogos.filter(j => {
+  const aOcorrer = (j) => {
     if (!aVir(j.status)) return false;
-    if (j.data_jogo && j.data_jogo < hoje) return false; // data passada travada em NS
+    if (j.data_jogo && j.data_jogo < hoje) return false;
     if (j.data_jogo === hoje && j.hora){
       const [h,m] = (j.hora||'').split(':').map(Number);
       if (!isNaN(h)){ const jogoMin = h*60 + (m||0); if (agoraMin > jogoMin + 15) return false; }
     }
     return true;
-  });
+  };
+  // "ao vivo + a ocorrer": jogos rolando agora OU que ainda vão começar (ideal para apostar live)
+  if (sit === 'vivo_ocorrer') return jogos.filter(j => aoVivo(j.status) || aOcorrer(j));
+  return jogos.filter(aOcorrer); // padrão: só a ocorrer
 }
 function filtraFavoritas(jogos, checkboxId){
   if (!$(checkboxId) || !$(checkboxId).checked) return jogos;
@@ -721,7 +725,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.66";
+const APP_VERSAO = "v3.67";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2287,7 +2291,9 @@ async function gerarSugestoes(){
   const corte = Number($('su-corte').value);
   aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
   try{
-    const rg = await chamarEdge({ acao:'grade', data });
+    const situSug = $('su-situacao') ? $('su-situacao').value : 'ocorrer';
+    const querVivoSug = (situSug === 'aovivo' || situSug === 'vivo_ocorrer');
+    const rg = await chamarEdge(querVivoSug ? { acao:'grade', data, forcar: 1 } : { acao:'grade', data });
     const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j)), 'su-situacao'), 'su-favoritas');
     await carregarOddsMapa(data);
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
@@ -3256,7 +3262,9 @@ $('btn-topdia').addEventListener('click', async () => {
       await carregarOddsMapa(data); // garante odds carregadas mesmo reusando stats
       $('td-status').textContent = `⚡ Reusando ${jogosComStats.length} jogos já analisados (troca de mercado é instantânea).`;
     } else {
-      const rg = await chamarEdge({ acao:'grade', data });
+      // se o filtro inclui jogos ao vivo, força atualização da grade para pegar status atualizado
+      const querVivo = (situ === 'aovivo' || situ === 'vivo_ocorrer');
+      const rg = await chamarEdge(querVivo ? { acao:'grade', data, forcar: 1 } : { acao:'grade', data });
       const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j)), 'td-situacao'), 'td-favoritas');
       await carregarOddsMapa(data);
       const saoPassados = situ === 'ocorridos';
