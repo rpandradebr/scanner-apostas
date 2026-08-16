@@ -642,6 +642,14 @@
         <input type="checkbox" id="hs-filtro-pegas" style="width:auto"> Só apostas que peguei
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Situação:
+        <select id="hs-filtro-situacao" style="width:auto;padding:4px 8px">
+          <option value="todos">Todos</option>
+          <option value="ocorrer">Só os que vão ocorrer</option>
+          <option value="ocorridos">Só os que já ocorreram</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Ordenar por:
         <select id="hs-ordem" style="width:auto;padding:4px 8px">
           <option value="recente">Mais recentes primeiro</option>
@@ -698,7 +706,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.63";
+const APP_VERSAO = "v3.64";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2538,6 +2546,23 @@ async function listarHistSug(){
   let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
   if (filtroMercado) dataFiltrada = dataFiltrada.filter(a => a.mercado_sugerido === filtroMercado);
   if ($('hs-filtro-pegas') && $('hs-filtro-pegas').checked) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
+  // filtro de situação (a ocorrer / ocorridos) pela data+hora do jogo
+  const filtroSit = $('hs-filtro-situacao') ? $('hs-filtro-situacao').value : 'todos';
+  if (filtroSit !== 'todos'){
+    const agoraBahia = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bahia' }));
+    const jaOcorreu = (a) => {
+      // se já tem resultado apurado, com certeza ocorreu
+      if (a.resultado_auto) return true;
+      if (!a.data_jogo) return false;
+      // monta data+hora do jogo (hora em horário da Bahia)
+      const [h,m] = (a.hora_jogo||'23:59').split(':').map(Number);
+      const dtJogo = new Date(a.data_jogo + 'T' + String(isNaN(h)?23:h).padStart(2,'0') + ':' + String(isNaN(m)?59:m||0).padStart(2,'0') + ':00');
+      // considera ocorrido se já passou da hora + 2h (margem de fim de jogo)
+      return (agoraBahia.getTime() - dtJogo.getTime()) > 2*3600000;
+    };
+    if (filtroSit === 'ocorrer') dataFiltrada = dataFiltrada.filter(a => !jaOcorreu(a));
+    else if (filtroSit === 'ocorridos') dataFiltrada = dataFiltrada.filter(a => jaOcorreu(a));
+  }
   const semHoraFim = '99:99'; // jogos sem hora vão para o fim
   dataFiltrada.sort((a,b) => {
     if (ordem === 'hora') return (a.hora_jogo||semHoraFim).localeCompare(b.hora_jogo||semHoraFim);
@@ -2567,7 +2592,7 @@ async function marcarApostaFeita(id, feita){
 }
 window.marcarApostaFeita = marcarApostaFeita;
 
-document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas') listarHistSug(); });
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao') listarHistSug(); });
 listarHistSug();
 
 
