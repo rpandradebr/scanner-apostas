@@ -568,6 +568,12 @@
       <button class="acao" id="btn-atualizar-res">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="hs-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Mercado:
+        <select id="hs-filtro-mercado" style="width:auto;padding:4px 8px">
+          <option value="">Todos</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Data:
         <input type="date" id="hs-filtro-data" style="width:auto;padding:4px 8px">
         <button class="mini" onclick="$('hs-filtro-data').value='';listarHistSug()">limpar</button>
@@ -629,7 +635,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.58";
+const APP_VERSAO = "v3.59";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2424,7 +2430,17 @@ async function listarHistSug(){
   // ordenação escolhida
   const ordem = $('hs-ordem') ? $('hs-ordem').value : 'recente';
   const filtroData = $('hs-filtro-data') ? $('hs-filtro-data').value : '';
+  // popula o select de mercados com os que existem nas sugestões (uma vez)
+  const selMerc = $('hs-filtro-mercado');
+  if (selMerc){
+    const mercadosUnicos = [...new Set(data.map(a => a.mercado_sugerido).filter(Boolean))].sort();
+    const atual = selMerc.value;
+    selMerc.innerHTML = '<option value="">Todos</option>' + mercadosUnicos.map(m => `<option value="${m}">${m}</option>`).join('');
+    selMerc.value = atual; // preserva a seleção
+  }
+  const filtroMercado = selMerc ? selMerc.value : '';
   let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
+  if (filtroMercado) dataFiltrada = dataFiltrada.filter(a => a.mercado_sugerido === filtroMercado);
   const semHoraFim = '99:99'; // jogos sem hora vão para o fim
   dataFiltrada.sort((a,b) => {
     if (ordem === 'hora') return (a.hora_jogo||semHoraFim).localeCompare(b.hora_jogo||semHoraFim);
@@ -2454,7 +2470,7 @@ async function marcarApostaFeita(id, feita){
 }
 window.marcarApostaFeita = marcarApostaFeita;
 
-document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data') listarHistSug(); });
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado') listarHistSug(); });
 listarHistSug();
 
 
