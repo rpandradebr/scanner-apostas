@@ -344,6 +344,16 @@
       <input type="checkbox" id="td-meuscamp" style="width:auto"> Só meus campeonatos escolhidos (⚙️ configure na aba Grade do dia)
     </label>
     <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chalk-dim);margin-bottom:10px;flex-wrap:wrap">
+      <label style="margin:0">Faixa de favoritismo:</label>
+      <select id="td-faixa" style="width:auto;padding:4px 8px">
+        <option value="">Todas</option>
+        <option value="super">🔥 Super favorito (odd ≤ 1.20)</option>
+        <option value="favorito">⭐ Favorito (1.21 a 1.50)</option>
+        <option value="leve">✨ Leve favorito (1.51 a 1.90)</option>
+        <option value="equilibrado">⚖️ Equilibrado (sem favorito claro)</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--chalk-dim);margin-bottom:10px;flex-wrap:wrap">
       <label style="margin:0">Máximo de jogos a analisar (economiza requisições):</label>
       <select id="td-limite" style="width:auto;padding:4px 8px">
         <option value="50">50 (rápido)</option>
@@ -635,7 +645,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.59";
+const APP_VERSAO = "v3.60";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -833,6 +843,14 @@ async function carregarOddsMapa(data){
   } catch(_){}
 }
 const fmtOdd = v => v ? Number(v).toFixed(2) : '—';
+// classifica a faixa de favoritismo pela menor odd (do favorito)
+function faixaFavorito(oddFav){
+  if (!oddFav || oddFav <= 0) return null;
+  if (oddFav <= 1.20) return { nome:'Super favorito', selo:'🔥', cor:'var(--red)', id:'super' };
+  if (oddFav <= 1.50) return { nome:'Favorito', selo:'⭐', cor:'var(--amber)', id:'favorito' };
+  if (oddFav <= 1.90) return { nome:'Leve favorito', selo:'✨', cor:'var(--green)', id:'leve' };
+  return { nome:'Equilibrado', selo:'⚖️', cor:'var(--chalk-dim)', id:'equilibrado' };
+}
 $('btn-grade').addEventListener('click', carregarGrade);
 if ($('btn-gerenciar-ligas')) $('btn-gerenciar-ligas').addEventListener('click', abrirGerenciadorLigas);
 $('grade-liga').addEventListener('change', desenharGrade);
@@ -2241,8 +2259,10 @@ async function gerarSugestoes(){
             const favEhCasa = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
             const favNome = favEhCasa ? (s.nm||s.j.mandante) : (s.nv||s.j.visitante);
             const favOdd = favEhCasa ? o.odd_home : o.odd_away;
+            const fx = faixaFavorito(favOdd);
+            const selo = fx ? `<span style="background:${fx.cor};color:var(--pitch);padding:1px 7px;border-radius:5px;font-weight:700;font-size:10.5px">${fx.selo} ${fx.nome}</span>` : '';
             return `<div style="font-size:12px;color:var(--chalk-dim);margin-top:4px">
-              Odds: <b>${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b>${fmtOdd(o.odd_away)}</b> | ⭐ Fav: <b style="color:var(--amber)">${favNome}</b> (${fmtOdd(favOdd)})</div>`;
+              Odds: <b>${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b>${fmtOdd(o.odd_away)}</b> | ${favNome} (${fmtOdd(favOdd)}) ${selo}</div>`;
           })()}
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
@@ -3080,11 +3100,22 @@ $('btn-topdia').addEventListener('click', async () => {
     }
 
     // pontua para o mercado escolhido (instantâneo, local)
-    const pontuados = [];
+    let pontuados = [];
     jogosComStats.forEach(x => {
       const nota = pontuarTD(mercado, oddsMap[x.j.fixture_id], x.em, x.ev);
       if (nota != null) pontuados.push({ ...x, nota });
     });
+    // filtro de faixa de favoritismo (pela odd do favorito)
+    const faixaEscolhida = $('td-faixa') ? $('td-faixa').value : '';
+    if (faixaEscolhida){
+      pontuados = pontuados.filter(x => {
+        const o = oddsMap[x.j.fixture_id];
+        if (!o?.odd_home) return false;
+        const favOdd = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
+        const fx = faixaFavorito(favOdd);
+        return fx && fx.id === faixaEscolhida;
+      });
+    }
     pontuados.sort((a,c) => c.nota - a.nota);
     const top = pontuados.slice(0, 10);
     if (!top.length){
@@ -3134,9 +3165,11 @@ $('btn-topdia').addEventListener('click', async () => {
                 const favEhCasa = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
                 const favNome = favEhCasa ? x.nm : x.nv;
                 const favOdd = favEhCasa ? o.odd_home : o.odd_away;
+                const fx = faixaFavorito(favOdd);
+                const selo = fx ? `<span style="background:${fx.cor};color:var(--pitch);padding:1px 8px;border-radius:5px;font-weight:700;font-size:11px">${fx.selo} ${fx.nome}</span>` : '';
                 return `<div style="font-size:12.5px;color:var(--chalk-dim);margin-top:2px">
                   Odds: <b style="color:var(--chalk)">${fmtOdd(o.odd_home)}</b> · ${fmtOdd(o.odd_draw)} · <b style="color:var(--chalk)">${fmtOdd(o.odd_away)}</b>
-                  &nbsp;|&nbsp; ⭐ Favorito: <b style="color:var(--amber)">${favNome}</b> (${fmtOdd(favOdd)})
+                  &nbsp;|&nbsp; ${favNome} (${fmtOdd(favOdd)}) ${selo}
                 </div>`;
               })()}
               ${seloResultado(x)}
