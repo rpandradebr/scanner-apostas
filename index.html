@@ -725,7 +725,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.68";
+const APP_VERSAO = "v3.69";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1264,7 +1264,7 @@ async function fichaJogo(idx){
       <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="mini" onclick="$('sc-mandante').value='${j.mandante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-mandante').dataset.tid='${j.mandante_id??''}';$('sc-visitante').value='${j.visitante.replace(/'/g,String.fromCharCode(92,39))}';$('sc-visitante').dataset.tid='${j.visitante_id??''}';irParaAba('scanner')">🎯 Abrir no Scanner</button>
         <button class="mini" onclick="copiarPrompt('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Copiar prompt p/ análise completa</button>
-        ${(j.fixture_id > 0 && ['FT','AET','PEN'].includes(j.status)) ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)</button>` : ''}
+        ${(j.fixture_id > 0 && ['FT','AET','PEN','1H','2H','HT','ET','P','BT','LIVE','INT'].includes(j.status)) ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)${['1H','2H','HT','ET','P','BT','LIVE','INT'].includes(j.status)?' 🔴 ao vivo':''}</button>` : ''}
         <button class="mini" onclick="verArbitro('${j.fixture_id}', this)">⚖️ Média do árbitro</button>
         <button class="mini" onclick="abrirAnaliseCompleta(${idx})" style="border-color:var(--amber);color:var(--amber)">🔬 Análise completa</button>
       </div>
@@ -1316,10 +1316,15 @@ async function estatsDetalhadas(fixtureId, botao){
     }
     if (r.jogadores?.length){
       let algumComStats = false;
+      let desarmesTotalJogo = 0;
+      const desarmesPorTime = [];
       r.jogadores.forEach(t => {
         const comStats = t.lista.filter(p => p.min);
         if (!comStats.length) return;
         const temDesarme = comStats.some(p => p.desarmes != null);
+        // soma total de desarmes do time (todos os jogadores)
+        const totalDesarmesTime = comStats.reduce((s,p) => s + (p.desarmes||0), 0);
+        if (temDesarme){ desarmesPorTime.push({ time: t.time, total: totalDesarmesTime }); desarmesTotalJogo += totalDesarmesTime; }
         if (!temDesarme && !comStats.some(p => p.nota)) return;
         algumComStats = true;
         const topNota = [...comStats].sort((x,y)=>(parseFloat(y.nota)||0)-(parseFloat(x.nota)||0)).slice(0,3);
@@ -1329,6 +1334,16 @@ async function estatsDetalhadas(fixtureId, botao){
           (topDesarme?.desarmes ? `<span class="chip">🛡️ Mais desarmes: <b>${topDesarme.nome}</b> (${topDesarme.desarmes})</span>` : '') +
           '</div>';
       });
+      // painel de total de desarmes do jogo (o que você pediu)
+      if (desarmesPorTime.length){
+        html = `<div style="background:var(--pitch);border:1px solid var(--amber);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+          <h3 style="margin-top:0;color:var(--amber)">🛡️ Desarmes totais do jogo</h3>
+          <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+            ${desarmesPorTime.map(d => `<div class="stat" style="min-width:120px"><b style="font-size:22px">${d.total}</b><span>${d.time}</span></div>`).join('')}
+            <div class="stat" style="min-width:120px;border:1px solid var(--amber)"><b style="font-size:22px;color:var(--amber)">${desarmesTotalJogo}</b><span>TOTAL do jogo</span></div>
+          </div>
+        </div>` + html;
+      }
       if (!algumComStats){
         html += `<h3>Desarmes e notas de jogadores</h3><p style="font-size:13px;color:var(--chalk-dim)">A API não coletou estatística individual de jogadores para esta partida (desarmes, notas, dribles). Isso varia por jogo — a estatística de time acima está completa. Jogos das grandes ligas europeias costumam ter cobertura de jogador mais consistente.</p>`;
       }
