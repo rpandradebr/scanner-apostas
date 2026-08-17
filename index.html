@@ -172,6 +172,7 @@
     <button data-aba="banca" title="Gestão de banca: controle suas apostas reais com valor, odd, green/red/cashout e acompanhe o lucro e a evolução do saldo.">💰 Gestão de banca</button>
     <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
     <button data-aba="notas" title="Assertividade por faixa de nota: descubra se as notas altas (10, 9...) realmente acertam mais, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
+    <button data-aba="campeonatos" title="Estatísticas por campeonato: quais ligas são mais Under, mais Over, mais gols. E os times dentro de cada campeonato.">🏆 Campeonatos</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -590,6 +591,39 @@
     <div id="notas-conteudo"><p class="msg-vazia">Clique em "Analisar assertividade" para ver a taxa de acerto por faixa de nota.</p></div>
   </section>
 
+  <!-- ================= CAMPEONATOS ================= -->
+  <section id="aba-campeonatos">
+    <h2>🏆 Estatísticas por campeonato</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">
+      Perfil de gols de cada campeonato com base nos jogos já carregados no banco (não gasta requisição da API). Descubra quais ligas são mais Under, mais Over, mais BTTS — para caçar cada mercado onde ele mais acontece. Clique num campeonato para ver os times dentro dele.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <button class="acao" id="btn-gerar-campeonatos">📊 Gerar estatísticas</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Ordenar por:
+        <select id="camp-ordem" style="width:auto;padding:4px 8px">
+          <option value="pctUnder25">Mais Under 2.5</option>
+          <option value="pctUnder35">Mais Under 3.5</option>
+          <option value="pctOver25">Mais Over 2.5</option>
+          <option value="pctOver15">Mais Over 1.5</option>
+          <option value="pctBtts">Mais Ambas marcam</option>
+          <option value="mediaGols">Mais gols (média)</option>
+          <option value="jogos">Maior amostra</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Mínimo de jogos:
+        <select id="camp-minjogos" style="width:auto;padding:4px 8px">
+          <option value="5">5+</option>
+          <option value="10" selected>10+</option>
+          <option value="20">20+</option>
+          <option value="1">Todos</option>
+        </select>
+      </label>
+    </div>
+    <div id="campeonatos-conteudo"><p class="msg-vazia">Clique em "Gerar estatísticas" para ver o perfil dos campeonatos.</p></div>
+  </section>
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -753,7 +787,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.72";
+const APP_VERSAO = "v3.73";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4343,6 +4377,96 @@ document.addEventListener('change', e => { if (e.target?.id === 'notas-mercado' 
 document.querySelectorAll('nav button').forEach(b => {
   if (b.dataset.aba === 'notas') b.addEventListener('click', () => { setTimeout(()=>{ if($('notas-conteudo') && $('notas-conteudo').querySelector('.msg-vazia')) gerarAnaliseNotas(); }, 100); });
 });
+
+
+
+// ==========================================================
+// ESTATÍSTICAS POR CAMPEONATO
+// ==========================================================
+let _campData = [];
+async function gerarStatsCampeonatos(){
+  const alvo = $('campeonatos-conteudo');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Calculando (do banco, sem gastar API)...</p>';
+  try{
+    const r = await chamarEdge({ acao:'stats_campeonatos' });
+    _campData = r.campeonatos || [];
+    if (!_campData.length){ alvo.innerHTML = '<div class="aviso">Nenhum jogo encerrado no banco ainda. Carregue algumas grades de dias passados primeiro (aba Grade do dia) para acumular histórico.</div>'; return; }
+    renderCampeonatos();
+  }catch(e){ alvo.innerHTML = `<div class="aviso erro">Erro: ${e.message}</div>`; }
+}
+window.gerarStatsCampeonatos = gerarStatsCampeonatos;
+
+function renderCampeonatos(){
+  const alvo = $('campeonatos-conteudo');
+  const ordem = $('camp-ordem') ? $('camp-ordem').value : 'pctUnder25';
+  const minJogos = $('camp-minjogos') ? parseInt($('camp-minjogos').value) : 10;
+  let lista = _campData.filter(c => c.jogos >= minJogos);
+  lista.sort((a,b) => (b[ordem]||0) - (a[ordem]||0));
+  if (!lista.length){ alvo.innerHTML = '<div class="aviso">Nenhum campeonato com esse mínimo de jogos. Reduza o "mínimo de jogos" ou carregue mais grades.</div>'; return; }
+
+  const cor = (v, inv) => { const x = inv ? 100-v : v; return x>=60?'var(--green)':x>=40?'var(--amber)':'var(--chalk-dim)'; };
+  const barra = (v, corV) => `<div style="background:rgba(237,234,224,.1);border-radius:3px;height:16px;position:relative;min-width:70px">
+    <div style="background:${corV};width:${v}%;height:100%;border-radius:3px"></div>
+    <span style="position:absolute;top:0;left:5px;line-height:16px;font-size:10.5px;font-family:'IBM Plex Mono',monospace">${v}%</span></div>`;
+
+  alvo.innerHTML = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">${lista.length} campeonatos · ordenado por ${$('camp-ordem').selectedOptions[0].text.toLowerCase()}. Clique num campeonato para ver os times.</p>
+    <div class="tabela-scroll"><table class="comp" style="font-size:12.5px">
+      <tr>
+        <th style="text-align:left">Campeonato</th><th style="text-align:center">Jogos</th>
+        <th style="text-align:center">Média gols</th>
+        <th style="text-align:center">Under 2.5</th><th style="text-align:center">Under 3.5</th>
+        <th style="text-align:center">Over 1.5</th><th style="text-align:center">Over 2.5</th>
+        <th style="text-align:center">BTTS</th>
+      </tr>
+      ${lista.map((c,idx) => `
+        <tr style="cursor:pointer" onclick="verTimesCampeonato('${c.liga.replace(/'/g,String.fromCharCode(92,39))}', ${idx})" title="Ver times deste campeonato">
+          <td style="text-align:left"><b>${c.campeonato}</b> <span style="font-size:10px;color:var(--chalk-dim)">▼</span></td>
+          <td style="text-align:center">${c.jogos}</td>
+          <td style="text-align:center"><b>${c.mediaGols}</b></td>
+          <td style="text-align:center">${barra(c.pctUnder25, cor(c.pctUnder25))}</td>
+          <td style="text-align:center">${barra(c.pctUnder35, cor(c.pctUnder35))}</td>
+          <td style="text-align:center">${barra(c.pctOver15, cor(c.pctOver15))}</td>
+          <td style="text-align:center">${barra(c.pctOver25, cor(c.pctOver25))}</td>
+          <td style="text-align:center">${barra(c.pctBtts, cor(c.pctBtts))}</td>
+        </tr>
+        <tr id="camp-times-${idx}" style="display:none"><td colspan="8" style="padding:0;background:var(--pitch)"><div id="camp-times-conteudo-${idx}" style="padding:10px">Carregando times...</div></td></tr>
+      `).join('')}
+    </table></div>`;
+}
+window.renderCampeonatos = renderCampeonatos;
+
+async function verTimesCampeonato(liga, idx){
+  const linha = document.getElementById('camp-times-'+idx);
+  if (!linha) return;
+  if (linha.style.display !== 'none'){ linha.style.display = 'none'; return; }
+  linha.style.display = 'table-row';
+  const alvo = document.getElementById('camp-times-conteudo-'+idx);
+  alvo.innerHTML = '⏳ Carregando times (do banco)...';
+  try{
+    const r = await chamarEdge({ acao:'stats_campeonato_times', liga });
+    const times = r.times || [];
+    if (!times.length){ alvo.innerHTML = '<p style="font-size:12px;color:var(--chalk-dim)">Sem dados de times para este campeonato.</p>'; return; }
+    alvo.innerHTML = `<b style="font-size:12px;color:var(--amber)">Times de ${liga}:</b>
+      <table style="width:100%;font-size:12px;margin-top:6px">
+        <tr><th style="text-align:left">Time</th><th>J</th><th>Média gols/jogo</th><th>Marca</th><th>Sofre</th><th>Over 2.5</th><th>Under 2.5</th><th>BTTS</th><th>V-E-D</th></tr>
+        ${times.map(t => `<tr>
+          <td style="text-align:left"><b>${t.time}</b></td>
+          <td style="text-align:center">${t.jogos}</td>
+          <td style="text-align:center"><b>${t.mediaGolsJogo}</b></td>
+          <td style="text-align:center">${t.mediaGolsPro}</td>
+          <td style="text-align:center">${t.mediaGolsContra}</td>
+          <td style="text-align:center">${t.pctOver25}%</td>
+          <td style="text-align:center">${t.pctUnder25}%</td>
+          <td style="text-align:center">${t.pctBtts}%</td>
+          <td style="text-align:center;font-size:11px">${t.vit}-${t.emp}-${t.der}</td>
+        </tr>`).join('')}
+      </table>`;
+  }catch(e){ alvo.innerHTML = `<p style="color:var(--red);font-size:12px">Erro: ${e.message}</p>`; }
+}
+window.verTimesCampeonato = verTimesCampeonato;
+
+if ($('btn-gerar-campeonatos')) $('btn-gerar-campeonatos').addEventListener('click', gerarStatsCampeonatos);
+document.addEventListener('change', e => { if (e.target?.id === 'camp-ordem' || e.target?.id === 'camp-minjogos'){ if (_campData.length) renderCampeonatos(); } });
 
 </script>
 </body>
