@@ -572,6 +572,14 @@
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <button class="acao" id="btn-gerar-notas">📊 Analisar assertividade</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Agrupar por:
+        <select id="notas-modo" style="width:auto;padding:4px 8px">
+          <option value="exata">Nota exata (9.55, 9.3, 9.7)</option>
+          <option value="decimal">1 casa decimal (9.5, 9.7)</option>
+          <option value="inteiro">Nota inteira (9, 10)</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Mercado:
         <select id="notas-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
       </label>
@@ -745,7 +753,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.70";
+const APP_VERSAO = "v3.71";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4234,7 +4242,6 @@ async function gerarAnaliseNotas(){
     const { data } = await db.from('analises').select('*').eq('origem','sugestao').limit(2000);
     if (!data?.length){ alvo.innerHTML = '<p class="msg-vazia">Nenhuma sugestão salva ainda.</p>'; return; }
 
-    // popula filtro de mercado
     const selM = $('notas-mercado');
     if (selM){
       const merc = [...new Set(data.map(a=>a.mercado_sugerido).filter(Boolean))].sort();
@@ -4244,30 +4251,34 @@ async function gerarAnaliseNotas(){
     }
     const filtroM = selM ? selM.value : '';
     const soPegas = $('notas-so-pegas')?.checked;
+    const modo = $('notas-modo') ? $('notas-modo').value : 'exata';
 
-    // só as resolvidas (com green/red)
     let apostas = data.filter(a => a.resultado_auto && a.confianca != null);
     if (filtroM) apostas = apostas.filter(a => a.mercado_sugerido === filtroM);
     if (soPegas) apostas = apostas.filter(a => a.aposta_feita);
     if (!apostas.length){ alvo.innerHTML = '<div class="aviso">Nenhuma sugestão resolvida ainda neste filtro. As faixas aparecem conforme os jogos terminam e recebem green/red (use "Atualizar resultados" no Histórico de sugestões).</div>'; return; }
 
-    // agrupa por faixa de nota (arredonda para o inteiro: 9.5 conta como 10, 8.5 como 9, etc.? -> vamos usar faixas por inteiro)
-    const faixas = {}; // chave = nota inteira
-    apostas.forEach(a => {
-      const nota = Math.round(+a.confianca); // 9.5->10, 8.4->8
-      faixas[nota] = faixas[nota] || {g:0,r:0,total:0};
-      if (a.resultado_auto==='GREEN') faixas[nota].g++; else faixas[nota].r++;
-      faixas[nota].total++;
-    });
-
-    // ordena da nota mais alta para a mais baixa
-    const notasOrd = Object.keys(faixas).map(Number).sort((a,b)=>b-a);
     const barra = (g,r) => { const t=g+r; const p=t?Math.round(g/t*100):0; const c=p>=60?'var(--green)':p>=45?'var(--amber)':'var(--red)';
       return `<div style="background:rgba(237,234,224,.1);border-radius:4px;height:22px;position:relative;min-width:180px">
         <div style="background:${c};width:${p}%;height:100%;border-radius:4px"></div>
         <span style="position:absolute;top:0;left:8px;line-height:22px;font-size:12px;font-family:'IBM Plex Mono',monospace">${p}% · ${g}G/${r}R</span></div>`; };
 
-    // total geral
+    // agrupa conforme o modo escolhido
+    const faixas = {};
+    const chaveDe = (conf) => {
+      const nota = +conf;
+      if (modo === 'exata') return String(Math.round(nota*100)/100); // nota exata: 9.55, 9.3, 10
+      if (modo === 'decimal') return nota.toFixed(1); // 1 casa: 9.5, 9.3, 9.7
+      return String(Math.floor(nota)); // inteiro: 9, 10
+    };
+    apostas.forEach(a => {
+      const k = chaveDe(a.confianca);
+      faixas[k] = faixas[k] || {g:0,r:0,total:0,soma:0};
+      if (a.resultado_auto==='GREEN') faixas[k].g++; else faixas[k].r++;
+      faixas[k].total++; faixas[k].soma += +a.confianca;
+    });
+    const notasOrd = Object.keys(faixas).sort((a,b)=>parseFloat(b)-parseFloat(a));
+
     const totG = apostas.filter(a=>a.resultado_auto==='GREEN').length;
     const totR = apostas.filter(a=>a.resultado_auto==='RED').length;
     const taxaGeral = Math.round(totG/(totG+totR)*100);
@@ -4278,29 +4289,36 @@ async function gerarAnaliseNotas(){
       <div class="stat" style="flex:1;min-width:130px"><b style="font-size:24px;color:var(--red)">${totR}</b><span>reds</span></div>
       <div class="stat" style="flex:1;min-width:130px"><b style="font-size:24px">${taxaGeral}%</b><span>taxa geral</span></div>
     </div>
-    <h3>Assertividade por faixa de nota</h3>
-    <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 10px">Da nota mais alta para a mais baixa. Se o sistema é bem calibrado, as notas altas (10, 9) devem ter taxa maior que as baixas.</p>
+    <h3>Assertividade por nota</h3>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 10px">
+      As notas das sugestões vão de 0 a 10 (ex.: 9.3, 9.55, 9.7) — equivalem à pontuação do TOP dividida por 10 (9.55 = 95.5 pontos = 95.5% de probabilidade estimada). Da mais alta para a mais baixa.
+    </p>
     <div class="tabela-scroll"><table class="comp">
-      <tr><th style="text-align:center">Nota</th><th>Assertividade</th><th style="text-align:center">Amostra</th></tr>
-      ${notasOrd.map(n => {
-        const f = faixas[n];
-        const selo = n>=10 ? '🔥' : n>=9 ? '⭐' : n>=8 ? '✨' : '';
+      <tr><th style="text-align:center">Nota</th><th style="text-align:center">Pontos</th><th style="text-align:center">Prob.</th><th>Assertividade real</th><th style="text-align:center">Amostra</th></tr>
+      ${notasOrd.map(k => {
+        const f = faixas[k];
+        const notaMedia = f.soma/f.total;
+        const pontos = (notaMedia*10).toFixed(0);
+        const prob = pontos + '%';
+        const selo = notaMedia>=9.5 ? '🔥' : notaMedia>=9 ? '⭐' : notaMedia>=8 ? '✨' : '';
         return `<tr>
-          <td class="valor" style="text-align:center;font-size:18px"><b>${selo} ${n}</b></td>
+          <td class="valor" style="text-align:center;font-size:17px"><b>${selo} ${k}</b></td>
+          <td class="valor" style="text-align:center">${pontos}</td>
+          <td class="valor" style="text-align:center;color:var(--chalk-dim)">${prob}</td>
           <td>${barra(f.g,f.r)}</td>
-          <td class="valor" style="text-align:center">${f.total} jogos</td>
+          <td class="valor" style="text-align:center">${f.total}</td>
         </tr>`;
       }).join('')}
     </table></div>
     <div style="background:var(--pitch);border-radius:8px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--chalk-dim)">
-      <b>Como ler:</b> quanto maior a amostra (número de jogos), mais confiável é a taxa. Uma nota 10 com 80% em 50 jogos é um sinal forte. Uma nota 10 com 100% em 2 jogos ainda é pouca amostra. Use isso para calibrar em quais notas você aposta mais.
+      <b>Nota vs Pontos vs Probabilidade:</b> são a mesma medida em formatos diferentes. Nota 9.55 = 95.5 pontos (escala do TOP) = ~95% de probabilidade estimada pelo modelo. A coluna <b>Assertividade real</b> mostra o que <i>de fato</i> aconteceu nos seus jogos — se a nota 9.55 tem 95% de probabilidade mas só 70% de assertividade real, o modelo está otimista demais naquela faixa. Compare "Prob." (o que o modelo previu) com a barra (o que aconteceu).
     </div>`;
     alvo.innerHTML = html;
   }catch(e){ alvo.innerHTML = `<div class="aviso erro">Erro: ${e.message}</div>`; }
 }
 window.gerarAnaliseNotas = gerarAnaliseNotas;
 if ($('btn-gerar-notas')) $('btn-gerar-notas').addEventListener('click', gerarAnaliseNotas);
-document.addEventListener('change', e => { if (e.target?.id === 'notas-mercado' || e.target?.id === 'notas-so-pegas') gerarAnaliseNotas(); });
+document.addEventListener('change', e => { if (e.target?.id === 'notas-mercado' || e.target?.id === 'notas-so-pegas' || e.target?.id === 'notas-modo') gerarAnaliseNotas(); });
 // carrega ao abrir a aba
 document.querySelectorAll('nav button').forEach(b => {
   if (b.dataset.aba === 'notas') b.addEventListener('click', () => { setTimeout(()=>{ if($('notas-conteudo') && $('notas-conteudo').querySelector('.msg-vazia')) gerarAnaliseNotas(); }, 100); });
