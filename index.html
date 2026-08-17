@@ -753,7 +753,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.71";
+const APP_VERSAO = "v3.72";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4273,9 +4273,10 @@ async function gerarAnaliseNotas(){
     };
     apostas.forEach(a => {
       const k = chaveDe(a.confianca);
-      faixas[k] = faixas[k] || {g:0,r:0,total:0,soma:0};
+      faixas[k] = faixas[k] || {g:0,r:0,total:0,soma:0,jogos:[]};
       if (a.resultado_auto==='GREEN') faixas[k].g++; else faixas[k].r++;
       faixas[k].total++; faixas[k].soma += +a.confianca;
+      faixas[k].jogos.push(a);
     });
     const notasOrd = Object.keys(faixas).sort((a,b)=>parseFloat(b)-parseFloat(a));
 
@@ -4295,19 +4296,32 @@ async function gerarAnaliseNotas(){
     </p>
     <div class="tabela-scroll"><table class="comp">
       <tr><th style="text-align:center">Nota</th><th style="text-align:center">Pontos</th><th style="text-align:center">Prob.</th><th>Assertividade real</th><th style="text-align:center">Amostra</th></tr>
-      ${notasOrd.map(k => {
+      ${notasOrd.map((k,idx) => {
         const f = faixas[k];
         const notaMedia = f.soma/f.total;
         const pontos = (notaMedia*10).toFixed(0);
         const prob = pontos + '%';
         const selo = notaMedia>=9.5 ? '🔥' : notaMedia>=9 ? '⭐' : notaMedia>=8 ? '✨' : '';
-        return `<tr>
-          <td class="valor" style="text-align:center;font-size:17px"><b>${selo} ${k}</b></td>
+        // linha da nota (clicável) + linha escondida com os jogos
+        const jogosDetalhe = f.jogos.sort((a,b)=>(b.data_jogo||'').localeCompare(a.data_jogo||'')).map(j => {
+          const cor = j.resultado_auto==='GREEN' ? 'var(--green)' : 'var(--red)';
+          const tag = j.resultado_auto==='GREEN' ? 'GREEN' : 'RED';
+          return `<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(237,234,224,.08);font-size:12.5px">
+            <span><b>${j.mandante} x ${j.visitante}</b> <span style="color:var(--chalk-dim)">· ${j.mercado_sugerido||''} · ${j.data_jogo||''}${j.placar_final?' · '+j.placar_final:''}</span></span>
+            <span style="background:${cor};color:var(--pitch);padding:1px 8px;border-radius:4px;font-weight:700;font-size:11px;white-space:nowrap">${tag}</span>
+          </div>`;
+        }).join('');
+        return `<tr style="cursor:pointer" onclick="toggleDetalheNota(${idx})" title="Clique para ver os jogos desta nota">
+          <td class="valor" style="text-align:center;font-size:17px"><b>${selo} ${k}</b> <span style="font-size:11px;color:var(--chalk-dim)">▼</span></td>
           <td class="valor" style="text-align:center">${pontos}</td>
           <td class="valor" style="text-align:center;color:var(--chalk-dim)">${prob}</td>
           <td>${barra(f.g,f.r)}</td>
           <td class="valor" style="text-align:center">${f.total}</td>
-        </tr>`;
+        </tr>
+        <tr id="detalhe-nota-${idx}" style="display:none"><td colspan="5" style="padding:0;background:var(--pitch)">
+          <div style="padding:8px 10px"><b style="font-size:12px;color:var(--amber)">Jogos com nota ${k}:</b></div>
+          ${jogosDetalhe}
+        </td></tr>`;
       }).join('')}
     </table></div>
     <div style="background:var(--pitch);border-radius:8px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--chalk-dim)">
@@ -4317,6 +4331,12 @@ async function gerarAnaliseNotas(){
   }catch(e){ alvo.innerHTML = `<div class="aviso erro">Erro: ${e.message}</div>`; }
 }
 window.gerarAnaliseNotas = gerarAnaliseNotas;
+// expande/esconde os jogos de uma faixa de nota
+function toggleDetalheNota(idx){
+  const el = document.getElementById('detalhe-nota-'+idx);
+  if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+}
+window.toggleDetalheNota = toggleDetalheNota;
 if ($('btn-gerar-notas')) $('btn-gerar-notas').addEventListener('click', gerarAnaliseNotas);
 document.addEventListener('change', e => { if (e.target?.id === 'notas-mercado' || e.target?.id === 'notas-so-pegas' || e.target?.id === 'notas-modo') gerarAnaliseNotas(); });
 // carrega ao abrir a aba
