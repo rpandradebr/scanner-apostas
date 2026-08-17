@@ -173,6 +173,7 @@
     <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
     <button data-aba="notas" title="Assertividade por faixa de nota: descubra se as notas altas (10, 9...) realmente acertam mais, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
     <button data-aba="campeonatos" title="Estatísticas por campeonato: quais ligas são mais Under, mais Over, mais gols. E os times dentro de cada campeonato.">🏆 Campeonatos</button>
+    <button data-aba="especiais" title="Mercados especiais: rankings de times por desarmes, cartões, faltas, chutes, escanteios, passes, posse de bola e impedimentos.">📊 Mercados especiais</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -624,6 +625,37 @@
     <div id="campeonatos-conteudo"><p class="msg-vazia">Clique em "Gerar estatísticas" para ver o perfil dos campeonatos.</p></div>
   </section>
 
+  <!-- ================= MERCADOS ESPECIAIS ================= -->
+  <section id="aba-especiais">
+    <h2>📊 Mercados especiais</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">
+      Rankings de times por estatística: desarmes, cartões, faltas, chutes, escanteios, passes, posse de bola e impedimentos. Baseado nos times que você já analisou (os dados ficam salvos, não gasta API). Para adicionar um time, use "Estatísticas detalhadas" na ficha do jogo ou a análise completa.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <button class="acao" id="btn-gerar-especiais">📊 Carregar rankings</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Estatística:
+        <select id="esp-stat" style="width:auto;padding:4px 8px">
+          <option value="media_desarmes">🛡️ Desarmes</option>
+          <option value="media_amarelos">🟨 Cartões amarelos</option>
+          <option value="media_vermelhos">🟥 Cartões vermelhos</option>
+          <option value="media_faltas">⚠️ Faltas</option>
+          <option value="media_impedimentos">🚩 Impedimentos</option>
+          <option value="media_chutes">👟 Chutes (total)</option>
+          <option value="media_chutes_gol">🎯 Chutes no gol</option>
+          <option value="media_escanteios">🚩 Escanteios</option>
+          <option value="media_passes">🔄 Passes</option>
+          <option value="media_posse">⚽ Posse de bola</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Liga:
+        <select id="esp-liga" style="width:auto;padding:4px 8px"><option value="">Todas</option></select>
+      </label>
+    </div>
+    <div id="especiais-conteudo"><p class="msg-vazia">Clique em "Carregar rankings" para ver os times por estatística.</p></div>
+  </section>
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -787,7 +819,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.73";
+const APP_VERSAO = "v3.74";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4467,6 +4499,79 @@ window.verTimesCampeonato = verTimesCampeonato;
 
 if ($('btn-gerar-campeonatos')) $('btn-gerar-campeonatos').addEventListener('click', gerarStatsCampeonatos);
 document.addEventListener('change', e => { if (e.target?.id === 'camp-ordem' || e.target?.id === 'camp-minjogos'){ if (_campData.length) renderCampeonatos(); } });
+
+
+
+// ==========================================================
+// MERCADOS ESPECIAIS — rankings de times por estatística
+// ==========================================================
+let _espData = [];
+const ESP_LABELS = {
+  media_desarmes:'Desarmes', media_amarelos:'Cartões amarelos', media_vermelhos:'Cartões vermelhos',
+  media_faltas:'Faltas', media_impedimentos:'Impedimentos', media_chutes:'Chutes (total)',
+  media_chutes_gol:'Chutes no gol', media_escanteios:'Escanteios', media_passes:'Passes', media_posse:'Posse de bola (%)'
+};
+async function gerarEspeciais(){
+  const alvo = $('especiais-conteudo');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Carregando (do banco)...</p>';
+  try{
+    const r = await chamarEdge({ acao:'mercados_especiais' });
+    _espData = r.times || [];
+    if (!_espData.length){ alvo.innerHTML = '<div class="aviso">Nenhum time analisado ainda. Para popular esta aba, abra jogos na Grade do dia e clique em "Estatísticas detalhadas" ou use a Análise completa — os dados de cada time ficam salvos aqui.</div>'; return; }
+    // popula filtro de ligas
+    const selL = $('esp-liga');
+    if (selL){
+      const ligas = [...new Set(_espData.map(t=>t.liga).filter(Boolean))].sort();
+      const atual = selL.value;
+      selL.innerHTML = '<option value="">Todas as ligas</option>' + ligas.map(l=>`<option value="${l}">${l}</option>`).join('');
+      selL.value = atual;
+    }
+    renderEspeciais();
+  }catch(e){ alvo.innerHTML = `<div class="aviso erro">Erro: ${e.message}</div>`; }
+}
+window.gerarEspeciais = gerarEspeciais;
+
+function renderEspeciais(){
+  const alvo = $('especiais-conteudo');
+  const stat = $('esp-stat') ? $('esp-stat').value : 'media_desarmes';
+  const liga = $('esp-liga') ? $('esp-liga').value : '';
+  let lista = _espData.filter(t => t[stat] != null);
+  if (liga) lista = lista.filter(t => t.liga === liga);
+  if (!lista.length){ alvo.innerHTML = '<div class="aviso">Nenhum time com essa estatística disponível. Alguns dados (como desarmes e passes) só existem nas grandes ligas.</div>'; return; }
+  lista.sort((a,b) => (b[stat]||0) - (a[stat]||0));
+
+  const label = ESP_LABELS[stat] || stat;
+  const maxVal = Math.max(...lista.map(t => t[stat]||0)) || 1;
+  const cor = 'var(--amber)';
+
+  alvo.innerHTML = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">${lista.length} times · ordenado por <b>${label}</b> (maior média primeiro). Médias por jogo com base nos últimos jogos analisados de cada time.</p>
+    <div class="tabela-scroll"><table class="comp">
+      <tr><th style="text-align:center">#</th><th style="text-align:left">Time</th><th style="text-align:left">Liga</th><th style="text-align:center">Amostra</th><th style="text-align:left">${label} (média/jogo)</th></tr>
+      ${lista.map((t,i) => {
+        const v = t[stat] || 0;
+        const larg = Math.round(v/maxVal*100);
+        return `<tr>
+          <td class="valor" style="text-align:center">${i+1}</td>
+          <td style="text-align:left"><b>${t.time_nome}</b></td>
+          <td style="text-align:left;font-size:12px;color:var(--chalk-dim)">${t.liga||'—'}</td>
+          <td class="valor" style="text-align:center">${t.jogos_amostra||'—'}</td>
+          <td><div style="display:flex;align-items:center;gap:8px">
+            <div style="background:rgba(237,234,224,.1);border-radius:3px;height:18px;width:${larg}%;min-width:32px;position:relative">
+              <div style="background:${cor};width:100%;height:100%;border-radius:3px"></div>
+            </div>
+            <b style="font-family:'IBM Plex Mono',monospace">${v}${stat==='media_posse'?'%':''}</b>
+          </div></td>
+        </tr>`;
+      }).join('')}
+    </table></div>
+    <div style="background:var(--pitch);border-radius:8px;padding:12px 14px;margin-top:14px;font-size:13px;color:var(--chalk-dim)">
+      <b>Dica de mercado:</b> times no topo de <b>faltas</b> e <b>cartões</b> são bons para mercados de cartão. Times com muitos <b>escanteios</b> e <b>chutes</b> pressionam mais (bom para over de escanteios/gols). <b>Desarmes</b> e <b>passes</b> só têm dados nas grandes ligas.
+    </div>`;
+}
+window.renderEspeciais = renderEspeciais;
+
+if ($('btn-gerar-especiais')) $('btn-gerar-especiais').addEventListener('click', gerarEspeciais);
+document.addEventListener('change', e => { if (e.target?.id === 'esp-stat' || e.target?.id === 'esp-liga'){ if (_espData.length) renderEspeciais(); } });
 
 </script>
 </body>
