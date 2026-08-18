@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.85";
+const APP_VERSAO = "v3.86";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2717,11 +2717,13 @@ function confereMercado(mercado, gm, gv){
   const total = gm + gv;
   if (mercado === 'UNDER 2.5') return total <= 2 ? 'GREEN' : 'RED';
   if (mercado === 'UNDER 3.5') return total <= 3 ? 'GREEN' : 'RED';
+  if (mercado === 'UNDER 1.5') return total <= 1 ? 'GREEN' : 'RED';
+  if (mercado === 'OVER 3.5')  return total >= 4 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 2.5')  return total >= 3 ? 'GREEN' : 'RED';
   if (mercado === 'OVER 0.5')  return total >= 1 ? 'GREEN' : 'RED';
   if (mercado === 'LAY 0x0')   return (gm===0 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'OVER 1.5')  return total >= 2 ? 'GREEN' : 'RED';
-  if (mercado === 'BTTS')      return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
+  if (mercado === 'BTTS' || mercado === 'AMBAS MARCAM') return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
   if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
   if (mercado === 'LAY ZEBRA'){
@@ -2787,11 +2789,19 @@ $('btn-atualizar-res').addEventListener('click', async () => {
   aviso($('hs-aviso'), '');
   try{
     const { data: sugs } = await db.from('analises').select('*')
-      .in('origem',['sugestao','vigia']).is('placar_final', null).order('criado_em',{ascending:false});
+      .in('origem',['sugestao','vigia']).or('placar_final.is.null,resultado_auto.is.null').order('criado_em',{ascending:false});
     if (!sugs?.length){ $('hs-status').textContent = 'Nenhuma sugestão pendente de resultado.'; b.disabled=false; listarHistSug(); return; }
     let resolvidos = 0;
     for (let i=0; i<sugs.length; i++){
       $('hs-status').textContent = `⏳ Buscando ${i+1}/${sugs.length}…`;
+      // se já tem placar mas faltou green/red, recalcula
+      if (sugs[i].placar_final && !sugs[i].resultado_auto){
+        const [gm, gv] = sugs[i].placar_final.split('x').map(Number);
+        if (!isNaN(gm) && !isNaN(gv)){
+          const res = confereMercado(sugs[i].mercado_sugerido, gm, gv);
+          if (res){ await db.from('analises').update({ resultado_auto: res }).eq('id', sugs[i].id); resolvidos++; continue; }
+        }
+      }
       const pl = await buscarPlacar(sugs[i]);
       if (pl){
         const res = confereMercado(sugs[i].mercado_sugerido, pl.gm, pl.gv);
@@ -4862,10 +4872,18 @@ async function atualizarResultadosBot(){
   if ($('bot-status')) $('bot-status').textContent = '⏳ Buscando placares...';
   try{
     const { data: sugs } = await db.from('analises').select('*')
-      .eq('origem','vigia').is('placar_final', null).order('criado_em',{ascending:false});
+      .eq('origem','vigia').or('placar_final.is.null,resultado_auto.is.null').order('criado_em',{ascending:false});
     if (!sugs?.length){ if($('bot-status')) $('bot-status').textContent = 'Nenhuma sugestão do bot pendente.'; if(b) b.disabled=false; listarBotSug(); return; }
     let apurados = 0;
     for (const a of sugs){
+      // se já tem placar salvo mas faltou green/red, recalcula sem buscar de novo
+      if (a.placar_final && !a.resultado_auto){
+        const [gm, gv] = a.placar_final.split('x').map(Number);
+        if (!isNaN(gm) && !isNaN(gv)){
+          const res = confereMercado(a.mercado_sugerido, gm, gv);
+          if (res){ await db.from('analises').update({ resultado_auto: res }).eq('id', a.id); apurados++; continue; }
+        }
+      }
       const pl = await buscarPlacar(a);
       if (pl){
         const res = confereMercado(a.mercado_sugerido, pl.gm, pl.gv);
