@@ -169,6 +169,7 @@
     <button data-aba="especiais" title="Mercados especiais: rankings de times por desarmes, cartões, faltas, chutes, escanteios, passes, posse de bola e impedimentos.">📊 Mercados especiais</button>
     <button data-aba="analises" title="Suas análises salvas. Registre o veredito, cole a análise completa e, depois do jogo, o placar para ver green/red e sua taxa de acerto.">💾 Minhas análises</button>
     <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático. Clique em "Atualizar resultados" para o sistema apurar sozinho.">📋 Histórico de sugestões</button>
+    <button data-aba="botsug" title="Só as sugestões enviadas pelo vigia do Telegram (o bot), separadas das que você pega manualmente. Marque se pegou e veja green/red.">📲 Sugestões do bot</button>
     <button data-aba="banca" title="Gestão de banca: controle suas apostas reais com valor, odd, green/red/cashout e acompanhe o lucro e a evolução do saldo.">💰 Gestão de banca</button>
     <button data-aba="relatorios" title="Relatórios de desempenho: montante de green/red das apostas que você pegou, taxa por mercado, evolução e mais.">📈 Relatórios</button>
     <button data-aba="notas" title="Assertividade por faixa de nota: descubra se as notas altas (10, 9...) realmente acertam mais, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
@@ -530,6 +531,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.80</b></td><td>Nova aba <b>📲 Sugestões do bot</b>: separa os alertas do vigia das sugestões manuais, com resumo de green/red, taxa de acerto e marcação de "peguei". Filtro de origem também no Histórico de sugestões.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v3.79</b></td><td>Os alertas do <b>Vigia do Telegram</b> agora entram no Histórico de sugestões do site (marcados com selo 📲 VIGIA), onde você marca se pegou a aposta e o green/red é apurado automaticamente. Lay Goleada Visitante passou a filtrar por <b>odd justa mínima</b> (1.10) em vez de nota, cortando os lays de odd baixíssima.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v3.78</b></td><td>Criado este menu <b>ℹ️ Sobre</b> com o objetivo do sistema e o histórico completo de versões.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v3.77</b></td><td>Filtro de <b>intervalo de datas</b> na Grade do dia (carregar vários dias de uma vez, ex: 01 ao 07, salvando tudo no banco). Mensagem da aba Campeonatos com passo a passo.</td></tr>
@@ -810,6 +812,14 @@
         <input type="checkbox" id="hs-filtro-pegas" style="width:auto"> Só apostas que peguei
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Origem:
+        <select id="hs-filtro-origem" style="width:auto;padding:4px 8px">
+          <option value="">Todas</option>
+          <option value="manual">✋ Manuais</option>
+          <option value="vigia">📲 Do bot (vigia)</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Situação:
         <select id="hs-filtro-situacao" style="width:auto;padding:4px 8px">
           <option value="todos">Todos</option>
@@ -832,6 +842,37 @@
     <div id="hs-aviso"></div>
     <div class="tabela-scroll"><table id="hs-tabela"></table></div>
   </section>
+
+  <!-- ================= SUGESTÕES DO BOT ================= -->
+  <section id="aba-botsug">
+    <h2>📲 Sugestões do bot (vigia do Telegram)</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Apenas as sugestões enviadas automaticamente pelo vigia do Telegram, separadas das que você pega manualmente. Marque se pegou a aposta e clique em "Atualizar resultados" para apurar green/red.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <button class="acao" id="btn-bot-atualizar">🔄 Atualizar resultados</button>
+      <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="bot-status"></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Mercado:
+        <select id="bot-filtro-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="bot-filtro-pegas" style="width:auto"> Só apostas que peguei
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Situação:
+        <select id="bot-filtro-situacao" style="width:auto;padding:4px 8px">
+          <option value="todos">Todos</option>
+          <option value="ocorrer">Só os que vão ocorrer</option>
+          <option value="ocorridos">Só os que já ocorreram</option>
+        </select>
+      </label>
+    </div>
+    <div id="bot-resumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div id="bot-aviso"></div>
+    <div class="tabela-scroll"><table id="bot-tabela"></table></div>
+  </section>
+
 
   <footer>
     Ferramenta pessoal de apoio à decisão — os sinais são estatísticos e não substituem a análise de contexto (13 pontos) nem garantem resultado.
@@ -878,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.79";
+const APP_VERSAO = "v3.80";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1027,6 +1068,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   $('aba-' + b.dataset.aba).classList.add('on');
   // carrega o conteúdo da ajuda ao abrir a aba
   if (b.dataset.aba === 'ajuda' && typeof trocaAjuda === 'function' && !$('ajuda-conteudo').innerHTML){ trocaAjuda('fluxos'); }
+  // carrega as sugestões do bot ao abrir a aba
+  if (b.dataset.aba === 'botsug' && typeof listarBotSug === 'function'){ listarBotSug(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -2806,6 +2849,10 @@ async function listarHistSug(){
   const filtroMercado = selMerc ? selMerc.value : '';
   let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
   if (filtroMercado) dataFiltrada = dataFiltrada.filter(a => a.mercado_sugerido === filtroMercado);
+  // filtro por origem (manual vs vigia)
+  const filtroOrigem = $('hs-filtro-origem') ? $('hs-filtro-origem').value : '';
+  if (filtroOrigem === 'vigia') dataFiltrada = dataFiltrada.filter(a => a.origem === 'vigia');
+  else if (filtroOrigem === 'manual') dataFiltrada = dataFiltrada.filter(a => a.origem !== 'vigia');
   if ($('hs-filtro-pegas') && $('hs-filtro-pegas').checked) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
   // filtro de situação (a ocorrer / ocorridos) pela data+hora do jogo
   const filtroSit = $('hs-filtro-situacao') ? $('hs-filtro-situacao').value : 'todos';
@@ -2937,7 +2984,7 @@ async function confirmarIntegracao(idAnalise){
 window.confirmarIntegracao = confirmarIntegracao;
 
 
-document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao') listarHistSug(); });
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao' || e.target?.id === 'hs-filtro-origem') listarHistSug(); });
 listarHistSug();
 
 
@@ -4766,6 +4813,113 @@ if ($('btn-gerar-especiais')) $('btn-gerar-especiais').addEventListener('click',
 if ($('btn-popular-especiais')) $('btn-popular-especiais').addEventListener('click', abrirPopularEspeciais);
 document.addEventListener('change', e => { if (e.target?.id === 'esp-stat' || e.target?.id === 'esp-liga'){ if (_espData.length) renderEspeciais(); } });
 
+
+
+
+// ==========================================================
+// SUGESTÕES DO BOT (vigia) — tela dedicada só para origem 'vigia'
+// ==========================================================
+async function atualizarResultadosBot(){
+  const b = $('btn-bot-atualizar'); if (b) b.disabled = true;
+  if ($('bot-status')) $('bot-status').textContent = '⏳ Buscando placares...';
+  try{
+    const { data: sugs } = await db.from('analises').select('*')
+      .eq('origem','vigia').is('placar_final', null).order('criado_em',{ascending:false});
+    if (!sugs?.length){ if($('bot-status')) $('bot-status').textContent = 'Nenhuma sugestão do bot pendente.'; if(b) b.disabled=false; listarBotSug(); return; }
+    let apurados = 0;
+    for (const a of sugs){
+      const pl = await buscarPlacar(a);
+      if (pl){
+        const res = confereMercado(a.mercado_sugerido, pl.gm, pl.gv);
+        await db.from('analises').update({
+          placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res
+        }).eq('id', a.id);
+        apurados++;
+      }
+    }
+    if ($('bot-status')) $('bot-status').textContent = `✅ ${apurados} jogo(s) apurado(s).`;
+    listarBotSug();
+  }catch(e){ if($('bot-status')) $('bot-status').textContent = 'Erro: '+e.message; }
+  finally{ if(b) b.disabled=false; }
+}
+window.atualizarResultadosBot = atualizarResultadosBot;
+
+async function listarBotSug(){
+  const { data, error } = await db.from('analises').select('*')
+    .eq('origem','vigia').order('criado_em',{ascending:false}).limit(300);
+  if (error){ aviso($('bot-aviso'), 'Erro: '+error.message,'erro'); return; }
+  const todas = data || [];
+  // popula filtro de mercado
+  const selM = $('bot-filtro-mercado');
+  if (selM){
+    const merc = [...new Set(todas.map(a=>a.mercado_sugerido).filter(Boolean))].sort();
+    const atual = selM.value;
+    selM.innerHTML = '<option value="">Todos</option>' + merc.map(m=>`<option value="${m}">${m}</option>`).join('');
+    selM.value = atual;
+  }
+  const fMerc = selM ? selM.value : '';
+  const soPegas = $('bot-filtro-pegas')?.checked;
+  const fSit = $('bot-filtro-situacao') ? $('bot-filtro-situacao').value : 'todos';
+
+  const jaOcorreu = (a) => {
+    if (a.resultado_auto) return true;
+    if (!a.data_jogo) return false;
+    const agora = new Date(new Date().toLocaleString('en-US',{timeZone:'America/Bahia'}));
+    const dt = new Date(a.data_jogo + 'T' + (a.hora_jogo||'23:59') + ':00');
+    return (agora - dt) > 2*3600*1000;
+  };
+
+  let lista = todas;
+  if (fMerc) lista = lista.filter(a => a.mercado_sugerido === fMerc);
+  if (soPegas) lista = lista.filter(a => a.aposta_feita);
+  if (fSit === 'ocorrer') lista = lista.filter(a => !jaOcorreu(a));
+  else if (fSit === 'ocorridos') lista = lista.filter(a => jaOcorreu(a));
+
+  // resumo (green/red/taxa)
+  const resolvidas = todas.filter(a => a.resultado_auto);
+  const g = resolvidas.filter(a=>a.resultado_auto==='GREEN').length;
+  const r = resolvidas.filter(a=>a.resultado_auto==='RED').length;
+  const taxa = (g+r) ? Math.round(g/(g+r)*100) : 0;
+  const pegas = todas.filter(a=>a.aposta_feita).length;
+  if ($('bot-resumo')){
+    $('bot-resumo').innerHTML = `
+      <div class="stat" style="flex:1;min-width:110px"><b style="font-size:22px">${todas.length}</b><span>alertas do bot</span></div>
+      <div class="stat" style="flex:1;min-width:110px"><b style="font-size:22px;color:var(--green)">${g}</b><span>greens</span></div>
+      <div class="stat" style="flex:1;min-width:110px"><b style="font-size:22px;color:var(--red)">${r}</b><span>reds</span></div>
+      <div class="stat" style="flex:1;min-width:110px"><b style="font-size:22px">${taxa}%</b><span>taxa (resolvidos)</span></div>
+      <div class="stat" style="flex:1;min-width:110px"><b style="font-size:22px">${pegas}</b><span>que peguei</span></div>`;
+  }
+
+  if (!lista.length){ $('bot-tabela').innerHTML = '<tr><td style="padding:16px;color:var(--chalk-dim)">Nenhuma sugestão do bot ainda. Quando o vigia do Telegram encontrar um jogo de nota alta, ele aparece aqui automaticamente.</td></tr>'; return; }
+
+  $('bot-tabela').innerHTML =
+    '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th><th>Banca</th></tr>' +
+    lista.map(a => `<tr>
+      <td>${a.data_jogo ?? ''}</td>
+      <td style="font-family:'IBM Plex Mono',monospace">${a.hora_jogo ?? '—'}</td>
+      <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
+      <td>${a.mercado_sugerido ?? ''}</td>
+      <td>${a.confianca ?? ''}</td>
+      <td>${a.placar_final ?? '—'}</td>
+      <td>${pill(a.resultado_auto)}</td>
+      <td><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--chalk-dim)">
+        <input type="checkbox" style="width:auto" ${a.aposta_feita?'checked':''} onchange="marcarApostaFeitaBot(${a.id}, this.checked)"> ${a.aposta_feita?'sim':'não'}
+      </label></td>
+      <td><button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button></td>
+    </tr>`).join('');
+}
+window.listarBotSug = listarBotSug;
+
+async function marcarApostaFeitaBot(id, feita){
+  try{ await db.from('analises').update({ aposta_feita: feita }).eq('id', id); listarBotSug(); }
+  catch(e){ alert('Erro: '+e.message); }
+}
+window.marcarApostaFeitaBot = marcarApostaFeitaBot;
+
+if ($('btn-bot-atualizar')) $('btn-bot-atualizar').addEventListener('click', atualizarResultadosBot);
+document.addEventListener('change', e => {
+  if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao'].includes(e.target?.id)) listarBotSug();
+});
 
 </script>
 </body>
