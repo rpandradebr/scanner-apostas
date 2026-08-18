@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.82";
+const APP_VERSAO = "v3.83";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2488,6 +2488,21 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
   else if (mercado === 'OVER 1.5') reg.over_under = 'OVER 1.5';
   else if (mercado === 'BTTS') reg.over_under = 'BTTS';
   else if (mercado === 'LAY ZEBRA'){ reg.lay_zebra = 'VIAVEL'; }
+
+  // valida duplicata: mesmo jogo (mandante+visitante+data) e mesmo mercado já salvo?
+  try{
+    let q = db.from('analises').select('id')
+      .eq('mandante', mandante).eq('visitante', visitante)
+      .eq('mercado_sugerido', mercado);
+    if (reg.data_jogo) q = q.eq('data_jogo', reg.data_jogo);
+    const { data: existentes } = await q.limit(1);
+    if (existentes?.length){
+      botao.textContent = '⚠️ já salvo';
+      botao.disabled = true;
+      return;
+    }
+  }catch(_){ /* se a checagem falhar, segue e tenta salvar */ }
+
   const { error } = await db.from('analises').insert(reg);
   if (error){ botao.textContent = '❌ erro'; return; }
   botao.textContent = '✅ salvo';
