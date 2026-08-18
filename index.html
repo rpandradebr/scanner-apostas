@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.88";
+const APP_VERSAO = "v3.89";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4679,7 +4679,7 @@ function renderCampeonatos(){
         const linhas = camps.map(c => {
           const idx = idxGlobal++;
           return `
-          <tr style="cursor:pointer" onclick="verTimesCampeonato('${c.liga.replace(/'/g,String.fromCharCode(92,39))}', ${idx})" title="Ver times deste campeonato">
+          <tr style="cursor:pointer" onclick="verTimesCampeonato('${c.liga.replace(/'/g,String.fromCharCode(92,39))}', ${idx}, '${(c.pais||'').replace(/'/g,String.fromCharCode(92,39))}')" title="Ver times deste campeonato">
             <td style="text-align:left;padding-left:16px"><b>${c.liga}</b> <span style="font-size:10px;color:var(--chalk-dim)">▼</span></td>
             <td style="text-align:center">${c.jogos}</td>
             <td style="text-align:center"><b>${c.mediaGols}</b></td>
@@ -4709,7 +4709,7 @@ function renderCampeonatos(){
 }
 window.renderCampeonatos = renderCampeonatos;
 
-async function verTimesCampeonato(liga, idx){
+async function verTimesCampeonato(liga, idx, pais){
   const linha = document.getElementById('camp-times-'+idx);
   if (!linha) return;
   if (linha.style.display !== 'none'){ linha.style.display = 'none'; return; }
@@ -4717,7 +4717,7 @@ async function verTimesCampeonato(liga, idx){
   const alvo = document.getElementById('camp-times-conteudo-'+idx);
   alvo.innerHTML = '⏳ Carregando times (do banco)...';
   try{
-    const r = await chamarEdge({ acao:'stats_campeonato_times', liga });
+    const r = await chamarEdge({ acao:'stats_campeonato_times', liga, pais: pais||'' });
     const times = r.times || [];
     if (!times.length){ alvo.innerHTML = '<p style="font-size:12px;color:var(--chalk-dim)">Sem dados de times para este campeonato.</p>'; return; }
     alvo.innerHTML = `<b style="font-size:12px;color:var(--amber)">Times de ${liga}:</b>
