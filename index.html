@@ -530,6 +530,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.79</b></td><td>Os alertas do <b>Vigia do Telegram</b> agora entram no Histórico de sugestões do site (marcados com selo 📲 VIGIA), onde você marca se pegou a aposta e o green/red é apurado automaticamente. Lay Goleada Visitante passou a filtrar por <b>odd justa mínima</b> (1.10) em vez de nota, cortando os lays de odd baixíssima.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v3.78</b></td><td>Criado este menu <b>ℹ️ Sobre</b> com o objetivo do sistema e o histórico completo de versões.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v3.77</b></td><td>Filtro de <b>intervalo de datas</b> na Grade do dia (carregar vários dias de uma vez, ex: 01 ao 07, salvando tudo no banco). Mensagem da aba Campeonatos com passo a passo.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v3.76</b></td><td>Abas <b>reorganizadas</b> em sequência lógica de uso. Ranking <b>Lay 0x1</b> nas Sugestões do dia (jogos com tendência over, ordenado por nota).</td></tr>
@@ -877,7 +878,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.78";
+const APP_VERSAO = "v3.79";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2718,7 +2719,7 @@ $('btn-atualizar-res').addEventListener('click', async () => {
   aviso($('hs-aviso'), '');
   try{
     const { data: sugs } = await db.from('analises').select('*')
-      .eq('origem','sugestao').is('placar_final', null).order('criado_em',{ascending:false});
+      .in('origem',['sugestao','vigia']).is('placar_final', null).order('criado_em',{ascending:false});
     if (!sugs?.length){ $('hs-status').textContent = 'Nenhuma sugestão pendente de resultado.'; b.disabled=false; listarHistSug(); return; }
     let resolvidos = 0;
     for (let i=0; i<sugs.length; i++){
@@ -2741,7 +2742,7 @@ $('btn-atualizar-res').addEventListener('click', async () => {
 async function listarHistSug(){
   if (typeof renderConfigAlerta === 'function') renderConfigAlerta();
   const { data, error } = await db.from('analises').select('*')
-    .eq('origem','sugestao').order('criado_em',{ascending:false}).limit(200);
+    .in('origem',['sugestao','vigia']).order('criado_em',{ascending:false}).limit(200);
   if (error){ aviso($('hs-aviso'), 'Erro: '+error.message,'erro'); return; }
   if (!data?.length){ $('hs-tabela').innerHTML=''; $('hs-painel').innerHTML='<p class="msg-vazia">Nenhuma sugestão salva ainda. Salve sugestões na aba 💡 Sugestões do dia.</p>'; return; }
 
@@ -2836,7 +2837,7 @@ async function listarHistSug(){
     dataFiltrada.map(a => `<tr>
       <td>${a.data_jogo ?? ''}</td>
       <td style="font-family:'IBM Plex Mono',monospace">${a.hora_jogo ?? '—'}</td>
-      <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
+      <td><b>${a.mandante}</b> x <b>${a.visitante}</b>${a.origem==='vigia'?' <span style="background:var(--amber);color:var(--pitch);padding:0 5px;border-radius:3px;font-size:10px;font-weight:700">📲 VIGIA</span>':''}<br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
       <td>${a.mercado_sugerido ?? ''}</td>
       <td>${a.confianca ?? ''}</td>
       <td>${a.placar_final ?? '—'}</td>
