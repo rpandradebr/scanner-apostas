@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.81";
+const APP_VERSAO = "v3.82";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2399,7 +2399,7 @@ $('sub-gols').addEventListener('click', () => {
 function linhaGols(j, o){
   const idx = gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1);
   return `<tr class="clicavel" onclick="fichaJogo(${idx})">
-    <td>${j.hora||''}</td><td>${j.liga||''}</td>
+    <td>${j.hora||''}</td><td style="font-size:12px">${j.pais?j.pais+' — ':''}${j.liga||''}</td>
     <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
     <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtOdd(o.odd_under25)}</td>
     <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${fmtOdd(o.odd_under35)}</td>
@@ -2428,7 +2428,7 @@ function desenharGols(jogos){
 
 function linhaFav(j, o, destaque){
   return `<tr class="clicavel" onclick="fichaJogo(${gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1)})">
-    <td>${j.hora||''}</td><td>${j.liga||''}</td>
+    <td>${j.hora||''}</td><td style="font-size:12px">${j.pais?j.pais+' — ':''}${j.liga||''}</td>
     <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
     <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${destaque}</td>
     <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}</td>
@@ -2546,11 +2546,11 @@ function desenharRankingsSug(){
           : `${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%`;
         const mostrarV = ehLay01 ? (x.v/10).toFixed(1) : x.v + '%';
         return `<tr class="clicavel">
-          <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td onclick="fichaJogo(${idx})">${x.c.j.liga||''}</td>
+          <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td onclick="fichaJogo(${idx})" style="font-size:12px">${x.c.j.pais?x.c.j.pais+' — ':''}${x.c.j.liga||''}</td>
           <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${mostrarV}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-size:12px;color:var(--chalk-dim)">${detalhe}</td>
-          <td><button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.c.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay01?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay01?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}')">💾</button></td>
+          <td><button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay01?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay01?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}')">💾</button></td>
         </tr>`;
       }).join('')}
       </table></div></div>`;
@@ -2654,7 +2654,7 @@ async function gerarSugestoes(){
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
             <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
-            <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this, '${s.j.hora||''}', '${s.j.data_jogo||$('su-data').value||''}')">💾 Salvar no histórico</button>
+            <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((s.j.pais?s.j.pais+' — ':'')+(s.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this, '${s.j.hora||''}', '${s.j.data_jogo||$('su-data').value||''}')">💾 Salvar no histórico</button>
           </div>
         </div>`).join('') + '</div>' +
         '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo) e conferir a odd na exchange.</p>';
@@ -3682,7 +3682,7 @@ $('btn-topdia').addEventListener('click', async () => {
                 <button class="mini" onclick="event.stopPropagation();copiarPrompt('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
                 <button class="mini" onclick="event.stopPropagation();fichaJogo(${idx})">🔎 Ficha</button>
                 <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="event.stopPropagation();abrirAnaliseCompleta(${idx})">🔬 Análise completa</button>
-                ${mktConfere ? `<button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}','${mktConfere}',${(x.nota/10).toFixed(1)},'TOP do dia ${m.nome}: ${x.nota} pontos', this, '${x.j.hora||''}', '${x.j.data_jogo||$('td-data').value||''}')">💾 Salvar</button>` : ''}
+                ${mktConfere ? `<button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.j.pais?x.j.pais+' — ':'')+(x.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktConfere}',${(x.nota/10).toFixed(1)},'TOP do dia ${m.nome}: ${x.nota} pontos', this, '${x.j.hora||''}', '${x.j.data_jogo||$('td-data').value||''}')">💾 Salvar</button>` : ''}
               </div>
             </div>
             <div style="text-align:center;min-width:70px;cursor:pointer" onclick="abrirAnaliseCompleta(${idx})">
