@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.84";
+const APP_VERSAO = "v3.85";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2741,32 +2741,42 @@ function confereMercado(mercado, gm, gv){
   return null;
 }
 async function buscarPlacar(a){
-  // 1) tenta no banco por nome+data (grades já gravam placar final)
-  const tok = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/\s+/).filter(p=>p.length>=4)[0] || s;
-  const tA = tok(a.mandante), tB = tok(a.visitante);
+  // normaliza e pega tokens significativos (palavras com 4+ letras)
+  const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const tokens = s => norm(s).split(/\s+/).filter(p => p.length >= 4);
+  const casa = (nomeBanco, nomeSug) => {
+    const tb = norm(nomeBanco), ts = tokens(nomeSug);
+    return ts.some(t => tb.includes(t)) || ts.length===0;
+  };
+  const extrair = (row) => {
+    // prioriza gols_mandante/gols_visitante (mais confiável); cai pro campo placar texto
+    let gm = row.gols_mandante, gv = row.gols_visitante;
+    if (gm == null || gv == null){
+      const p = (row.placar||'').split('x').map(Number);
+      gm = p[0]; gv = p[1];
+    }
+    if (gm == null || gv == null || isNaN(gm) || isNaN(gv)) return null;
+    // alinha ao mandante da sugestão
+    const mandBancoEhMandSug = casa(row.mandante, a.mandante);
+    return mandBancoEhMandSug ? {gm, gv} : {gm: gv, gv: gm};
+  };
+  const tA = tokens(a.mandante)[0] || a.mandante;
+  const tB = tokens(a.visitante)[0] || a.visitante;
   try{
     let query = db.from('jogos_dia').select('*').in('status',['FT','AET','PEN']);
     if (a.data_jogo) query = query.eq('data_jogo', a.data_jogo);
     const { data } = await query
       .or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`)
       .limit(1);
-    if (data?.length){
-      const [gm, gv] = (data[0].placar||'0x0').split('x').map(Number);
-      const mandEhA = data[0].mandante.toLowerCase().includes(tA.toLowerCase());
-      return mandEhA ? {gm, gv} : {gm: gv, gv: gm};
-    }
+    if (data?.length){ const r = extrair(data[0]); if (r) return r; }
   } catch(_){}
-  // 2) fallback: recarrega a grade daquele dia (força a API atualizar o banco) e tenta de novo
+  // fallback: recarrega a grade daquele dia (força a API atualizar o banco) e tenta de novo
   if (a.data_jogo){
     try{
-      await chamarEdge({ acao:'grade', data: a.data_jogo });
+      await chamarEdge({ acao:'grade', data: a.data_jogo, forcar: 1 });
       let q2 = db.from('jogos_dia').select('*').eq('data_jogo', a.data_jogo).in('status',['FT','AET','PEN']);
       const { data } = await q2.or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`).limit(1);
-      if (data?.length){
-        const [gm, gv] = (data[0].placar||'0x0').split('x').map(Number);
-        const mandEhA = data[0].mandante.toLowerCase().includes(tA.toLowerCase());
-        return mandEhA ? {gm, gv} : {gm: gv, gv: gm};
-      }
+      if (data?.length){ const r = extrair(data[0]); if (r) return r; }
     } catch(_){}
   }
   return null;
@@ -4865,7 +4875,11 @@ async function atualizarResultadosBot(){
         apurados++;
       }
     }
-    if ($('bot-status')) $('bot-status').textContent = `✅ ${apurados} jogo(s) apurado(s).`;
+    const naoAchados = sugs.length - apurados;
+    if ($('bot-status')){
+      if (apurados === 0) $('bot-status').textContent = `Nenhum placar encontrado ainda (${sugs.length} pendente(s)). Os jogos podem não ter terminado, ou o placar ainda não está no banco. Tente de novo mais tarde.`;
+      else $('bot-status').textContent = `✅ ${apurados} apurado(s)${naoAchados>0?`, ${naoAchados} ainda sem placar (jogos não terminados ou fora do banco)`:''}.`;
+    }
     listarBotSug();
   }catch(e){ if($('bot-status')) $('bot-status').textContent = 'Erro: '+e.message; }
   finally{ if(b) b.disabled=false; }
