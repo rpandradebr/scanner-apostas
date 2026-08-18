@@ -224,8 +224,10 @@
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <button class="acao" id="btn-grade">Carregar grade</button>
+      <button class="mini" id="btn-intervalo" style="border-color:var(--amber);color:var(--amber)">📅 Carregar intervalo de datas</button>
       <button class="mini" id="btn-gerenciar-ligas" style="border-color:var(--amber);color:var(--amber)">⚙️ Escolher meus campeonatos</button>
     </div>
+    <div id="grade-intervalo-painel" style="display:none;background:var(--pitch);border:1px solid var(--amber);border-radius:10px;padding:14px 16px;margin-bottom:12px"></div>
     <div id="grade-gerenciador" style="display:none;background:var(--pitch);border:1px solid rgba(237,234,224,.15);border-radius:10px;padding:14px;margin-bottom:12px"></div>
     <div id="grade-aviso"></div>
     <div id="grade-grupos"></div>
@@ -821,7 +823,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.76";
+const APP_VERSAO = "v3.77";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1028,6 +1030,7 @@ function faixaFavorito(oddFav){
   return { nome:'Equilibrado', selo:'⚖️', cor:'var(--chalk-dim)', id:'equilibrado' };
 }
 $('btn-grade').addEventListener('click', carregarGrade);
+if ($('btn-intervalo')) $('btn-intervalo').addEventListener('click', abrirIntervalo);
 if ($('btn-gerenciar-ligas')) $('btn-gerenciar-ligas').addEventListener('click', abrirGerenciadorLigas);
 $('grade-liga').addEventListener('change', desenharGrade);
 $('grade-time').addEventListener('input', desenharGrade);
@@ -1054,6 +1057,55 @@ async function carregarGrade(){
   } catch(e){ aviso($('grade-aviso'), 'Não consegui carregar a grade: ' + e.message, 'erro'); }
   finally{ botao.disabled = false; }
 }
+// ---- Carregar intervalo de datas ----
+function abrirIntervalo(){
+  const p = $('grade-intervalo-painel');
+  if (p.style.display === 'block'){ p.style.display = 'none'; return; }
+  p.style.display = 'block';
+  const hoje = new Date().toISOString().slice(0,10);
+  const seteAtras = new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+  p.innerHTML = `
+    <b style="color:var(--amber)">📅 Carregar vários dias de uma vez</b>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin:8px 0">
+      Puxa a grade de cada dia do intervalo e salva tudo no banco (ótimo para encher o histórico e as estatísticas de campeonato). Cada dia gasta ~1 requisição. Máximo de 31 dias por vez.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <div><label style="font-size:12px;color:var(--chalk-dim)">De</label><br><input type="date" id="int-de" value="${seteAtras}" style="padding:5px 8px"></div>
+      <div><label style="font-size:12px;color:var(--chalk-dim)">Até</label><br><input type="date" id="int-ate" value="${hoje}" style="padding:5px 8px"></div>
+      <button class="acao" id="btn-int-carregar">Carregar intervalo</button>
+    </div>
+    <div id="int-status" style="margin-top:10px;font-size:13px;color:var(--chalk-dim)"></div>`;
+  $('btn-int-carregar').addEventListener('click', carregarIntervalo);
+}
+window.abrirIntervalo = abrirIntervalo;
+
+async function carregarIntervalo(){
+  const de = $('int-de').value, ate = $('int-ate').value;
+  const st = $('int-status'), btn = $('btn-int-carregar');
+  if (!de || !ate){ st.textContent = 'Preencha as duas datas.'; return; }
+  const d1 = new Date(de+'T12:00:00'), d2 = new Date(ate+'T12:00:00');
+  if (d1 > d2){ st.textContent = 'A data inicial não pode ser depois da final.'; return; }
+  const dias = Math.round((d2-d1)/86400000) + 1;
+  if (dias > 31){ st.textContent = 'Intervalo muito grande (máx. 31 dias). Reduza o período.'; return; }
+  btn.disabled = true;
+  let ok = 0, totalJogos = 0;
+  const datas = [];
+  for (let i=0;i<dias;i++){ datas.push(new Date(d1.getTime()+i*86400000).toISOString().slice(0,10)); }
+  for (let i=0;i<datas.length;i++){
+    const data = datas[i];
+    st.textContent = `⏳ ${i+1}/${dias} — carregando ${data}...`;
+    try{
+      const r = await chamarEdge({ acao:'grade', data });
+      const n = (r.jogos||[]).length;
+      totalJogos += n; ok++;
+      // a Edge já salva no banco (jogos_dia) automaticamente
+    }catch(e){ /* segue para o próximo dia */ }
+  }
+  st.innerHTML = `✅ Pronto! ${ok}/${dias} dias carregados, ${totalJogos} jogos salvos no banco.<br><span style="font-size:12px">Agora as estatísticas de campeonato e o histórico dos times já têm esses dados. Os jogos já encerrados vêm com placar.</span>`;
+  btn.disabled = false;
+}
+window.carregarIntervalo = carregarIntervalo;
+
 function desenharGrade(){
   const liga = $('grade-liga').value;
   const busca = $('grade-time').value.trim().toLowerCase();
