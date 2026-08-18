@@ -174,6 +174,7 @@
     <button data-aba="notas" title="Assertividade por faixa de nota: descubra se as notas altas (10, 9...) realmente acertam mais, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
     <button data-aba="importar" title="Importe planilhas de resultados (CSV do football-data.co.uk ou Excel combinado) direto para o banco, sem gastar requisição da API.">📥 Importar CSV</button>
     <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
+    <button data-aba="sobre" title="Sobre o sistema: objetivo, e o histórico de todas as versões com o que mudou em cada uma.">ℹ️ Sobre</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -503,6 +504,59 @@
     <div id="ajuda-conteudo"></div>
   </section>
 
+  <!-- ================= SOBRE ================= -->
+  <section id="aba-sobre">
+    <h2>ℹ️ Sobre o Scanner de Apostas</h2>
+
+    <div class="ajuda-card" style="margin-bottom:16px">
+      <h3 style="margin-top:0">🎯 Objetivo</h3>
+      <p style="line-height:1.6">
+        O Scanner de Apostas é uma central de análise para apostas esportivas de futebol, focada em mercados de exchange (Betfair, Betfair-like). Ele cruza <b>odds do dia</b> com o <b>histórico das equipes</b> para pontuar cada jogo de 0 a 100 em vários mercados (Under 3.5, Lay 0x1, Lay 1x0, Lay zebra, Lay goleada, Over, Ambas marcam), ajudando a encontrar as melhores oportunidades com base em dados, não em achismo.
+      </p>
+      <p style="line-height:1.6">
+        Além da análise, o sistema tem gestão de banca, registro de apostas com green/red automático, relatórios de desempenho, análise de assertividade por nota, estatísticas por campeonato e um vigia no Telegram que avisa automaticamente quando aparece um jogo de nota alta.
+      </p>
+      <p style="line-height:1.6;color:var(--chalk-dim);font-size:13px">
+        Stack: site estático (GitHub Pages) + Supabase (banco e funções) + API-Football. Feito para ser rápido, direto e econômico em requisições.
+      </p>
+    </div>
+
+    <div class="ajuda-card" style="margin-bottom:16px;background:rgba(230,180,80,.08);border-color:var(--amber)">
+      <b>⚠️ Aviso:</b> nota alta é a <b>probabilidade estimada</b> pelo modelo, não uma garantia de acerto. A assertividade real só se revela com o tempo, na aba <b>🎯 Análise nota 10</b>. Aposte com responsabilidade e sempre confira a odd na exchange antes de operar.
+    </div>
+
+    <h3>📋 Histórico de versões</h3>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:12px">Da mais recente para a mais antiga. A versão atual aparece no topo do site.</p>
+
+    <div class="tabela-scroll"><table class="comp" style="font-size:13px">
+      <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.78</b></td><td>Criado este menu <b>ℹ️ Sobre</b> com o objetivo do sistema e o histórico completo de versões.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.77</b></td><td>Filtro de <b>intervalo de datas</b> na Grade do dia (carregar vários dias de uma vez, ex: 01 ao 07, salvando tudo no banco). Mensagem da aba Campeonatos com passo a passo.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.76</b></td><td>Abas <b>reorganizadas</b> em sequência lógica de uso. Ranking <b>Lay 0x1</b> nas Sugestões do dia (jogos com tendência over, ordenado por nota).</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.75</b></td><td>Botão <b>"Popular com uma liga"</b> na aba Mercados especiais, para buscar estatísticas dos times de uma data.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.74</b></td><td>Aba <b>📊 Mercados especiais</b>: rankings de times por desarmes, cartões, faltas, chutes, escanteios, passes, posse de bola e impedimentos.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.73</b></td><td>Aba <b>🏆 Campeonatos</b>: perfil de gols por liga (mais Under, mais Over, BTTS) e estatísticas dos times dentro de cada campeonato. Tudo do banco, sem gastar API.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.70-3.72</b></td><td>Aba <b>🎯 Análise nota 10</b>: assertividade real por nota (respeitando decimais como 9.55, 9.7). Linhas clicáveis que expandem os jogos de cada nota com green/red.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.68-3.69</b></td><td>Matriz de placares em grade cruzada (Poisson). Total de desarmes do jogo na análise detalhada.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.62-3.67</b></td><td>Aba <b>💰 Gestão de banca</b>: saldo, apostas com green/red/cashout, comissão da casa, múltiplas bancas, integração das sugestões à banca, filtro de situação.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.60-3.61</b></td><td>Faixas de favorito (super favorito, favorito, leve favorito, equilibrado). Odds justas para Over 0.5 e Lay 0x0.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.58-3.59</b></td><td>Aba <b>❓ Ajuda</b> com manual completo. Filtro por mercado no Histórico de sugestões.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.51-3.57</b></td><td>Medidor de cota da API no header, com contagem regressiva até o reset e alerta automático em 80% e 95% de uso.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.52-3.54</b></td><td>Aba <b>📈 Relatórios</b> de desempenho. Correções de cache (não misturar estatísticas entre times) e filtros por data/mercado.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.48-3.50</b></td><td>Gerenciador de campeonatos favoritos (whitelist). Ordenação do Histórico. Filtro "só meus campeonatos".</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v3.47</b></td><td>Histórico de sugestões busca a hora faltante cruzando com a grade do dia.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>até v3.46</b></td><td>Núcleo do sistema: Grade do dia, Favoritos, Sugestões, TOP do dia, Scanner de mercados, Análise da rodada (Poisson), Histórico de times, Minhas análises, Importar CSV, Ao vivo. Integração com Supabase e API-Football.</td></tr>
+    </table></div>
+
+    <div class="ajuda-card" style="margin-top:16px">
+      <h3 style="margin-top:0">🤖 Vigia do Telegram</h3>
+      <p style="line-height:1.6">
+        Além do site, existe um robô que roda no servidor a cada 3 horas e envia no Telegram os jogos de nota alta automaticamente, mesmo com o site fechado. Ele usa a mesma lógica do site e analisa os mercados: Under 3.5, Lay 0x1, Lay 1x0, Lay zebra, Lay goleada visitante, Ambas marcam, Over 0.5 (nota 10), Over 2.5 e Over 3.5.
+      </p>
+    </div>
+  </section>
+
+
   <!-- ================= GESTÃO DE BANCA ================= -->
   <section id="aba-banca">
     <h2>💰 Gestão de banca</h2>
@@ -823,7 +877,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.77";
+const APP_VERSAO = "v3.78";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
