@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.80";
+const APP_VERSAO = "v3.81";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4893,8 +4893,11 @@ async function listarBotSug(){
   if (!lista.length){ $('bot-tabela').innerHTML = '<tr><td style="padding:16px;color:var(--chalk-dim)">Nenhuma sugestão do bot ainda. Quando o vigia do Telegram encontrar um jogo de nota alta, ele aparece aqui automaticamente.</td></tr>'; return; }
 
   $('bot-tabela').innerHTML =
-    '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th><th>Banca</th></tr>' +
-    lista.map(a => `<tr>
+    '<tr><th>Alertado em</th><th>Data jogo</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th><th>Banca</th></tr>' +
+    lista.map(a => {
+      const alertado = a.criado_em ? new Date(a.criado_em).toLocaleString('pt-BR', { timeZone:'America/Bahia', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+      return `<tr>
+      <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--amber)">${alertado}</td>
       <td>${a.data_jogo ?? ''}</td>
       <td style="font-family:'IBM Plex Mono',monospace">${a.hora_jogo ?? '—'}</td>
       <td><b>${a.mandante}</b> x <b>${a.visitante}</b><br><small style="color:var(--chalk-dim)">${a.campeonato ?? ''}</small></td>
@@ -4906,7 +4909,7 @@ async function listarBotSug(){
         <input type="checkbox" style="width:auto" ${a.aposta_feita?'checked':''} onchange="marcarApostaFeitaBot(${a.id}, this.checked)"> ${a.aposta_feita?'sim':'não'}
       </label></td>
       <td><button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button></td>
-    </tr>`).join('');
+    </tr>`; }).join('');
 }
 window.listarBotSug = listarBotSug;
 
