@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.86";
+const APP_VERSAO = "v3.87";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1958,8 +1958,8 @@ function conferir(a, mercado){
   return null;
 }
 function pill(res){
-  if (res==='g') return '<span class="pill g">GREEN</span>';
-  if (res==='r') return '<span class="pill r">RED</span>';
+  if (res==='GREEN' || res==='g') return '<span class="pill g">GREEN</span>';
+  if (res==='RED' || res==='r') return '<span class="pill r">RED</span>';
   return '<span class="pill n">—</span>';
 }
 
