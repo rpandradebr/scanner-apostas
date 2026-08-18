@@ -919,7 +919,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.87";
+const APP_VERSAO = "v3.88";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4667,29 +4667,45 @@ function renderCampeonatos(){
     <div style="background:${corV};width:${v}%;height:100%;border-radius:3px"></div>
     <span style="position:absolute;top:0;left:5px;line-height:16px;font-size:10.5px;font-family:'IBM Plex Mono',monospace">${v}%</span></div>`;
 
-  alvo.innerHTML = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">${lista.length} campeonatos · ordenado por ${$('camp-ordem').selectedOptions[0].text.toLowerCase()}. Clique num campeonato para ver os times.</p>
-    <div class="tabela-scroll"><table class="comp" style="font-size:12.5px">
-      <tr>
-        <th style="text-align:left">Campeonato</th><th style="text-align:center">Jogos</th>
-        <th style="text-align:center">Média gols</th>
-        <th style="text-align:center">Under 2.5</th><th style="text-align:center">Under 3.5</th>
-        <th style="text-align:center">Over 1.5</th><th style="text-align:center">Over 2.5</th>
-        <th style="text-align:center">BTTS</th>
-      </tr>
-      ${lista.map((c,idx) => `
-        <tr style="cursor:pointer" onclick="verTimesCampeonato('${c.liga.replace(/'/g,String.fromCharCode(92,39))}', ${idx})" title="Ver times deste campeonato">
-          <td style="text-align:left"><b>${c.campeonato}</b> <span style="font-size:10px;color:var(--chalk-dim)">▼</span></td>
-          <td style="text-align:center">${c.jogos}</td>
-          <td style="text-align:center"><b>${c.mediaGols}</b></td>
-          <td style="text-align:center">${barra(c.pctUnder25, cor(c.pctUnder25))}</td>
-          <td style="text-align:center">${barra(c.pctUnder35, cor(c.pctUnder35))}</td>
-          <td style="text-align:center">${barra(c.pctOver15, cor(c.pctOver15))}</td>
-          <td style="text-align:center">${barra(c.pctOver25, cor(c.pctOver25))}</td>
-          <td style="text-align:center">${barra(c.pctBtts, cor(c.pctBtts))}</td>
-        </tr>
-        <tr id="camp-times-${idx}" style="display:none"><td colspan="8" style="padding:0;background:var(--pitch)"><div id="camp-times-conteudo-${idx}" style="padding:10px">Carregando times...</div></td></tr>
-      `).join('')}
-    </table></div>`;
+  alvo.innerHTML = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">${lista.length} campeonatos em ${[...new Set(lista.map(c=>c.pais))].length} países · ordenado por ${$('camp-ordem').selectedOptions[0].text.toLowerCase()}. Clique num campeonato para ver os times.</p>` +
+    (() => {
+      // agrupa por país
+      const porPais = {};
+      lista.forEach(c => { const p = c.pais || 'Outros'; (porPais[p] = porPais[p] || []).push(c); });
+      const paises = Object.keys(porPais).sort();
+      let idxGlobal = 0;
+      return paises.map(pais => {
+        const camps = porPais[pais];
+        const linhas = camps.map(c => {
+          const idx = idxGlobal++;
+          return `
+          <tr style="cursor:pointer" onclick="verTimesCampeonato('${c.liga.replace(/'/g,String.fromCharCode(92,39))}', ${idx})" title="Ver times deste campeonato">
+            <td style="text-align:left;padding-left:16px"><b>${c.liga}</b> <span style="font-size:10px;color:var(--chalk-dim)">▼</span></td>
+            <td style="text-align:center">${c.jogos}</td>
+            <td style="text-align:center"><b>${c.mediaGols}</b></td>
+            <td style="text-align:center">${barra(c.pctUnder25, cor(c.pctUnder25))}</td>
+            <td style="text-align:center">${barra(c.pctUnder35, cor(c.pctUnder35))}</td>
+            <td style="text-align:center">${barra(c.pctOver15, cor(c.pctOver15))}</td>
+            <td style="text-align:center">${barra(c.pctOver25, cor(c.pctOver25))}</td>
+            <td style="text-align:center">${barra(c.pctBtts, cor(c.pctBtts))}</td>
+          </tr>
+          <tr id="camp-times-${idx}" style="display:none"><td colspan="8" style="padding:0;background:var(--pitch)"><div id="camp-times-conteudo-${idx}" style="padding:10px">Carregando times...</div></td></tr>`;
+        }).join('');
+        return `<div style="margin-bottom:18px">
+          <h3 style="margin:0 0 6px;padding:6px 10px;background:var(--pitch);border-radius:6px;border-left:3px solid var(--amber)">🌍 ${pais} <span style="font-size:12px;color:var(--chalk-dim);font-weight:400">(${camps.length})</span></h3>
+          <div class="tabela-scroll"><table class="comp" style="font-size:12.5px">
+            <tr>
+              <th style="text-align:left">Campeonato</th><th style="text-align:center">Jogos</th>
+              <th style="text-align:center">Média gols</th>
+              <th style="text-align:center">Under 2.5</th><th style="text-align:center">Under 3.5</th>
+              <th style="text-align:center">Over 1.5</th><th style="text-align:center">Over 2.5</th>
+              <th style="text-align:center">BTTS</th>
+            </tr>
+            ${linhas}
+          </table></div>
+        </div>`;
+      }).join('');
+    })();
 }
 window.renderCampeonatos = renderCampeonatos;
 
