@@ -767,6 +767,12 @@
       </select>
       <button class="acao" id="btn-sl-carregar">📥 Carregar da API</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        <select id="sl-modo" style="width:auto;padding:4px 8px">
+          <option value="faz">⚔️ O que o time FAZ</option>
+          <option value="cede">🛡️ O que o time CEDE</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Ver estatística:
         <select id="sl-ordem" style="width:auto;padding:4px 8px">
           <option value="mediaChutes">🎯 Chutes</option>
@@ -1025,7 +1031,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.94";
+const APP_VERSAO = "v3.95";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5183,14 +5189,32 @@ window.carregarStatsLiga = carregarStatsLiga;
 
 function renderStatsLiga(){
   if (!_slDados?.times?.length) return;
-  const est = $('sl-ordem').value;
+  const estBase = $('sl-ordem').value;
+  const modo = $('sl-modo') ? $('sl-modo').value : 'faz';
   const temDes = _slDados.tem_desarmes;
+  // mapeia a estatística escolhida para a versão "cede" quando o modo é cede
+  const mapCede = {
+    mediaChutes:'cedeChutes', mediaChutesGol:'cedeChutesGol', mediaEscanteios:'cedeEscanteios',
+    mediaFaltas:'cedeFaltas', mediaImpedimentos:'cedeImpedimentos', mediaAmarelos:'cedeAmarelos'
+  };
+  // estatísticas que não têm versão "cede" (posse, passes, desarmes, casa/fora)
+  const semCede = ['mediaPosse','mediaPasses','mediaPassesCasa','mediaPassesFora','mediaChutesCasa','mediaChutesFora','mediaDesarmes'];
+  let est = estBase;
+  if (modo === 'cede'){
+    if (semCede.includes(estBase)){
+      $('sl-resultado').innerHTML = `<p style="color:var(--chalk-dim);padding:16px;text-align:center">Esta estatística não tem versão "cede". Escolha chutes, chutes a gol, escanteios, faltas, impedimentos ou cartões.</p>`;
+      return;
+    }
+    est = mapCede[estBase] || estBase;
+  }
   const rotulos = {
     mediaChutes:'🎯 Chutes', mediaChutesGol:'⚽ Chutes a gol', mediaEscanteios:'🚩 Escanteios',
     mediaFaltas:'⚠️ Faltas', mediaImpedimentos:'🚫 Impedimentos', mediaAmarelos:'🟨 Cartões amarelos',
     mediaDesarmes:'🛡️ Desarmes', mediaPosse:'⚽ Posse de bola (%)', mediaPasses:'🔄 Total de passes',
     mediaPassesCasa:'🏠 Passes em casa', mediaPassesFora:'✈️ Passes fora',
-    mediaChutesCasa:'🏠 Chutes em casa', mediaChutesFora:'✈️ Chutes fora'
+    mediaChutesCasa:'🏠 Chutes em casa', mediaChutesFora:'✈️ Chutes fora',
+    cedeChutes:'🎯 Chutes cedidos', cedeChutesGol:'⚽ Chutes a gol cedidos', cedeEscanteios:'🚩 Escanteios cedidos',
+    cedeFaltas:'⚠️ Faltas sofridas', cedeImpedimentos:'🚫 Impedimentos cedidos', cedeAmarelos:'🟨 Cartões cedidos'
   };
   if (est === 'mediaDesarmes' && !temDes){
     $('sl-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:16px;text-align:center">🛡️ Desarmes não disponíveis para esta liga.</p>';
@@ -5200,10 +5224,11 @@ function renderStatsLiga(){
   const max = Math.max(...lista.map(t => t[est]||0));
   const media = lista.reduce((s,t) => s+(t[est]||0), 0) / (lista.length||1);
   const sufixo = est === 'mediaPosse' ? '%' : '';
+  const legendaModo = modo === 'cede' ? ' <span style="font-size:12px;color:var(--chalk-dim);font-weight:400">(quanto o time cede ao adversário — menos é melhor defensivamente)</span>' : '';
 
   $('sl-resultado').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <h3 style="margin:0">${rotulos[est]} <span style="font-size:13px;color:var(--chalk-dim);font-weight:400">— média por jogo</span></h3>
+      <h3 style="margin:0">${rotulos[est]} <span style="font-size:13px;color:var(--chalk-dim);font-weight:400">— média por jogo</span>${legendaModo}</h3>
       <span style="font-size:12.5px;color:var(--chalk-dim)">Média da liga: <b style="color:var(--amber)">${media.toFixed(1)}${sufixo}</b></span>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -5276,7 +5301,7 @@ window.traduzPos = traduzPos;
 
 if ($('btn-sl-carregar')) $('btn-sl-carregar').addEventListener('click', carregarStatsLiga);
 document.addEventListener('change', e => {
-  if (e.target?.id === 'sl-ordem') renderStatsLiga();
+  if (e.target?.id === 'sl-ordem' || e.target?.id === 'sl-modo') renderStatsLiga();
   if (e.target?.id === 'sl-liga') lerStatsLiga();
 });
 
