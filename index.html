@@ -166,6 +166,7 @@
     <button data-aba="historico" title="Últimos 10 jogos de qualquer time, com médias. Aqui também ficam os botões de manutenção: baixar 90 dias, colher resultados, ativar últimos-10.">📊 Histórico 10 jogos</button>
     <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
     <button data-aba="campeonatos" title="Estatísticas por campeonato: quais ligas são mais Under, mais Over, mais gols. E os times dentro de cada campeonato.">🏆 Campeonatos</button>
+    <button data-aba="statsligas" title="Estatísticas detalhadas dos times (chutes, escanteios, faltas, cartões, impedimentos) nas suas ligas favoritas, temporada atual.">📈 Estatísticas de time</button>
     <button data-aba="especiais" title="Mercados especiais: rankings de times por desarmes, cartões, faltas, chutes, escanteios, passes, posse de bola e impedimentos.">📊 Mercados especiais</button>
     <button data-aba="analises" title="Suas análises salvas. Registre o veredito, cole a análise completa e, depois do jogo, o placar para ver green/red e sua taxa de acerto.">💾 Minhas análises</button>
     <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático. Clique em "Atualizar resultados" para o sistema apurar sozinho.">📋 Histórico de sugestões</button>
@@ -684,6 +685,73 @@
     <div id="campeonatos-conteudo"><p class="msg-vazia">Clique em "Gerar estatísticas" para ver o perfil dos campeonatos.</p></div>
   </section>
 
+  <!-- ================= ESTATÍSTICAS DE TIME (ligas favoritas) ================= -->
+  <section id="aba-statsligas">
+    <h2>📈 Estatísticas de time</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Médias detalhadas dos times (chutes, escanteios, faltas, cartões, impedimentos) nas ligas que você acompanha, sempre da <b>temporada atual</b>. Escolha uma liga e clique em carregar. Os dados vêm da API na hora.
+    </p>
+    <div style="background:var(--pitch);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;color:var(--chalk-dim)">
+      ⚠️ Cada liga carregada consome até ~80 requisições da API (busca jogo por jogo). Carregue uma liga por vez, quando precisar. <b>Desarmes</b> aparecem nas ligas que têm o dado (grandes ligas); onde não há, a coluna não aparece. <b>Laterais</b> e <b>tiro de meta</b> não são fornecidos pela API.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <select id="sl-liga" style="width:auto;min-width:260px;padding:8px">
+        <optgroup label="Brasil">
+          <option value="71">Brasileirão Série A</option>
+          <option value="72">Brasileirão Série B</option>
+          <option value="73">Copa do Brasil</option>
+        </optgroup>
+        <optgroup label="Inglaterra">
+          <option value="39">Premier League</option>
+          <option value="40">Championship</option>
+        </optgroup>
+        <optgroup label="Europa - Ligas nacionais">
+          <option value="140">La Liga (Espanha)</option>
+          <option value="78">Bundesliga (Alemanha)</option>
+          <option value="79">Bundesliga 2 (Alemanha)</option>
+          <option value="61">Ligue 1 (França)</option>
+          <option value="135">Serie A (Itália)</option>
+          <option value="88">Eredivisie (Países Baixos)</option>
+          <option value="94">Primeira Liga (Portugal)</option>
+        </optgroup>
+        <optgroup label="Competições continentais">
+          <option value="2">Champions League</option>
+          <option value="3">Europa League</option>
+          <option value="848">Conference League</option>
+          <option value="13">Copa Libertadores</option>
+          <option value="11">Copa Sul-Americana</option>
+        </optgroup>
+        <optgroup label="Outras ligas">
+          <option value="253">MLS (EUA)</option>
+          <option value="128">Liga Profesional (Argentina)</option>
+          <option value="307">Pro League (Arábia Saudita)</option>
+        </optgroup>
+        <optgroup label="Seleções">
+          <option value="1">Copa do Mundo</option>
+          <option value="9">Copa América</option>
+          <option value="4">Eurocopa</option>
+          <option value="32">Eliminatórias da Copa</option>
+        </optgroup>
+      </select>
+      <button class="acao" id="btn-sl-carregar">📥 Carregar estatísticas</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Ordenar por:
+        <select id="sl-ordem" style="width:auto;padding:4px 8px">
+          <option value="mediaChutes">Chutes</option>
+          <option value="mediaChutesGol">Chutes a gol</option>
+          <option value="mediaEscanteios">Escanteios</option>
+          <option value="mediaFaltas">Faltas</option>
+          <option value="mediaImpedimentos">Impedimentos</option>
+          <option value="mediaAmarelos">Cartões amarelos</option>
+          <option value="mediaDesarmes">Desarmes</option>
+        </select>
+      </label>
+    </div>
+    <div id="sl-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:10px"></div>
+    <div id="sl-resultado"></div>
+  </section>
+
+
   <!-- ================= MERCADOS ESPECIAIS ================= -->
   <section id="aba-especiais">
     <h2>📊 Mercados especiais</h2>
@@ -919,7 +987,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.89";
+const APP_VERSAO = "v3.91";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4999,6 +5067,82 @@ if ($('btn-bot-atualizar')) $('btn-bot-atualizar').addEventListener('click', atu
 document.addEventListener('change', e => {
   if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao'].includes(e.target?.id)) listarBotSug();
 });
+
+
+
+// ==========================================================
+// ESTATÍSTICAS DE TIME (ligas favoritas, temporada atual)
+// ==========================================================
+let _slDados = null;
+async function carregarStatsLiga(){
+  const liga = $('sl-liga').value;
+  const nomeLiga = $('sl-liga').selectedOptions[0].text;
+  const b = $('btn-sl-carregar');
+  b.disabled = true;
+  $('sl-status').textContent = `⏳ Buscando estatísticas de ${nomeLiga} (temporada atual)... isso pode levar até 1 minuto.`;
+  $('sl-resultado').innerHTML = '';
+  try{
+    const r = await chamarEdge({ acao:'stats_liga_detalhado', liga });
+    if (r.erro){ $('sl-status').textContent = '❌ '+r.erro; b.disabled=false; return; }
+    if (r.aviso){ $('sl-status').textContent = '⚠️ '+r.aviso; }
+    _slDados = r;
+    if (!r.times?.length){
+      $('sl-resultado').innerHTML = '<p style="color:var(--chalk-dim)">Nenhuma estatística disponível para esta liga na temporada atual.</p>';
+      if (!r.aviso) $('sl-status').textContent = '';
+      b.disabled=false; return;
+    }
+    $('sl-status').innerHTML = `✅ <b>${r.liga}</b> · temporada ${r.season} · ${r.times.length} times · baseado nos jogos mais recentes com estatísticas disponíveis.`;
+    renderStatsLiga();
+  }catch(e){ $('sl-status').textContent = 'Erro: '+e.message; }
+  finally{ b.disabled=false; }
+}
+window.carregarStatsLiga = carregarStatsLiga;
+
+function renderStatsLiga(){
+  if (!_slDados?.times?.length) return;
+  const ordem = $('sl-ordem').value;
+  const temDes = _slDados.tem_desarmes;
+  const lista = [..._slDados.times].sort((a,b) => (b[ordem]||0) - (a[ordem]||0));
+  const barra = (v, max) => {
+    if (v == null) return '<span style="color:var(--chalk-dim);font-size:11px">—</span>';
+    const pct = max>0 ? Math.round(v/max*100) : 0;
+    return `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;background:var(--pitch);border-radius:3px;height:14px;min-width:40px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--amber)"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;min-width:32px;text-align:right">${v}</span></div>`;
+  };
+  const maxCol = {};
+  ['mediaChutes','mediaChutesGol','mediaEscanteios','mediaFaltas','mediaImpedimentos','mediaAmarelos','mediaDesarmes'].forEach(k => {
+    maxCol[k] = Math.max(..._slDados.times.map(t => t[k]||0));
+  });
+  $('sl-resultado').innerHTML = `
+    <div class="tabela-scroll"><table style="font-size:12.5px;width:100%">
+      <tr>
+        <th style="text-align:left">Time</th>
+        <th style="text-align:center">Jogos</th>
+        <th style="text-align:center">Chutes</th>
+        <th style="text-align:center">Chutes a gol</th>
+        <th style="text-align:center">Escanteios</th>
+        <th style="text-align:center">Faltas</th>
+        <th style="text-align:center">Impedim.</th>
+        <th style="text-align:center">Amarelos</th>
+        ${temDes ? '<th style="text-align:center">Desarmes</th>' : ''}
+      </tr>
+      ${lista.map(t => `<tr>
+        <td style="text-align:left"><b>${t.time}</b></td>
+        <td style="text-align:center">${t.jogos}</td>
+        <td>${barra(t.mediaChutes, maxCol.mediaChutes)}</td>
+        <td>${barra(t.mediaChutesGol, maxCol.mediaChutesGol)}</td>
+        <td>${barra(t.mediaEscanteios, maxCol.mediaEscanteios)}</td>
+        <td>${barra(t.mediaFaltas, maxCol.mediaFaltas)}</td>
+        <td>${barra(t.mediaImpedimentos, maxCol.mediaImpedimentos)}</td>
+        <td>${barra(t.mediaAmarelos, maxCol.mediaAmarelos)}</td>
+        ${temDes ? `<td>${barra(t.mediaDesarmes, maxCol.mediaDesarmes)}</td>` : ''}
+      </tr>`).join('')}
+    </table></div>
+    <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:8px">Valores = média por jogo. As barras comparam os times entre si (o mais alto de cada coluna preenche 100%).${temDes ? '' : ' Desarmes não disponíveis para esta liga.'}</p>`;
+}
+window.renderStatsLiga = renderStatsLiga;
+
+if ($('btn-sl-carregar')) $('btn-sl-carregar').addEventListener('click', carregarStatsLiga);
+document.addEventListener('change', e => { if (e.target?.id === 'sl-ordem') renderStatsLiga(); });
 
 </script>
 </body>
