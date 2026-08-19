@@ -692,7 +692,7 @@
       Médias detalhadas dos times (chutes, escanteios, faltas, cartões, impedimentos) nas ligas que você acompanha, sempre da <b>temporada atual</b>. Escolha uma liga e clique em carregar. Os dados vêm da API na hora.
     </p>
     <div style="background:var(--pitch);border-radius:8px;padding:12px;margin-bottom:14px;font-size:12.5px;color:var(--chalk-dim)">
-      ⚠️ Cada liga carregada consome até ~80 requisições da API (busca jogo por jogo). Carregue uma liga por vez, quando precisar. <b>Desarmes</b> aparecem nas ligas que têm o dado (grandes ligas); onde não há, a coluna não aparece. <b>Laterais</b> e <b>tiro de meta</b> não são fornecidos pela API.
+      💾 As estatísticas ficam <b>salvas no banco</b>: você carrega uma liga uma vez (pode levar alguns minutos, processa em lotes) e depois é <b>instantâneo e grátis</b>. Só recarregue quando quiser atualizar com jogos novos. Clique num time para ver os jogadores. <b>Laterais</b> e <b>tiro de meta</b> não são fornecidos pela API.
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <select id="sl-liga" style="width:auto;min-width:260px;padding:8px">
@@ -733,13 +733,19 @@
           <option value="32">Eliminatórias da Copa</option>
         </optgroup>
       </select>
-      <button class="acao" id="btn-sl-carregar">📥 Carregar estatísticas</button>
+      <button class="acao" id="btn-sl-carregar">📥 Carregar da API</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
         Ver estatística:
         <select id="sl-ordem" style="width:auto;padding:4px 8px">
           <option value="mediaChutes">🎯 Chutes</option>
           <option value="mediaChutesGol">⚽ Chutes a gol</option>
+          <option value="mediaChutesCasa">🏠 Chutes em casa</option>
+          <option value="mediaChutesFora">✈️ Chutes fora</option>
           <option value="mediaEscanteios">🚩 Escanteios</option>
+          <option value="mediaPosse">⚽ Posse de bola (%)</option>
+          <option value="mediaPasses">🔄 Total de passes</option>
+          <option value="mediaPassesCasa">🏠 Passes em casa</option>
+          <option value="mediaPassesFora">✈️ Passes fora</option>
           <option value="mediaFaltas">⚠️ Faltas</option>
           <option value="mediaImpedimentos">🚫 Impedimentos</option>
           <option value="mediaAmarelos">🟨 Cartões amarelos</option>
@@ -987,7 +993,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.92";
+const APP_VERSAO = "v3.93";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1138,6 +1144,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'ajuda' && typeof trocaAjuda === 'function' && !$('ajuda-conteudo').innerHTML){ trocaAjuda('fluxos'); }
   // carrega as sugestões do bot ao abrir a aba
   if (b.dataset.aba === 'botsug' && typeof listarBotSug === 'function'){ listarBotSug(); }
+  // lê as estatísticas de time do banco ao abrir a aba
+  if (b.dataset.aba === 'statsligas' && typeof lerStatsLiga === 'function'){ lerStatsLiga(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -5071,30 +5079,55 @@ document.addEventListener('change', e => {
 
 
 // ==========================================================
-// ESTATÍSTICAS DE TIME (ligas favoritas, temporada atual)
+// ESTATÍSTICAS DE TIME (ligas favoritas) — lê do banco, carga em lotes
 // ==========================================================
 let _slDados = null;
+
+// ao abrir a aba ou trocar liga: lê do banco (sem gastar requisição)
+async function lerStatsLiga(){
+  const liga = $('sl-liga').value;
+  $('sl-status').textContent = '⏳ Lendo do banco...';
+  $('sl-resultado').innerHTML = '';
+  try{
+    const r = await chamarEdge({ acao:'stats_liga_ler', liga });
+    _slDados = r;
+    if (!r.carregado || !r.times?.length){
+      $('sl-status').innerHTML = `📭 <b>${r.liga||''}</b> ainda não tem estatísticas salvas. Clique em "Carregar da API" para baixar (temporada ${r.season||'atual'}).`;
+      $('sl-resultado').innerHTML = '';
+      return;
+    }
+    $('sl-status').innerHTML = `✅ <b>${r.liga}</b> · temporada ${r.season} · ${r.times.length} times · <span style="color:var(--green)">lido do banco (grátis)</span>`;
+    renderStatsLiga();
+  }catch(e){ $('sl-status').textContent = 'Erro: '+e.message; }
+}
+window.lerStatsLiga = lerStatsLiga;
+
+// carrega da API em LOTES até completar (salva no banco a cada lote)
+let _slCarregando = false;
 async function carregarStatsLiga(){
+  if (_slCarregando) return;
   const liga = $('sl-liga').value;
   const nomeLiga = $('sl-liga').selectedOptions[0].text;
   const b = $('btn-sl-carregar');
-  b.disabled = true;
-  $('sl-status').textContent = `⏳ Buscando estatísticas de ${nomeLiga} (temporada atual)... isso pode levar até 1 minuto.`;
-  $('sl-resultado').innerHTML = '';
+  _slCarregando = true; b.disabled = true;
   try{
-    const r = await chamarEdge({ acao:'stats_liga_detalhado', liga });
-    if (r.erro){ $('sl-status').textContent = '❌ '+r.erro; b.disabled=false; return; }
-    if (r.aviso){ $('sl-status').textContent = '⚠️ '+r.aviso; }
-    _slDados = r;
-    if (!r.times?.length){
-      $('sl-resultado').innerHTML = '<p style="color:var(--chalk-dim)">Nenhuma estatística disponível para esta liga na temporada atual.</p>';
-      if (!r.aviso) $('sl-status').textContent = '';
-      b.disabled=false; return;
+    let concluido = false, tentativas = 0;
+    while (!concluido && tentativas < 20){
+      tentativas++;
+      $('sl-status').innerHTML = `⏳ Carregando ${nomeLiga} da API... lote ${tentativas} (isso salva no banco conforme avança, pode levar alguns minutos).`;
+      const r = await chamarEdge({ acao:'stats_liga_carregar', liga });
+      if (r.erro){ $('sl-status').textContent = '❌ '+r.erro; break; }
+      if (r.aviso){ $('sl-status').textContent = '⚠️ '+r.aviso; break; }
+      concluido = r.concluido;
+      $('sl-status').innerHTML = `⏳ ${nomeLiga}: <b>${r.processados}/${r.total}</b> jogos processados${concluido?' ✅':'...'}`;
+      if (concluido){
+        $('sl-status').innerHTML = `✅ <b>${nomeLiga}</b> carregado! ${r.total} jogos salvos no banco. Agora é instantâneo.`;
+        await lerStatsLiga();
+        break;
+      }
     }
-    $('sl-status').innerHTML = `✅ <b>${r.liga}</b> · temporada ${r.season} · ${r.times.length} times · baseado nos jogos mais recentes com estatísticas disponíveis.`;
-    renderStatsLiga();
   }catch(e){ $('sl-status').textContent = 'Erro: '+e.message; }
-  finally{ b.disabled=false; }
+  finally{ _slCarregando = false; b.disabled = false; }
 }
 window.carregarStatsLiga = carregarStatsLiga;
 
@@ -5102,46 +5135,99 @@ function renderStatsLiga(){
   if (!_slDados?.times?.length) return;
   const est = $('sl-ordem').value;
   const temDes = _slDados.tem_desarmes;
-  // rótulos amigáveis de cada estatística
   const rotulos = {
-    mediaChutes: '🎯 Chutes', mediaChutesGol: '⚽ Chutes a gol', mediaEscanteios: '🚩 Escanteios',
-    mediaFaltas: '⚠️ Faltas', mediaImpedimentos: '🚫 Impedimentos', mediaAmarelos: '🟨 Cartões amarelos',
-    mediaDesarmes: '🛡️ Desarmes'
+    mediaChutes:'🎯 Chutes', mediaChutesGol:'⚽ Chutes a gol', mediaEscanteios:'🚩 Escanteios',
+    mediaFaltas:'⚠️ Faltas', mediaImpedimentos:'🚫 Impedimentos', mediaAmarelos:'🟨 Cartões amarelos',
+    mediaDesarmes:'🛡️ Desarmes', mediaPosse:'⚽ Posse de bola (%)', mediaPasses:'🔄 Total de passes',
+    mediaPassesCasa:'🏠 Passes em casa', mediaPassesFora:'✈️ Passes fora',
+    mediaChutesCasa:'🏠 Chutes em casa', mediaChutesFora:'✈️ Chutes fora'
   };
-  // se escolheu desarmes mas a liga não tem, avisa
   if (est === 'mediaDesarmes' && !temDes){
-    $('sl-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:16px;text-align:center">🛡️ Desarmes não disponíveis para esta liga (a API não fornece dados de jogadores aqui).</p>';
+    $('sl-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:16px;text-align:center">🛡️ Desarmes não disponíveis para esta liga.</p>';
     return;
   }
   const lista = [..._slDados.times].filter(t => t[est] != null).sort((a,b) => (b[est]||0) - (a[est]||0));
   const max = Math.max(...lista.map(t => t[est]||0));
   const media = lista.reduce((s,t) => s+(t[est]||0), 0) / (lista.length||1);
+  const sufixo = est === 'mediaPosse' ? '%' : '';
 
   $('sl-resultado').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <h3 style="margin:0">${rotulos[est]} <span style="font-size:13px;color:var(--chalk-dim);font-weight:400">— média por jogo</span></h3>
-      <span style="font-size:12.5px;color:var(--chalk-dim)">Média da liga: <b style="color:var(--amber)">${media.toFixed(1)}</b></span>
+      <span style="font-size:12.5px;color:var(--chalk-dim)">Média da liga: <b style="color:var(--amber)">${media.toFixed(1)}${sufixo}</b></span>
     </div>
     <div style="display:flex;flex-direction:column;gap:6px">
       ${lista.map((t,i) => {
         const pct = max>0 ? Math.round(t[est]/max*100) : 0;
         const acimaMedia = t[est] >= media;
-        return `<div style="display:flex;align-items:center;gap:10px">
+        return `<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="verJogadoresTime('${t.time.replace(/'/g,String.fromCharCode(92,39))}')" title="Ver jogadores de ${t.time}">
           <span style="min-width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim)">${i+1}º</span>
-          <span style="min-width:150px;font-size:13px;font-weight:${i<3?'700':'400'}">${t.time}</span>
+          <span style="min-width:150px;font-size:13px;font-weight:${i<3?'700':'400'}">${t.time} <span style="font-size:10px;color:var(--chalk-dim)">👤</span></span>
           <div style="flex:1;background:var(--pitch);border-radius:4px;height:22px;overflow:hidden;position:relative;min-width:80px">
             <div style="width:${pct}%;height:100%;background:${acimaMedia?'var(--amber)':'var(--chalk-dim)'};border-radius:4px"></div>
-            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700">${t[est]}</span>
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700">${t[est]}${sufixo}</span>
           </div>
         </div>`;
       }).join('')}
     </div>
-    <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px">Baseado em ${_slDados.jogos_analisados||0} jogos analisados (de ${_slDados.total_jogos_api||0} da temporada). Barras em destaque = acima da média da liga.</p>`;
+    <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px">Clique num time para ver os jogadores. Barras em destaque = acima da média da liga.</p>
+    <div id="sl-jogadores"></div>`;
 }
 window.renderStatsLiga = renderStatsLiga;
 
+// mostra os jogadores de um time (ranking por estatística)
+async function verJogadoresTime(timeNome){
+  const liga = $('sl-liga').value;
+  const alvo = $('sl-jogadores');
+  if (!alvo) return;
+  alvo.innerHTML = '<p style="padding:10px;color:var(--chalk-dim)">⏳ Carregando jogadores...</p>';
+  alvo.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  try{
+    const r = await chamarEdge({ acao:'stats_jogadores_time', liga, time: timeNome });
+    if (!r.jogadores?.length){ alvo.innerHTML = `<p style="padding:10px;color:var(--chalk-dim)">Sem dados de jogadores para ${timeNome}.</p>`; return; }
+    const estJog = window._slEstJog || 'mediaDesarmes';
+    const rotJog = { mediaDesarmes:'🛡️ Desarmes', mediaChutes:'🎯 Chutes', mediaChutesGol:'⚽ Chutes a gol', mediaPasses:'🔄 Passes' };
+    const lista = [...r.jogadores].filter(j => j[estJog]!=null).sort((a,b)=>(b[estJog]||0)-(a[estJog]||0)).slice(0,15);
+    alvo.innerHTML = `
+      <div style="margin-top:16px;border-top:1px solid var(--linha);padding-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <h4 style="margin:0">👤 Jogadores do ${timeNome}</h4>
+          <label style="font-size:12.5px;color:var(--chalk-dim)">Por:
+            <select id="sl-est-jog" style="width:auto;padding:3px 6px" onchange="window._slEstJog=this.value;verJogadoresTime('${timeNome.replace(/'/g,String.fromCharCode(92,39))}')">
+              <option value="mediaDesarmes"${estJog==='mediaDesarmes'?' selected':''}>🛡️ Desarmes</option>
+              <option value="mediaChutes"${estJog==='mediaChutes'?' selected':''}>🎯 Chutes</option>
+              <option value="mediaChutesGol"${estJog==='mediaChutesGol'?' selected':''}>⚽ Chutes a gol</option>
+              <option value="mediaPasses"${estJog==='mediaPasses'?' selected':''}>🔄 Passes</option>
+            </select>
+          </label>
+        </div>
+        <table style="width:100%;font-size:12.5px">
+          <tr><th style="text-align:left">#</th><th style="text-align:left">Jogador</th><th style="text-align:center">Posição</th><th style="text-align:center">Jogos</th><th style="text-align:center">${rotJog[estJog]} (média)</th><th style="text-align:center">Total</th></tr>
+          ${lista.map((j,i)=>`<tr>
+            <td>${i+1}º</td>
+            <td style="text-align:left"><b>${j.nome}</b></td>
+            <td style="text-align:center">${traduzPos(j.posicao)}</td>
+            <td style="text-align:center">${j.jogos}</td>
+            <td style="text-align:center"><b style="color:var(--amber)">${j[estJog]}</b></td>
+            <td style="text-align:center;color:var(--chalk-dim)">${j[estJog.replace('media','').toLowerCase()==='desarmes'?'desarmes':estJog==='mediaChutes'?'chutes':estJog==='mediaChutesGol'?'chutesGol':'passes']}</td>
+          </tr>`).join('')}
+        </table>
+      </div>`;
+  }catch(e){ alvo.innerHTML = '<p style="padding:10px;color:var(--red)">Erro: '+e.message+'</p>'; }
+}
+window.verJogadoresTime = verJogadoresTime;
+
+function traduzPos(p){
+  const m = { 'G':'Goleiro','D':'Zagueiro','M':'Meia','F':'Atacante' };
+  return m[p] || p || '—';
+}
+window.traduzPos = traduzPos;
+
 if ($('btn-sl-carregar')) $('btn-sl-carregar').addEventListener('click', carregarStatsLiga);
-document.addEventListener('change', e => { if (e.target?.id === 'sl-ordem') renderStatsLiga(); });
+document.addEventListener('change', e => {
+  if (e.target?.id === 'sl-ordem') renderStatsLiga();
+  if (e.target?.id === 'sl-liga') lerStatsLiga();
+});
 
 </script>
 </body>
