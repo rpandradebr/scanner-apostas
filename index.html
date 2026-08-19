@@ -766,6 +766,7 @@
         </optgroup>
       </select>
       <button class="acao" id="btn-sl-carregar">📥 Carregar da API</button>
+      <button class="mini" id="btn-sl-resetar" style="border-color:var(--red);color:var(--red)" title="Apaga os dados salvos desta liga e busca tudo de novo da API (use quando adicionar estatísticas novas)">🔄 Refazer do zero</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
         <select id="sl-modo" style="width:auto;padding:4px 8px">
           <option value="faz">⚔️ O que o time FAZ</option>
@@ -1031,7 +1032,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.95";
+const APP_VERSAO = "v3.96";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5187,6 +5188,19 @@ async function carregarStatsLiga(){
 }
 window.carregarStatsLiga = carregarStatsLiga;
 
+async function refazerStatsLiga(){
+  const liga = $('sl-liga').value;
+  const nomeLiga = $('sl-liga').selectedOptions[0].text;
+  if (!confirm(`Refazer do zero as estatísticas de ${nomeLiga}?\n\nIsso apaga os dados salvos e busca tudo de novo da API (demora e gasta requisições). Use quando quiser atualizar ou pegar estatísticas novas como "o que o time cede".`)) return;
+  $('sl-status').textContent = '🗑️ Apagando dados antigos...';
+  try{
+    await chamarEdge({ acao:'stats_liga_resetar', liga });
+    $('sl-status').textContent = '✅ Dados apagados. Iniciando recarga...';
+    await carregarStatsLiga();
+  }catch(e){ $('sl-status').textContent = 'Erro: '+e.message; }
+}
+window.refazerStatsLiga = refazerStatsLiga;
+
 function renderStatsLiga(){
   if (!_slDados?.times?.length) return;
   const estBase = $('sl-ordem').value;
@@ -5300,6 +5314,7 @@ function traduzPos(p){
 window.traduzPos = traduzPos;
 
 if ($('btn-sl-carregar')) $('btn-sl-carregar').addEventListener('click', carregarStatsLiga);
+if ($('btn-sl-resetar')) $('btn-sl-resetar').addEventListener('click', refazerStatsLiga);
 document.addEventListener('change', e => {
   if (e.target?.id === 'sl-ordem' || e.target?.id === 'sl-modo') renderStatsLiga();
   if (e.target?.id === 'sl-liga') lerStatsLiga();
