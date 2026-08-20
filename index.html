@@ -1032,7 +1032,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.96";
+const APP_VERSAO = "v3.98";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3406,16 +3406,16 @@ $('btn-rankear-es').addEventListener('click', async () => {
     try{
       for (let i=0; i<listaTimes.length; i++){
         const t = listaTimes[i];
-        $('es-status').textContent = `⏳ Calculando médias ${i+1}/${listaTimes.length} — ${t.nome}…`;
+        $('es-status').textContent = `⏳ Lendo médias ${i+1}/${listaTimes.length} — ${t.nome}…`;
         let media = null;
         try{
+          // usa SEMPRE o dado salvo no banco (não rebusca por tempo).
+          // atualização só acontece quando você clica em "Popular com uma liga".
           const { data } = await db.from('stats_times').select('*').eq('time_id', t.id).limit(1);
-          if (data?.length && (Date.now() - new Date(data[0].atualizado_em).getTime()) < 86400000) media = data[0];
+          if (data?.length) media = data[0];
         } catch(_){}
-        if (!media){
-          const r = await chamarEdge({ acao:'stats_time', time_id: t.id, liga: t.liga, nome: t.nome, n: 10 });
-          if (r.ok) media = r.registro;
-        }
+        // NÃO busca da API aqui — carregar rankings nunca gasta requisição.
+        // (times sem dado salvo simplesmente não aparecem até você popular a liga)
         if (media && media[campo] != null){
           linhas.push({ nome: t.nome, liga: t.liga, valor: Number(media[campo]), amostra: media.jogos_amostra });
         }
@@ -4955,51 +4955,81 @@ function abrirPopularEspeciais(){
   p.innerHTML = `
     <b style="color:var(--amber)">➕ Popular estatísticas de uma liga</b>
     <p style="font-size:12.5px;color:var(--chalk-dim);margin:8px 0">
-      Escolha uma data com jogos e o sistema busca as estatísticas (chutes, faltas, cartões, escanteios, desarmes) dos times daquele dia. <b>Só funciona bem com grandes ligas</b> (Premier, La Liga, Bundesliga, Serie A, Ligue 1, Brasileirão) — as menores não têm todos os dados. Cada time gasta ~1 requisição.
+      Escolha <b>uma liga</b> e o sistema busca as estatísticas (chutes, faltas, cartões, escanteios, desarmes) dos times dela na temporada atual. Assim você controla o consumo: popula só a liga que quer, quando quer. <b>Cada time gasta ~21 requisições</b> (busca os últimos 10 jogos de cada um). Uma liga de 20 times ≈ 420 requisições. Fica salvo no banco.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input type="date" id="esp-pop-data" style="width:auto;padding:5px 8px">
-      <label style="display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--chalk-dim)">
-        <input type="checkbox" id="esp-pop-so-grandes" style="width:auto" checked> Só grandes ligas (recomendado)
-      </label>
+      <select id="esp-pop-liga" style="width:auto;min-width:240px;padding:6px 8px">
+        <optgroup label="Brasil">
+          <option value="71">Brasileirão Série A</option>
+          <option value="72">Brasileirão Série B</option>
+          <option value="73">Copa do Brasil</option>
+        </optgroup>
+        <optgroup label="Inglaterra">
+          <option value="39">Premier League</option>
+          <option value="40">Championship</option>
+        </optgroup>
+        <optgroup label="Europa - nacionais">
+          <option value="140">La Liga (Espanha)</option>
+          <option value="78">Bundesliga (Alemanha)</option>
+          <option value="79">Bundesliga 2 (Alemanha)</option>
+          <option value="61">Ligue 1 (França)</option>
+          <option value="135">Serie A (Itália)</option>
+          <option value="88">Eredivisie (Países Baixos)</option>
+          <option value="94">Primeira Liga (Portugal)</option>
+        </optgroup>
+        <optgroup label="Continentais">
+          <option value="2">Champions League</option>
+          <option value="3">Europa League</option>
+          <option value="848">Conference League</option>
+          <option value="13">Copa Libertadores</option>
+          <option value="11">Copa Sul-Americana</option>
+        </optgroup>
+        <optgroup label="Outras">
+          <option value="253">MLS (EUA)</option>
+          <option value="128">Liga Profesional (Argentina)</option>
+          <option value="307">Pro League (Arábia Saudita)</option>
+        </optgroup>
+      </select>
       <button class="acao" id="btn-exec-popular">Buscar estatísticas</button>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--chalk-dim);margin-top:8px;cursor:pointer">
+      <input type="checkbox" id="esp-pop-forcar" style="width:auto"> Forçar atualização (rebusca mesmo os já salvos — use para dados mais frescos)
+    </label>
     <div id="esp-pop-status" style="margin-top:10px;font-size:12.5px;color:var(--chalk-dim)"></div>`;
-  const hoje = new Date().toISOString().slice(0,10);
-  if ($('esp-pop-data')) $('esp-pop-data').value = hoje;
   if ($('btn-exec-popular')) $('btn-exec-popular').addEventListener('click', executarPopular);
 }
 window.abrirPopularEspeciais = abrirPopularEspeciais;
 
 async function executarPopular(){
-  const data = $('esp-pop-data').value;
-  const soGrandes = $('esp-pop-so-grandes').checked;
+  const ligaId = $('esp-pop-liga').value;
+  const nomeLiga = $('esp-pop-liga').selectedOptions[0].text;
   const st = $('esp-pop-status');
   const btn = $('btn-exec-popular'); btn.disabled = true;
-  st.textContent = '⏳ Carregando grade do dia...';
+  st.textContent = `⏳ Buscando os times do ${nomeLiga} (temporada atual)...`;
   try{
-    const rg = await chamarEdge({ acao:'grade', data });
-    let jogos = rg.jogos || [];
-    if (soGrandes) jogos = jogos.filter(j => GRANDES_LIGAS.some(g => (j.liga||'').includes(g)));
-    if (!jogos.length){ st.textContent = '❌ Nenhum jogo de grande liga nessa data. Tente outra data ou desmarque "só grandes ligas".'; btn.disabled=false; return; }
-    // times únicos (com id)
-    const timesMap = {};
-    jogos.forEach(j => {
-      if (j.mandante_id) timesMap[j.mandante_id] = { id:j.mandante_id, nome:j.mandante, liga:j.liga };
-      if (j.visitante_id) timesMap[j.visitante_id] = { id:j.visitante_id, nome:j.visitante, liga:j.liga };
-    });
-    const times = Object.values(timesMap);
-    if (!times.length){ st.textContent = '❌ Sem times com ID nessa data.'; btn.disabled=false; return; }
-    let ok = 0;
+    // pega os times da liga na temporada atual (1 requisição)
+    const rt = await chamarEdge({ acao:'times_da_liga', liga: ligaId });
+    const times = rt.times || [];
+    if (!times.length){ st.textContent = `❌ Nenhum time encontrado para ${nomeLiga}. A temporada pode não ter começado.`; btn.disabled=false; return; }
+    if (!confirm(`${nomeLiga} tem ${times.length} times.\n\nIsso vai gastar até ~${times.length*21} requisições (busca os últimos 10 jogos de cada time). Os que já estão salvos e recentes não são rebuscados.\n\nContinuar?`)){ btn.disabled=false; st.textContent=''; return; }
+    const forcar = $('esp-pop-forcar') ? $('esp-pop-forcar').checked : false;
+    let ok = 0, pulados = 0;
     for (let i=0;i<times.length;i++){
       const t = times[i];
       st.textContent = `⏳ ${i+1}/${times.length} — ${t.nome}...`;
+      // se já tem dado salvo de menos de 7 dias, pula (não gasta requisição) — a menos que force
+      if (!forcar){
+        try{
+          const { data: ex } = await db.from('stats_times').select('atualizado_em').eq('time_id', t.id).limit(1);
+          if (ex?.length && (Date.now() - new Date(ex[0].atualizado_em).getTime()) < 7*86400000){ pulados++; continue; }
+        }catch(_){}
+      }
       try{
-        const r = await chamarEdge({ acao:'stats_time', time_id:t.id, liga:t.liga, nome:t.nome, n:10 });
+        const r = await chamarEdge({ acao:'stats_time', time_id:t.id, liga:t.liga||nomeLiga, nome:t.nome, n:10 });
         if (r.ok) ok++;
       }catch(_){}
     }
-    st.innerHTML = `✅ Pronto! ${ok} times com estatísticas salvas. Feche este painel e clique em "Carregar rankings".`;
+    st.innerHTML = `✅ Pronto! ${ok} times atualizados${pulados>0?`, ${pulados} já estavam salvos (não gastaram requisição)`:''}. Feche este painel e clique em "Carregar rankings".`;
     _espData = []; // força recarregar
   }catch(e){ st.textContent = '❌ Erro: '+e.message; }
   finally{ btn.disabled = false; }
