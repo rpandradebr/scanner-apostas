@@ -334,9 +334,13 @@
     </p>
     <div class="linha c3">
       <div><label for="fav-data">Data</label><input type="date" id="fav-data"></div>
+      <div><label for="fav-data-ate">Até (opcional)</label><input type="date" id="fav-data-ate" title="Intervalo de dias"></div>
       <div style="align-self:end"><button class="acao" id="btn-odds">Buscar odds do dia</button></div>
       <div style="align-self:end;font-size:13px;color:var(--chalk-dim)" id="fav-status"></div>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="fav-principais" style="width:auto"> ⭐ Só minhas ligas principais
+    </label>
     <div id="fav-aviso"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px">
       <button class="mini" id="sub-vencedor" style="border-color:var(--amber);color:var(--amber)">🏆 Mercado de vencedor</button>
@@ -356,12 +360,16 @@
     </p>
     <div class="linha c3">
       <div><label for="su-data">Data</label><input type="date" id="su-data"></div>
+      <div><label for="su-data-ate">Até (opcional)</label><input type="date" id="su-data-ate" title="Preencha para analisar um intervalo de dias (lê do banco os já salvos)"></div>
       <div><label for="su-corte">Nota mínima</label>
         <select id="su-corte"><option value="6.5">6.5 (padrão)</option><option value="6">6.0 (mais jogos)</option><option value="7.5">7.5 (só a nata)</option></select></div>
       <div><label for="su-situacao">Situação</label>
         <select id="su-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="vivo_ocorrer">🔴 Ao vivo + a ocorrer (para live)</option><option value="aovivo">🔴 Só ao vivo</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
       <div style="align-self:end"><button class="acao" id="btn-sugestoes">Gerar sugestões</button></div>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="su-principais" style="width:auto"> ⭐ Só minhas ligas principais
+    </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
       <input type="checkbox" id="su-favoritas" style="width:auto"> Só minhas ligas favoritas
     </label>
@@ -382,6 +390,7 @@
     </p>
     <div class="linha c3">
       <div><label for="td-data">Data</label><input type="date" id="td-data"></div>
+      <div><label for="td-data-ate">Até (opcional)</label><input type="date" id="td-data-ate" title="Intervalo de dias"></div>
       <div><label for="td-mercado">Mercado</label>
         <select id="td-mercado">
           <option value="back_fav">Back Favorito</option>
@@ -399,6 +408,9 @@
       <div><label for="td-situacao">Situação</label>
         <select id="td-situacao"><option value="ocorrer">Jogos a ocorrer</option><option value="vivo_ocorrer">🔴 Ao vivo + a ocorrer (para live)</option><option value="aovivo">🔴 Só ao vivo</option><option value="ocorridos">Jogos já ocorridos</option><option value="todos">Todos</option></select></div>
     </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
+      <input type="checkbox" id="td-principais" style="width:auto"> ⭐ Só minhas ligas principais
+    </label>
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:10px">
       <input type="checkbox" id="td-favoritas" style="width:auto"> Só minhas ligas favoritas (marque-as na aba 📊 Estatísticas)
     </label>
@@ -846,6 +858,9 @@
         Liga:
         <select id="esp-liga" style="width:auto;padding:4px 8px"><option value="">Todas</option></select>
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="esp-principais" style="width:auto"> ⭐ Só principais
+      </label>
     </div>
     <div id="esp-popular-painel" style="display:none;background:var(--pitch);border:1px solid var(--amber);border-radius:10px;padding:14px 16px;margin-bottom:14px"></div>
     <div id="especiais-conteudo"><p class="msg-vazia">Clique em "Carregar rankings" para ver os times por estatística.</p></div>
@@ -1050,10 +1065,18 @@ function filtraFavoritas(jogos, checkboxId){
   return jogos.filter(j => { const nome = norm(`${j.pais} — ${j.liga}`); return fav.some(f => { const [p,l]=f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l||nome.includes(l.trim())); }); });
 }
 
+// filtra só as ligas principais (quando o checkbox estiver marcado)
+function filtraPrincipais(jogos, checkboxId){
+  if (!$(checkboxId) || !$(checkboxId).checked) return jogos;
+  const principais = (typeof getLigasPrincipais==='function') ? getLigasPrincipais() : [];
+  if (!principais.length) return jogos;
+  return jogos.filter(j => principais.includes(`${j.pais} — ${j.liga}`));
+}
+
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.02";
+const APP_VERSAO = "v4.03";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2532,8 +2555,21 @@ $('btn-odds').addEventListener('click', async () => {
     }
     $('fav-status').textContent = `✅ ${total} jogos com odds.`;
     await carregarOddsMapa(data);
-    const rg = await chamarEdge({ acao:'grade', data });
-    favJogosComOdds = (rg.jogos ?? []).filter(j => oddsMap[j.fixture_id] && jogoValido(j));
+    const dataAteF = $('fav-data-ate') ? $('fav-data-ate').value : '';
+    let jogosBrutosF = [];
+    if (dataAteF && dataAteF > data){
+      const dias = listarDiasIntervalo(data, dataAteF, 31);
+      for (const d of dias){
+        const rgd = await chamarEdge({ acao:'grade', data: d });
+        jogosBrutosF.push(...(rgd.jogos ?? []));
+        await carregarOddsMapa(d);
+      }
+    } else {
+      const rg = await chamarEdge({ acao:'grade', data });
+      jogosBrutosF = rg.jogos ?? [];
+    }
+    window._favTodos = jogosBrutosF.filter(j => oddsMap[j.fixture_id] && jogoValido(j));
+    favJogosComOdds = filtraPrincipais(window._favTodos, 'fav-principais');
     desenharFavoritos(favJogosComOdds);
     desenharGols(favJogosComOdds);
   } catch(e){ aviso($('fav-aviso'), 'Falha: ' + e.message, 'erro'); }
@@ -2742,14 +2778,29 @@ window.trocaRanking = trocaRanking;
 async function gerarSugestoes(){
   const b = $('btn-sugestoes'); b.disabled = true;
   const data = $('su-data').value;
+  const dataAte = $('su-data-ate') ? $('su-data-ate').value : '';
   const corte = Number($('su-corte').value);
   aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
   try{
     const situSug = $('su-situacao') ? $('su-situacao').value : 'ocorrer';
     const querVivoSug = (situSug === 'aovivo' || situSug === 'vivo_ocorrer');
-    const rg = await chamarEdge(querVivoSug ? { acao:'grade', data, forcar: 1 } : { acao:'grade', data });
-    const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j)), 'su-situacao'), 'su-favoritas');
-    await carregarOddsMapa(data);
+    // se tem intervalo, busca vários dias; senão, um dia só
+    let jogosBrutos = [];
+    if (dataAte && dataAte > data){
+      const dias = listarDiasIntervalo(data, dataAte, 31);
+      $('su-aviso').innerHTML = `<div class="aviso">⏳ Buscando ${dias.length} dias...</div>`;
+      for (const d of dias){
+        const rgd = await chamarEdge({ acao:'grade', data: d });
+        jogosBrutos.push(...(rgd.jogos ?? []));
+        await carregarOddsMapa(d);
+      }
+      aviso($('su-aviso'), '');
+    } else {
+      const rg = await chamarEdge(querVivoSug ? { acao:'grade', data, forcar: 1 } : { acao:'grade', data });
+      jogosBrutos = rg.jogos ?? [];
+      await carregarOddsMapa(data);
+    }
+    const jogos = filtraPrincipais(filtraFavoritas(filtraSituacao(jogosBrutos.filter(j => jogoValido(j)), 'su-situacao'), 'su-favoritas'), 'su-principais');
     const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
     if (!comOdds.length){
       aviso($('su-aviso'), 'Sem odds carregadas — rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
@@ -3755,9 +3806,22 @@ $('btn-topdia').addEventListener('click', async () => {
     } else {
       // se o filtro inclui jogos ao vivo, força atualização da grade para pegar status atualizado
       const querVivo = (situ === 'aovivo' || situ === 'vivo_ocorrer');
-      const rg = await chamarEdge(querVivo ? { acao:'grade', data, forcar: 1 } : { acao:'grade', data });
-      const jogos = filtraFavoritas(filtraSituacao((rg.jogos ?? []).filter(j => jogoValido(j)), 'td-situacao'), 'td-favoritas');
-      await carregarOddsMapa(data);
+      const dataAteTd = $('td-data-ate') ? $('td-data-ate').value : '';
+      let jogosBrutosTd = [];
+      if (dataAteTd && dataAteTd > data){
+        const dias = listarDiasIntervalo(data, dataAteTd, 31);
+        $('td-status').textContent = `⏳ Buscando ${dias.length} dias...`;
+        for (const d of dias){
+          const rgd = await chamarEdge({ acao:'grade', data: d });
+          jogosBrutosTd.push(...(rgd.jogos ?? []));
+          await carregarOddsMapa(d);
+        }
+      } else {
+        const rg = await chamarEdge(querVivo ? { acao:'grade', data, forcar: 1 } : { acao:'grade', data });
+        jogosBrutosTd = rg.jogos ?? [];
+        await carregarOddsMapa(data);
+      }
+      const jogos = filtraPrincipais(filtraFavoritas(filtraSituacao(jogosBrutosTd.filter(j => jogoValido(j)), 'td-situacao'), 'td-favoritas'), 'td-principais');
       const saoPassados = situ === 'ocorridos';
       // jogos ocorridos frequentemente não têm mais odds (casas removem após o fim) —
       // então só exigimos odds para jogos a ocorrer; ocorridos usam histórico (Under/Over/BTTS funcionam sem odds)
@@ -4935,6 +4999,12 @@ function renderEspeciais(){
   const liga = $('esp-liga') ? $('esp-liga').value : '';
   let lista = _espData.filter(t => t[stat] != null);
   if (liga) lista = lista.filter(t => t.liga === liga);
+  // filtro "só principais": compara pelo nome da liga (parte após o "—")
+  if ($('esp-principais') && $('esp-principais').checked){
+    const principais = (typeof getLigasPrincipais==='function') ? getLigasPrincipais() : [];
+    const ligasPrin = principais.map(p => p.split(' — ').slice(1).join(' — ').toLowerCase());
+    lista = lista.filter(t => ligasPrin.some(lp => (t.liga||'').toLowerCase().includes(lp) || lp.includes((t.liga||'').toLowerCase())));
+  }
   if (!lista.length){ alvo.innerHTML = '<div class="aviso">Nenhum time com essa estatística disponível. Alguns dados (como desarmes e passes) só existem nas grandes ligas.</div>'; return; }
   lista.sort((a,b) => (b[stat]||0) - (a[stat]||0));
 
@@ -5061,7 +5131,7 @@ window.executarPopular = executarPopular;
 
 if ($('btn-gerar-especiais')) $('btn-gerar-especiais').addEventListener('click', gerarEspeciais);
 if ($('btn-popular-especiais')) $('btn-popular-especiais').addEventListener('click', abrirPopularEspeciais);
-document.addEventListener('change', e => { if (e.target?.id === 'esp-stat' || e.target?.id === 'esp-liga'){ if (_espData.length) renderEspeciais(); } });
+document.addEventListener('change', e => { if (e.target?.id === 'esp-stat' || e.target?.id === 'esp-liga' || e.target?.id === 'esp-principais'){ if (_espData.length) renderEspeciais(); } });
 
 
 
@@ -5412,6 +5482,36 @@ function getLigasPrincipais(){
   return [...LIGAS_PRINCIPAIS_PADRAO];
 }
 function setLigasPrincipais(arr){ localStorage.setItem('ligasPrincipais', JSON.stringify(arr)); }
+
+// lista as datas (YYYY-MM-DD) entre duas datas, com limite de dias
+function listarDiasIntervalo(de, ate, maxDias){
+  const dias = [];
+  const d1 = new Date(de+'T12:00:00'), d2 = new Date(ate+'T12:00:00');
+  let atual = d1;
+  while (atual <= d2 && dias.length < (maxDias||31)){
+    dias.push(atual.toISOString().slice(0,10));
+    atual = new Date(atual.getTime() + 86400000);
+  }
+  return dias;
+}
+window.listarDiasIntervalo = listarDiasIntervalo;
+
+// helper global: um jogo é de liga principal? (usado por várias abas)
+function ehLigaPrincipal(j){
+  const principais = getLigasPrincipais();
+  return principais.includes(`${j.pais} — ${j.liga}`);
+}
+window.ehLigaPrincipal = ehLigaPrincipal;
+// refiltra Favoritos ao marcar/desmarcar "só principais" (sem rebuscar da API)
+document.addEventListener('change', e => {
+  if (e.target?.id === 'fav-principais' && window._favTodos){
+    favJogosComOdds = filtraPrincipais(window._favTodos, 'fav-principais');
+    if (typeof desenharFavoritos === 'function'){ desenharFavoritos(favJogosComOdds); desenharGols(favJogosComOdds); }
+  }
+});
+// preferência do filtro "só principais" por aba (salva no localStorage)
+function getSoPrincipais(aba){ return localStorage.getItem('soPrincipais_'+aba) === '1'; }
+function setSoPrincipais(aba, v){ localStorage.setItem('soPrincipais_'+aba, v ? '1' : '0'); }
 
 let _prinJogos = [];
 async function carregarPrincipais(){
