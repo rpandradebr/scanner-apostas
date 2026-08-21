@@ -1102,7 +1102,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.06";
+const APP_VERSAO = "v4.07";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3979,9 +3979,9 @@ $('btn-topdia').addEventListener('click', async () => {
       }
       window._tdDebug = { noFiltro: comOdds.length, comHistorico: 0 };
       jogosComStats = [];
-      for (let i=0; i<comOdds.length; i+=4){
-        $('td-status').textContent = `⏳ Analisando ${Math.min(i+4,comOdds.length)}/${comOdds.length} jogos…`;
-        const leva = comOdds.slice(i, i+4);
+      for (let i=0; i<comOdds.length; i+=8){
+        $('td-status').textContent = `⏳ Analisando ${Math.min(i+8,comOdds.length)}/${comOdds.length} jogos…`;
+        const leva = comOdds.slice(i, i+8);
         const res = await Promise.all(leva.map(async j => {
           try{
             const [em, ev] = await Promise.all([
