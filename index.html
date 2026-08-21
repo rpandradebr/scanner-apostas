@@ -1053,7 +1053,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.01";
+const APP_VERSAO = "v4.02";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5387,15 +5387,27 @@ document.addEventListener('change', e => {
 // ==========================================================
 // lista inicial (as que já existiam como "grandes ligas") + você adiciona/remove
 const LIGAS_PRINCIPAIS_PADRAO = [
-  'Serie A','Serie B','Copa do Brasil','Premier League','Championship',
-  'La Liga','Bundesliga','Bundesliga 2','Ligue 1','Primeira Liga',
-  'Eredivisie','Liga Profesional Argentina','UEFA Champions League',
-  'UEFA Europa League','UEFA Europa Conference League','MLS'
+  'Brazil — Serie A','Brazil — Serie B','Brazil — Copa Do Brasil',
+  'England — Premier League','England — Championship',
+  'Spain — La Liga','Germany — Bundesliga','Germany — 2. Bundesliga',
+  'France — Ligue 1','Italy — Serie A','Portugal — Primeira Liga',
+  'Netherlands — Eredivisie','Argentina — Liga Profesional Argentina',
+  'World — UEFA Champions League','World — UEFA Europa League',
+  'World — UEFA Europa Conference League','USA — Major League Soccer'
 ];
 function getLigasPrincipais(){
   try{
     const salvo = localStorage.getItem('ligasPrincipais');
-    if (salvo) return JSON.parse(salvo);
+    if (salvo){
+      const arr = JSON.parse(salvo);
+      // se a config antiga não tem país (sem " — "), migra para o padrão novo
+      const temPais = arr.some(x => x.includes(' — '));
+      if (arr.length && !temPais){
+        setLigasPrincipais([...LIGAS_PRINCIPAIS_PADRAO]);
+        return [...LIGAS_PRINCIPAIS_PADRAO];
+      }
+      return arr;
+    }
   }catch(_){}
   return [...LIGAS_PRINCIPAIS_PADRAO];
 }
@@ -5413,7 +5425,7 @@ async function carregarPrincipais(){
     await carregarOddsMapa(data);
     const principais = getLigasPrincipais();
     // filtra só as ligas marcadas como principais
-    _prinJogos = todos.filter(j => principais.includes(j.liga));
+    _prinJogos = todos.filter(j => principais.includes(`${j.pais} — ${j.liga}`));
     desenharPrincipais();
     const totalLigas = [...new Set(_prinJogos.map(j=>j.liga))].length;
     $('prin-contador').textContent = `${_prinJogos.length} jogos · ${totalLigas} ligas principais (de ${todos.length} jogos no total)`;
@@ -5462,7 +5474,8 @@ async function abrirConfigPrincipais(){
   try{
     const data = $('prin-data').value || new Date().toISOString().slice(0,10);
     const r = await chamarEdge({ acao:'grade', data });
-    ligasDisponiveis = [...new Set((r.jogos||[]).map(j => j.liga).filter(Boolean))];
+    // guarda "País — Liga" para diferenciar ligas homônimas
+    ligasDisponiveis = [...new Set((r.jogos||[]).map(j => `${j.pais} — ${j.liga}`).filter(x => x && !x.startsWith('undefined')))];
   }catch(_){}
   const principais = getLigasPrincipais();
   // junta as disponíveis com as já marcadas (pra não perder nenhuma) e as padrão
@@ -5470,21 +5483,26 @@ async function abrirConfigPrincipais(){
   p.innerHTML = `
     <b style="color:var(--amber)">⚙️ Configurar ligas principais</b>
     <p style="font-size:12.5px;color:var(--chalk-dim);margin:8px 0">
-      Marque as ligas que você quer ver na aba Ligas Principais. Fica salvo automaticamente. As ligas do dia atual aparecem aqui; digite abaixo para adicionar uma que não está na lista.
+      Marque as ligas que você quer ver. Cada uma mostra o <b>país</b> ao lado, para diferenciar ligas com o mesmo nome (ex: Premier League da Inglaterra vs de outros países). Fica salvo automaticamente.
     </p>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input type="text" id="prin-add-liga" placeholder="Adicionar liga pelo nome exato" style="flex:1;min-width:200px;padding:6px 8px">
+      <input type="text" id="prin-add-liga" placeholder="Adicionar no formato: País — Liga" style="flex:1;min-width:200px;padding:6px 8px">
       <button class="mini" onclick="adicionarLigaPrincipal()">➕ Adicionar</button>
       <button class="mini" onclick="marcarTodasPrincipais(true)">Marcar todas</button>
       <button class="mini" onclick="marcarTodasPrincipais(false)">Desmarcar todas</button>
       <button class="mini" onclick="restaurarLigasPadrao()" style="border-color:var(--amber);color:var(--amber)">↩️ Restaurar padrão</button>
     </div>
-    <div id="prin-lista-checks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;max-height:340px;overflow-y:auto">
-      ${todas.map(liga => `
+    <div id="prin-lista-checks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;max-height:340px;overflow-y:auto">
+      ${todas.map(item => {
+        const partes = item.split(' — ');
+        const pais = partes.length > 1 ? partes[0] : '';
+        const liga = partes.length > 1 ? partes.slice(1).join(' — ') : item;
+        return `
         <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:5px 8px;background:var(--card);border-radius:6px">
-          <input type="checkbox" style="width:auto" value="${liga.replace(/"/g,'&quot;')}" ${principais.includes(liga)?'checked':''} onchange="togglePrincipal(this)">
-          ${liga}
-        </label>`).join('')}
+          <input type="checkbox" style="width:auto" value="${item.replace(/"/g,'&quot;')}" ${principais.includes(item)?'checked':''} onchange="togglePrincipal(this)">
+          <span>${liga}${pais?` <span style="font-size:11px;color:var(--amber)">· ${pais}</span>`:''}</span>
+        </label>`;
+      }).join('')}
     </div>
     <p style="font-size:12px;color:var(--green);margin-top:10px" id="prin-config-status">✅ ${principais.length} ligas marcadas como principais</p>`;
 }
