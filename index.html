@@ -320,7 +320,7 @@
   <section id="aba-sonota10">
     <h2>🔟 Só Nota 10</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
-      Seu funil de alta tendência. Aqui ficam reunidos <b>os jogos de nota mais alta (9.5 a 10)</b> que aparecem quando você gera as Sugestões, o Top do dia, ou que o bot alerta. Filtre por fonte, mercado, nota e horário. Gere as outras abas normalmente e os jogos de nota alta caem aqui automaticamente.
+      Seu funil de análise. Reúne <b>as 5 maiores notas de cada mercado</b> (Over 0.5, Under 3.5, Lay 1x0, Lay 0x1, Lay Zebra, etc.) das Sugestões e do Top do dia. Assim cada mercado sempre tem seus melhores jogos, mesmo sem nota 10. Filtre por fonte, mercado, nota e horário.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <button class="acao" id="btn-n10-atualizar">🔄 Atualizar lista</button>
@@ -345,6 +345,8 @@
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Nota mín:
         <select id="n10-nota-min" style="width:auto;padding:4px 8px">
+          <option value="0">Todas (top 5/mercado)</option>
+          <option value="9">9.0+</option>
           <option value="9.5">9.5+</option>
           <option value="9.8">9.8+</option>
           <option value="9.9">9.9+</option>
@@ -1156,7 +1158,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.10";
+const APP_VERSAO = "v4.11";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3032,13 +3034,19 @@ async function gerarSugestoes(){
 
     desenharRankingsSug();
     sugestoes.sort((a,b2) => b2.nota - a.nota);
-    // alimenta o funil "Só Nota 10" com os jogos nota alta (9.5+)
-    sugestoes.filter(s => s.nota >= 9.5).forEach(s => {
-      if (typeof addNota10 === 'function') addNota10({
-        mandante: s.j.mandante, visitante: s.j.visitante, liga: s.j.liga, pais: s.j.pais,
-        mercado: s.mercado, nota: s.nota, hora: s.j.hora, data: s.j.data_jogo || $('su-data').value, origem: 'sugestoes'
+    // alimenta o funil "Só Nota 10": top 5 por mercado (todos os mercados de todos os jogos)
+    if (typeof coletarTop5PorMercado === 'function'){
+      const todosMercados = [];
+      analisadosSug.forEach(c => {
+        const arr = pontuarJogo(c, true) || [];
+        arr.forEach(nt => todosMercados.push({
+          mandante: c.j.mandante, visitante: c.j.visitante, liga: c.j.liga, pais: c.j.pais,
+          mercado: nt.mercado, nota: +nt.nota.toFixed(1), hora: c.j.hora,
+          data: c.j.data_jogo || $('su-data').value, origem: 'sugestoes'
+        }));
       });
-    });
+      coletarTop5PorMercado(todosMercados);
+    }
     if (!sugestoes.length){
       aviso($('su-aviso'), `Nenhum jogo atingiu a nota mínima ${corte} hoje. Dia fraco é dia de proteger banca.`, 'erro');
     } else {
@@ -3078,7 +3086,7 @@ async function gerarSugestoes(){
   finally{ b.disabled = false; }
 }
 
-function pontuarJogo(c){
+function pontuarJogo(c, todos){
   const { o, em, ev } = c;
   const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
   const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
@@ -3103,9 +3111,9 @@ function pontuarJogo(c){
   if (bttsComb >= 68 && mediaJogo >= 2.9)
     notas.push({ mercado:'LAY 1x0', nota: Math.min(10, 6 + (bttsComb-68)/8),
       motivo:`Ambas marcam em ${Math.round(bttsComb)}% dos jogos das duas e média projetada de ${mediaJogo.toFixed(1)} gols — 1x0 seco é minoria.` });
-  if (!notas.length) return null;
+  if (!notas.length) return todos ? [] : null;
   notas.sort((a,b2) => b2.nota - a.nota);
-  return notas[0];
+  return todos ? notas : notas[0];
 }
 
 listarAnalises();
@@ -4079,14 +4087,15 @@ $('btn-topdia').addEventListener('click', async () => {
       });
     }
     pontuados.sort((a,c) => c.nota - a.nota);
-    // alimenta o funil "Só Nota 10" com os jogos nota alta (9.5+ na escala 0-10)
+    // alimenta o funil "Só Nota 10": as 5 maiores notas deste mercado
     const mercadoNome = $('td-mercado').selectedOptions[0] ? $('td-mercado').selectedOptions[0].text : mercado;
-    pontuados.filter(p => (p.nota/10) >= 9.5).forEach(p => {
-      if (typeof addNota10 === 'function') addNota10({
+    if (typeof addNota10 === 'function'){
+      pontuados.slice(0, 5).forEach(p => addNota10({
         mandante: p.j.mandante, visitante: p.j.visitante, liga: p.j.liga, pais: p.j.pais,
-        mercado: mercadoNome, nota: +(p.nota/10).toFixed(1), hora: p.j.hora, data: p.j.data_jogo || $('td-data').value, origem: 'topdia'
-      });
-    });
+        mercado: mercadoNome, nota: +(p.nota/10).toFixed(1), hora: p.j.hora,
+        data: p.j.data_jogo || $('td-data').value, origem: 'topdia'
+      }));
+    }
     const top = pontuados.slice(0, 10);
     if (!top.length){
       const situTxt = situ === 'ocorridos' ? 'já ocorridos' : situ === 'ocorrer' ? 'a ocorrer' : '';
@@ -5874,16 +5883,15 @@ function getNota10(){
 }
 function setNota10(arr){ localStorage.setItem('sonota10', JSON.stringify(arr)); }
 
-// adiciona um jogo nota alta (9.5+) ao funil (evita duplicar mesmo jogo+mercado)
+// adiciona um jogo ao funil (evita duplicar mesmo jogo+mercado, mantém a maior nota)
 function addNota10(item){
   // item: { mandante, visitante, liga, pais, mercado, nota, hora, data, origem }
-  if (!item || Number(item.nota) < 9.5) return; // pega 9.5, 9.8, 9.9, 10
+  if (!item || item.nota == null) return;
   const lista = getNota10();
   const chave = `${item.mandante}|${item.visitante}|${item.mercado}|${item.data||''}`;
   const existe = lista.find(x => `${x.mandante}|${x.visitante}|${x.mercado}|${x.data||''}` === chave);
   if (existe){
-    // se já existe, mantém a maior nota
-    if (Number(item.nota) > Number(existe.nota)) existe.nota = item.nota;
+    if (Number(item.nota) > Number(existe.nota)) existe.nota = Number(item.nota);
     setNota10(lista);
     return;
   }
@@ -5891,6 +5899,20 @@ function addNota10(item){
   setNota10(lista);
 }
 window.addNota10 = addNota10;
+
+// coleta as 5 maiores notas POR MERCADO de uma lista de itens {mercado, nota, ...}
+function coletarTop5PorMercado(itens){
+  const porMercado = {};
+  itens.forEach(it => {
+    if (it.nota == null) return;
+    (porMercado[it.mercado] = porMercado[it.mercado] || []).push(it);
+  });
+  Object.values(porMercado).forEach(arr => {
+    arr.sort((a,b) => Number(b.nota) - Number(a.nota));
+    arr.slice(0, 5).forEach(it => addNota10(it)); // top 5 de cada mercado
+  });
+}
+window.coletarTop5PorMercado = coletarTop5PorMercado;
 
 // renderiza a lista
 function renderNota10(){
@@ -5909,16 +5931,16 @@ function renderNota10(){
   // aplica filtros
   const fFonte = $('n10-fonte') ? $('n10-fonte').value : '';
   const fMerc = $('n10-mercado') ? $('n10-mercado').value : '';
-  const fNota = $('n10-nota-min') ? Number($('n10-nota-min').value) : 9.5;
+  const fNota = $('n10-nota-min') ? Number($('n10-nota-min').value) : 0;
   const fDe = $('n10-hora-de') ? $('n10-hora-de').value : '';
   const fAte = $('n10-hora-ate') ? $('n10-hora-ate').value : '';
   if (fFonte) lista = lista.filter(x => x.origem === fFonte);
   if (fMerc) lista = lista.filter(x => x.mercado === fMerc);
   if (fNota === 10) lista = lista.filter(x => Number(x.nota) >= 10);
-  else lista = lista.filter(x => Number(x.nota) >= fNota);
+  else if (fNota > 0) lista = lista.filter(x => Number(x.nota) >= fNota);
   if (fDe) lista = lista.filter(x => (x.hora||'') >= fDe);
   if (fAte) lista = lista.filter(x => (x.hora||'') <= fAte);
-  const temFiltro = fFonte||fMerc||fDe||fAte||fNota>9.5;
+  const temFiltro = fFonte||fMerc||fDe||fAte||fNota>0;
   if (!lista.length){
     alvo.innerHTML = totalGeral > 0
       ? '<p style="color:var(--chalk-dim);padding:16px;text-align:center">Nenhum jogo com esses filtros. <a href="#" onclick="limparFiltrosN10();return false" style="color:var(--amber)">Limpar filtros</a></p>'
@@ -5961,7 +5983,7 @@ window.renderNota10 = renderNota10;
 
 function limparFiltrosN10(){
   ['n10-fonte','n10-mercado','n10-hora-de','n10-hora-ate'].forEach(id => { if ($(id)) $(id).value=''; });
-  if ($('n10-nota-min')) $('n10-nota-min').value = '9.5';
+  if ($('n10-nota-min')) $('n10-nota-min').value = '0';
   renderNota10();
 }
 window.limparFiltrosN10 = limparFiltrosN10;
