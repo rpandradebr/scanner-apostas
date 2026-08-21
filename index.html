@@ -1076,7 +1076,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.03";
+const APP_VERSAO = "v4.04";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1692,7 +1692,9 @@ async function fichaJogo(idx){
         ${(j.fixture_id > 0 && ['FT','AET','PEN','1H','2H','HT','ET','P','BT','LIVE','INT'].includes(j.status)) ? `<button class="mini" onclick="estatsDetalhadas('${j.fixture_id}', this)">📊 Estatísticas detalhadas (chutes, cartões, desarmes)${['1H','2H','HT','ET','P','BT','LIVE','INT'].includes(j.status)?' 🔴 ao vivo':''}</button>` : ''}
         <button class="mini" onclick="verArbitro('${j.fixture_id}', this)">⚖️ Média do árbitro</button>
         <button class="mini" onclick="abrirAnaliseCompleta(${idx})" style="border-color:var(--amber);color:var(--amber)">🔬 Análise completa</button>
+        <button class="mini" onclick="analisarComIA('${j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)" style="border-color:#8e7cff;color:#8e7cff">🤖 Analisar com IA (Gemini)</button>
       </div>
+      <div id="ficha-ia-resultado"></div>
       <div id="ficha-estats"></div>
       <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">As estatísticas detalhadas (chutes, cartões, desarmes, escanteios, notas, minuto dos gols) são buscadas sob demanda — 3 requisições por jogo. No plano grátis use com parcimônia; no Pro, à vontade.</p>
     </div>`;
@@ -2292,6 +2294,7 @@ APÓS COLETAR TODA A ANÁLISE NECESSÁRIA DESSE CONFRONTO, ME ENTREGUE POR FAVOR
 2- Quantos gols podem vir nesse jogo?
 3- Qual o mercado mais seguro para apostar?
 4- De 0 a 10 qual a sua confiança?
+5- AVALIAÇÃO DOS MERCADOS DE EXCHANGE (obrigatório): analise especificamente cada um destes mercados e diga se é VIÁVEL ou EVITAR, justificando: Lay 1x0, Lay 0x1, Over/Under gols (indique a linha), e Lay Zebra (lay no azarão). Indique quais valem a pena e quais evitar.
 ⚠️ Não fique em cima do muro, justifique cada conclusão`;
 }
 async function copiarPrompt(mandante, visitante, liga, botao){
@@ -2302,6 +2305,53 @@ async function copiarPrompt(mandante, visitante, liga, botao){
   } catch(_){ alert(montarPrompt(mandante, visitante, liga)); }
 }
 window.copiarPrompt = copiarPrompt;
+
+// ---- Análise com IA (Gemini) direto no site ----
+const URL_ANALISE_IA = SUPABASE_URL + '/functions/v1/analise-ia';
+async function analisarComIA(mandante, visitante, liga, botao){
+  const alvo = $('ficha-ia-resultado');
+  if (!alvo) return;
+  const textoOriginal = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = '⏳ Analisando...';
+  alvo.innerHTML = `<div style="background:var(--card);border:1px solid #8e7cff;border-radius:10px;padding:16px;margin-top:12px">
+    <p style="color:#8e7cff;margin:0"><b>🤖 Gemini analisando ${mandante} x ${visitante}...</b></p>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin:8px 0 0">Isso leva alguns segundos. A IA está montando a análise dos 13 pontos com foco nos mercados de exchange.</p>
+  </div>`;
+  alvo.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  try{
+    const prompt = montarPrompt(mandante, visitante, liga);
+    const r = await fetch(URL_ANALISE_IA, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await r.json();
+    if (!r.ok || data.erro){
+      alvo.innerHTML = `<div class="aviso erro" style="margin-top:12px">❌ ${data.erro || 'Erro na análise'}<br><small>Confira se a Edge "analise-ia" foi criada e se o secret GEMINI_API_KEY está configurado no Supabase.</small></div>`;
+      return;
+    }
+    // formata a resposta preservando quebras de linha
+    const analiseHtml = (data.analise || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+      .replace(/\n/g,'<br>');
+    alvo.innerHTML = `<div style="background:var(--card);border:1px solid #8e7cff;border-radius:10px;padding:16px;margin-top:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <b style="color:#8e7cff">🤖 Análise da IA — ${mandante} x ${visitante}</b>
+        <button class="mini" onclick="navigator.clipboard.writeText(this.parentElement.parentElement.querySelector('.ia-texto').innerText);this.textContent='✅ Copiado'" style="border-color:#8e7cff;color:#8e7cff">📋 Copiar</button>
+      </div>
+      <div class="ia-texto" style="font-size:13.5px;line-height:1.6">${analiseHtml}</div>
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px;border-top:1px solid var(--linha);padding-top:8px">⚠️ Análise gerada por IA com base no conhecimento do modelo. A IA não acessa dados ao vivo (escalação do dia, lesões de última hora). Sempre confirme a escalação oficial ~1h antes e valide a odd na exchange.</p>
+    </div>`;
+  }catch(e){
+    alvo.innerHTML = `<div class="aviso erro" style="margin-top:12px">❌ Falha: ${e.message}</div>`;
+  }finally{
+    botao.disabled = false;
+    botao.textContent = textoOriginal;
+  }
+}
+window.analisarComIA = analisarComIA;
 
 async function analisarRodada(idx){
   const j = rodadaJogos[idx];
