@@ -1053,7 +1053,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.00";
+const APP_VERSAO = "v4.01";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5477,6 +5477,7 @@ async function abrirConfigPrincipais(){
       <button class="mini" onclick="adicionarLigaPrincipal()">➕ Adicionar</button>
       <button class="mini" onclick="marcarTodasPrincipais(true)">Marcar todas</button>
       <button class="mini" onclick="marcarTodasPrincipais(false)">Desmarcar todas</button>
+      <button class="mini" onclick="restaurarLigasPadrao()" style="border-color:var(--amber);color:var(--amber)">↩️ Restaurar padrão</button>
     </div>
     <div id="prin-lista-checks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;max-height:340px;overflow-y:auto">
       ${todas.map(liga => `
@@ -5509,6 +5510,13 @@ function adicionarLigaPrincipal(){
   abrirConfigPrincipais(); abrirConfigPrincipais(); // recarrega o painel
 }
 window.adicionarLigaPrincipal = adicionarLigaPrincipal;
+
+function restaurarLigasPadrao(){
+  if (!confirm('Restaurar a lista padrão de ligas principais? Isso substitui suas escolhas atuais pelas ligas padrão.')) return;
+  setLigasPrincipais([...LIGAS_PRINCIPAIS_PADRAO]);
+  abrirConfigPrincipais(); abrirConfigPrincipais(); // recarrega o painel mostrando as padrão marcadas
+}
+window.restaurarLigasPadrao = restaurarLigasPadrao;
 
 function marcarTodasPrincipais(marcar){
   const checks = document.querySelectorAll('#prin-lista-checks input[type=checkbox]');
