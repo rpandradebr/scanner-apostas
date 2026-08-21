@@ -320,7 +320,7 @@
   <section id="aba-sonota10">
     <h2>🔟 Só Nota 10</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
-      Seu funil de alta tendência. Aqui ficam reunidos <b>todos os jogos nota máxima (10)</b> que aparecem quando você gera as Sugestões, o Top do dia, ou que o bot alerta. Gere as outras abas normalmente e os nota 10 caem aqui automaticamente.
+      Seu funil de alta tendência. Aqui ficam reunidos <b>os jogos de nota mais alta (9.5 a 10)</b> que aparecem quando você gera as Sugestões, o Top do dia, ou que o bot alerta. Filtre por fonte, mercado, nota e horário. Gere as outras abas normalmente e os jogos de nota alta caem aqui automaticamente.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <button class="acao" id="btn-n10-atualizar">🔄 Atualizar lista</button>
@@ -339,6 +339,19 @@
         </select>
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Mercado:
+        <select id="n10-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Nota mín:
+        <select id="n10-nota-min" style="width:auto;padding:4px 8px">
+          <option value="9.5">9.5+</option>
+          <option value="9.8">9.8+</option>
+          <option value="9.9">9.9+</option>
+          <option value="10">Só 10</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Horário de:
         <input type="time" id="n10-hora-de" style="width:auto;padding:4px 6px">
       </label>
@@ -351,7 +364,7 @@
     <div id="n10-aviso"></div>
     <div id="n10-lista"></div>
     <div id="n10-vazia" style="display:none;color:var(--chalk-dim);padding:20px;text-align:center">
-      Nenhum jogo nota 10 ainda. Gere as <b>Sugestões do dia</b> ou o <b>Top do dia</b> — os jogos que baterem nota máxima aparecem aqui. Ou clique em "Puxar nota 10 do bot" para trazer os alertas máximos do bot.
+      Nenhum jogo de nota alta ainda. Gere as <b>Sugestões do dia</b> ou o <b>Top do dia</b> — os jogos que baterem nota 9.5 ou mais aparecem aqui. Ou clique em "Puxar nota 10 do bot" para trazer os alertas de nota alta do bot.
     </div>
   </section>
 
@@ -1143,7 +1156,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.09";
+const APP_VERSAO = "v4.10";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3019,11 +3032,11 @@ async function gerarSugestoes(){
 
     desenharRankingsSug();
     sugestoes.sort((a,b2) => b2.nota - a.nota);
-    // alimenta o funil "Só Nota 10" com os jogos nota máxima
-    sugestoes.filter(s => s.nota >= 10).forEach(s => {
+    // alimenta o funil "Só Nota 10" com os jogos nota alta (9.5+)
+    sugestoes.filter(s => s.nota >= 9.5).forEach(s => {
       if (typeof addNota10 === 'function') addNota10({
         mandante: s.j.mandante, visitante: s.j.visitante, liga: s.j.liga, pais: s.j.pais,
-        mercado: s.mercado, nota: 10, hora: s.j.hora, data: s.j.data_jogo || $('su-data').value, origem: 'sugestoes'
+        mercado: s.mercado, nota: s.nota, hora: s.j.hora, data: s.j.data_jogo || $('su-data').value, origem: 'sugestoes'
       });
     });
     if (!sugestoes.length){
@@ -4066,12 +4079,12 @@ $('btn-topdia').addEventListener('click', async () => {
       });
     }
     pontuados.sort((a,c) => c.nota - a.nota);
-    // alimenta o funil "Só Nota 10" com os jogos nota máxima
+    // alimenta o funil "Só Nota 10" com os jogos nota alta (9.5+ na escala 0-10)
     const mercadoNome = $('td-mercado').selectedOptions[0] ? $('td-mercado').selectedOptions[0].text : mercado;
-    pontuados.filter(p => p.nota >= 10).forEach(p => {
+    pontuados.filter(p => (p.nota/10) >= 9.5).forEach(p => {
       if (typeof addNota10 === 'function') addNota10({
         mandante: p.j.mandante, visitante: p.j.visitante, liga: p.j.liga, pais: p.j.pais,
-        mercado: mercadoNome, nota: 10, hora: p.j.hora, data: p.j.data_jogo || $('td-data').value, origem: 'topdia'
+        mercado: mercadoNome, nota: +(p.nota/10).toFixed(1), hora: p.j.hora, data: p.j.data_jogo || $('td-data').value, origem: 'topdia'
       });
     });
     const top = pontuados.slice(0, 10);
@@ -5861,14 +5874,20 @@ function getNota10(){
 }
 function setNota10(arr){ localStorage.setItem('sonota10', JSON.stringify(arr)); }
 
-// adiciona um jogo nota 10 ao funil (evita duplicar mesmo jogo+mercado)
+// adiciona um jogo nota alta (9.5+) ao funil (evita duplicar mesmo jogo+mercado)
 function addNota10(item){
   // item: { mandante, visitante, liga, pais, mercado, nota, hora, data, origem }
-  if (!item || Number(item.nota) < 10) return; // só nota máxima
+  if (!item || Number(item.nota) < 9.5) return; // pega 9.5, 9.8, 9.9, 10
   const lista = getNota10();
   const chave = `${item.mandante}|${item.visitante}|${item.mercado}|${item.data||''}`;
-  if (lista.some(x => `${x.mandante}|${x.visitante}|${x.mercado}|${x.data||''}` === chave)) return; // já existe
-  lista.push({ ...item, adicionado: new Date().toISOString() });
+  const existe = lista.find(x => `${x.mandante}|${x.visitante}|${x.mercado}|${x.data||''}` === chave);
+  if (existe){
+    // se já existe, mantém a maior nota
+    if (Number(item.nota) > Number(existe.nota)) existe.nota = item.nota;
+    setNota10(lista);
+    return;
+  }
+  lista.push({ ...item, nota: Number(item.nota), adicionado: new Date().toISOString() });
   setNota10(lista);
 }
 window.addNota10 = addNota10;
@@ -5879,45 +5898,60 @@ function renderNota10(){
   const alvo = $('n10-lista');
   const vazia = $('n10-vazia');
   const totalGeral = lista.length;
+  // popula o seletor de mercados (uma vez, com os mercados presentes)
+  const selM = $('n10-mercado');
+  if (selM){
+    const mercados = [...new Set(getNota10().map(x => x.mercado).filter(Boolean))].sort();
+    const atual = selM.value;
+    selM.innerHTML = '<option value="">Todos</option>' + mercados.map(m => `<option value="${m.replace(/"/g,'&quot;')}">${m}</option>`).join('');
+    selM.value = atual; // mantém a seleção
+  }
   // aplica filtros
   const fFonte = $('n10-fonte') ? $('n10-fonte').value : '';
+  const fMerc = $('n10-mercado') ? $('n10-mercado').value : '';
+  const fNota = $('n10-nota-min') ? Number($('n10-nota-min').value) : 9.5;
   const fDe = $('n10-hora-de') ? $('n10-hora-de').value : '';
   const fAte = $('n10-hora-ate') ? $('n10-hora-ate').value : '';
   if (fFonte) lista = lista.filter(x => x.origem === fFonte);
+  if (fMerc) lista = lista.filter(x => x.mercado === fMerc);
+  if (fNota === 10) lista = lista.filter(x => Number(x.nota) >= 10);
+  else lista = lista.filter(x => Number(x.nota) >= fNota);
   if (fDe) lista = lista.filter(x => (x.hora||'') >= fDe);
   if (fAte) lista = lista.filter(x => (x.hora||'') <= fAte);
+  const temFiltro = fFonte||fMerc||fDe||fAte||fNota>9.5;
   if (!lista.length){
     alvo.innerHTML = totalGeral > 0
-      ? '<p style="color:var(--chalk-dim);padding:16px;text-align:center">Nenhum jogo nota 10 com esses filtros. <a href="#" onclick="limparFiltrosN10();return false" style="color:var(--amber)">Limpar filtros</a></p>'
+      ? '<p style="color:var(--chalk-dim);padding:16px;text-align:center">Nenhum jogo com esses filtros. <a href="#" onclick="limparFiltrosN10();return false" style="color:var(--amber)">Limpar filtros</a></p>'
       : '';
     vazia.style.display = totalGeral > 0 ? 'none' : 'block';
     $('n10-contador').textContent = totalGeral > 0 ? `0 de ${totalGeral} (filtrado)` : '';
     return;
   }
   vazia.style.display = 'none';
-  // ordena por data e hora
-  lista.sort((a,b) => `${a.data||''} ${a.hora||''}`.localeCompare(`${b.data||''} ${b.hora||''}`));
+  // ordena por NOTA (maior primeiro), depois por data/hora
+  lista.sort((a,b) => Number(b.nota) - Number(a.nota) || `${a.data||''} ${a.hora||''}`.localeCompare(`${b.data||''} ${b.hora||''}`));
   const emoji = { sugestoes:'💡', topdia:'🏆', bot:'📲' };
   const nomeOrigem = { sugestoes:'Sugestões', topdia:'Top do dia', bot:'Bot' };
-  $('n10-contador').textContent = fFonte||fDe||fAte
+  $('n10-contador').textContent = temFiltro
     ? `${lista.length} de ${totalGeral} (filtrado)`
-    : `${lista.length} jogo${lista.length>1?'s':''} nota 10`;
-  alvo.innerHTML = lista.map((x, i) => {
+    : `${lista.length} jogo${lista.length>1?'s':''} de nota alta`;
+  alvo.innerHTML = lista.map((x) => {
     const orig = emoji[x.origem] || '⭐';
-    // índice real no array completo (para remover/abrir ficha corretamente)
+    const notaFmt = Number(x.nota).toFixed(1);
+    const corNota = Number(x.nota) >= 10 ? 'var(--green)' : (Number(x.nota) >= 9.8 ? 'var(--amber)' : 'var(--chalk)');
     const idxReal = getNota10().findIndex(y => y.mandante===x.mandante && y.visitante===x.visitante && y.mercado===x.mercado && (y.data||'')===(x.data||''));
-    return `<div class="mercado" style="border-left-color:var(--green);display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+    return `<div class="mercado" style="border-left-color:${corNota};display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
       <div style="flex:1">
-        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${idxReal})">🔟 ${x.mandante} x ${x.visitante}</div>
+        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${idxReal})">${Number(x.nota)>=10?'🔟':'⭐'} ${x.mandante} x ${x.visitante}</div>
         <div class="porque">${x.hora||''} ${x.data?('· '+x.data):''} · ${x.pais?x.pais+' — ':''}${x.liga||''}</div>
         <div style="font-size:13px;margin-top:4px">
-          <span style="color:var(--green);font-weight:700">● ${x.mercado}</span>
+          <span style="color:${corNota};font-weight:700">● ${x.mercado}</span>
           <span style="font-size:11px;color:var(--chalk-dim);margin-left:8px">${orig} ${nomeOrigem[x.origem]||x.origem||''}</span>
         </div>
       </div>
       <div style="text-align:center;min-width:70px">
-        <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:var(--green)">10</div>
-        <div style="font-size:9px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">NOTA MÁXIMA</div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:${corNota}">${notaFmt}</div>
+        <div style="font-size:9px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">NOTA</div>
       </div>
       <button class="mini" onclick="removerNota10(${idxReal})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
     </div>`;
@@ -5926,9 +5960,8 @@ function renderNota10(){
 window.renderNota10 = renderNota10;
 
 function limparFiltrosN10(){
-  if ($('n10-fonte')) $('n10-fonte').value = '';
-  if ($('n10-hora-de')) $('n10-hora-de').value = '';
-  if ($('n10-hora-ate')) $('n10-hora-ate').value = '';
+  ['n10-fonte','n10-mercado','n10-hora-de','n10-hora-ate'].forEach(id => { if ($(id)) $(id).value=''; });
+  if ($('n10-nota-min')) $('n10-nota-min').value = '9.5';
   renderNota10();
 }
 window.limparFiltrosN10 = limparFiltrosN10;
@@ -5959,11 +5992,11 @@ window.removerNota10 = removerNota10;
 async function puxarNota10Bot(){
   $('n10-aviso').innerHTML = '<div class="aviso">⏳ Buscando alertas nota 10 do bot...</div>';
   try{
-    const { data } = await db.from('analises').select('*').eq('origem','vigia').gte('confianca', 10).order('criado_em', { ascending:false }).limit(100);
+    const { data } = await db.from('analises').select('*').eq('origem','vigia').gte('confianca', 9.5).order('criado_em', { ascending:false }).limit(100);
     let add = 0;
     (data||[]).forEach(r => {
       const antes = getNota10().length;
-      addNota10({ mandante:r.mandante, visitante:r.visitante, liga:r.campeonato||'', pais:'', mercado:r.mercado_sugerido||'—', nota:10, hora:r.hora_jogo, data:r.data_jogo, origem:'bot' });
+      addNota10({ mandante:r.mandante, visitante:r.visitante, liga:r.campeonato||'', pais:'', mercado:r.mercado_sugerido||'—', nota:Number(r.confianca), hora:r.hora_jogo, data:r.data_jogo, origem:'bot' });
       if (getNota10().length > antes) add++;
     });
     $('n10-aviso').innerHTML = '';
@@ -5975,7 +6008,7 @@ window.puxarNota10Bot = puxarNota10Bot;
 
 if ($('btn-n10-atualizar')) $('btn-n10-atualizar').addEventListener('click', renderNota10);
 if ($('btn-n10-limpar-filtros')) $('btn-n10-limpar-filtros').addEventListener('click', limparFiltrosN10);
-['n10-fonte','n10-hora-de','n10-hora-ate'].forEach(id => {
+['n10-fonte','n10-mercado','n10-nota-min','n10-hora-de','n10-hora-ate'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('change', renderNota10);
 });
