@@ -322,11 +322,31 @@
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
       Seu funil de alta tendência. Aqui ficam reunidos <b>todos os jogos nota máxima (10)</b> que aparecem quando você gera as Sugestões, o Top do dia, ou que o bot alerta. Gere as outras abas normalmente e os nota 10 caem aqui automaticamente.
     </p>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <button class="acao" id="btn-n10-atualizar">🔄 Atualizar lista</button>
       <button class="mini" id="btn-n10-bot">📲 Puxar nota 10 do bot</button>
       <button class="mini" id="btn-n10-limpar" style="border-color:var(--red);color:var(--red)">🗑️ Limpar</button>
       <span id="n10-contador" style="font-size:12.5px;color:var(--chalk-dim);margin-left:auto"></span>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:center;background:var(--pitch);padding:10px 12px;border-radius:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Fonte:
+        <select id="n10-fonte" style="width:auto;padding:4px 8px">
+          <option value="">Todas</option>
+          <option value="sugestoes">💡 Sugestões</option>
+          <option value="topdia">🏆 Top do dia</option>
+          <option value="bot">📲 Bot</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Horário de:
+        <input type="time" id="n10-hora-de" style="width:auto;padding:4px 6px">
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        até:
+        <input type="time" id="n10-hora-ate" style="width:auto;padding:4px 6px">
+      </label>
+      <button class="mini" id="btn-n10-limpar-filtros">Limpar filtros</button>
     </div>
     <div id="n10-aviso"></div>
     <div id="n10-lista"></div>
@@ -1123,7 +1143,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.08";
+const APP_VERSAO = "v4.09";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5855,13 +5875,23 @@ window.addNota10 = addNota10;
 
 // renderiza a lista
 function renderNota10(){
-  const lista = getNota10();
+  let lista = getNota10();
   const alvo = $('n10-lista');
   const vazia = $('n10-vazia');
+  const totalGeral = lista.length;
+  // aplica filtros
+  const fFonte = $('n10-fonte') ? $('n10-fonte').value : '';
+  const fDe = $('n10-hora-de') ? $('n10-hora-de').value : '';
+  const fAte = $('n10-hora-ate') ? $('n10-hora-ate').value : '';
+  if (fFonte) lista = lista.filter(x => x.origem === fFonte);
+  if (fDe) lista = lista.filter(x => (x.hora||'') >= fDe);
+  if (fAte) lista = lista.filter(x => (x.hora||'') <= fAte);
   if (!lista.length){
-    alvo.innerHTML = '';
-    vazia.style.display = 'block';
-    $('n10-contador').textContent = '';
+    alvo.innerHTML = totalGeral > 0
+      ? '<p style="color:var(--chalk-dim);padding:16px;text-align:center">Nenhum jogo nota 10 com esses filtros. <a href="#" onclick="limparFiltrosN10();return false" style="color:var(--amber)">Limpar filtros</a></p>'
+      : '';
+    vazia.style.display = totalGeral > 0 ? 'none' : 'block';
+    $('n10-contador').textContent = totalGeral > 0 ? `0 de ${totalGeral} (filtrado)` : '';
     return;
   }
   vazia.style.display = 'none';
@@ -5869,12 +5899,16 @@ function renderNota10(){
   lista.sort((a,b) => `${a.data||''} ${a.hora||''}`.localeCompare(`${b.data||''} ${b.hora||''}`));
   const emoji = { sugestoes:'💡', topdia:'🏆', bot:'📲' };
   const nomeOrigem = { sugestoes:'Sugestões', topdia:'Top do dia', bot:'Bot' };
-  $('n10-contador').textContent = `${lista.length} jogo${lista.length>1?'s':''} nota 10`;
+  $('n10-contador').textContent = fFonte||fDe||fAte
+    ? `${lista.length} de ${totalGeral} (filtrado)`
+    : `${lista.length} jogo${lista.length>1?'s':''} nota 10`;
   alvo.innerHTML = lista.map((x, i) => {
     const orig = emoji[x.origem] || '⭐';
+    // índice real no array completo (para remover/abrir ficha corretamente)
+    const idxReal = getNota10().findIndex(y => y.mandante===x.mandante && y.visitante===x.visitante && y.mercado===x.mercado && (y.data||'')===(x.data||''));
     return `<div class="mercado" style="border-left-color:var(--green);display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
       <div style="flex:1">
-        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${i})">🔟 ${x.mandante} x ${x.visitante}</div>
+        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${idxReal})">🔟 ${x.mandante} x ${x.visitante}</div>
         <div class="porque">${x.hora||''} ${x.data?('· '+x.data):''} · ${x.pais?x.pais+' — ':''}${x.liga||''}</div>
         <div style="font-size:13px;margin-top:4px">
           <span style="color:var(--green);font-weight:700">● ${x.mercado}</span>
@@ -5885,11 +5919,19 @@ function renderNota10(){
         <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:var(--green)">10</div>
         <div style="font-size:9px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">NOTA MÁXIMA</div>
       </div>
-      <button class="mini" onclick="removerNota10(${i})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
+      <button class="mini" onclick="removerNota10(${idxReal})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
     </div>`;
   }).join('');
 }
 window.renderNota10 = renderNota10;
+
+function limparFiltrosN10(){
+  if ($('n10-fonte')) $('n10-fonte').value = '';
+  if ($('n10-hora-de')) $('n10-hora-de').value = '';
+  if ($('n10-hora-ate')) $('n10-hora-ate').value = '';
+  renderNota10();
+}
+window.limparFiltrosN10 = limparFiltrosN10;
 
 // abre a ficha de um jogo nota 10 (procura na grade em memória)
 function abrirFichaNota10(i){
@@ -5932,6 +5974,11 @@ async function puxarNota10Bot(){
 window.puxarNota10Bot = puxarNota10Bot;
 
 if ($('btn-n10-atualizar')) $('btn-n10-atualizar').addEventListener('click', renderNota10);
+if ($('btn-n10-limpar-filtros')) $('btn-n10-limpar-filtros').addEventListener('click', limparFiltrosN10);
+['n10-fonte','n10-hora-de','n10-hora-ate'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('change', renderNota10);
+});
 if ($('btn-n10-bot')) $('btn-n10-bot').addEventListener('click', puxarNota10Bot);
 if ($('btn-n10-limpar')) $('btn-n10-limpar').addEventListener('click', () => {
   if (confirm('Limpar todos os jogos nota 10 do funil?')){ setNota10([]); renderNota10(); }
