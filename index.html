@@ -191,6 +191,7 @@
     <button data-aba="aovivo" title="Jogos acontecendo agora, com placar e minuto ao vivo. Clique num jogo para abrir a análise.">🔴 Ao vivo</button>
     <button data-aba="grade" class="on" title="Todos os jogos do dia escolhido, agrupados por país e liga, com odds. Clique num jogo para a ficha completa.">📅 Grade do dia</button>
     <button data-aba="principais" title="Só os jogos das ligas que você marcou como principais. Foco no que você opera de verdade, com menos jogos.">⭐ Ligas Principais</button>
+    <button data-aba="ia" title="Faça qualquer pergunta à IA (Gemini): análise de jogos, times, mercados, estratégias.">🤖 Perguntar à IA</button>
     <button data-aba="favoritos" title="Busca as odds do dia e classifica: super favoritos, favoritos e zebras (mercado de vencedor) e mercado de gols (under/over).">⭐ Favoritos do dia</button>
     <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos para trabalhar, com nota e mercado indicado. Tem rankings por mercado (BTTS, over, under).">💡 Sugestões do dia</button>
     <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados de 0 a 100 para cada mercado (Back favorito, Under 3.5, Lay goleada, etc.). Escolha o mercado e veja o ranking.">🏆 TOP do dia</button>
@@ -289,6 +290,24 @@
     <div id="prin-resultado"></div>
     <div id="prin-vazia" style="display:none;color:var(--chalk-dim);padding:16px;text-align:center"></div>
   </section>
+
+  <!-- ================= PERGUNTAR À IA ================= -->
+  <section id="aba-ia">
+    <h2>🤖 Perguntar à IA (Gemini)</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Faça qualquer pergunta à IA: análise de um jogo, comparação de times, dúvida sobre um mercado, estratégia de exchange, o que quiser. A IA responde com base no conhecimento dela (não acessa dados ao vivo como escalação do dia).
+    </p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <textarea id="ia-pergunta" rows="4" placeholder="Ex: Analise o confronto Flamengo x Palmeiras pelo Brasileirão. Ou: Qual a melhor estratégia de lay em jogos de favorito muito forte? Ou: O que considerar antes de entrar em Under 2.5?" style="width:100%;padding:10px;font-size:14px"></textarea>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button class="acao" id="btn-ia-perguntar" style="border-color:#8e7cff;color:#8e7cff">🤖 Perguntar</button>
+        <button class="mini" id="btn-ia-limpar">🗑️ Limpar</button>
+        <span style="font-size:12px;color:var(--chalk-dim)">Dica: quanto mais detalhes na pergunta, melhor a resposta.</span>
+      </div>
+    </div>
+    <div id="ia-resposta" style="margin-top:16px"></div>
+  </section>
+
 
 
   <!-- ================= SCANNER ================= -->
@@ -1076,7 +1095,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.04";
+const APP_VERSAO = "v4.05";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2332,10 +2351,7 @@ async function analisarComIA(mandante, visitante, liga, botao){
       return;
     }
     // formata a resposta preservando quebras de linha
-    const analiseHtml = (data.analise || '')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
-      .replace(/\n/g,'<br>');
+    const analiseHtml = formatarRespostaIA(data.analise);
     alvo.innerHTML = `<div style="background:var(--card);border:1px solid #8e7cff;border-radius:10px;padding:16px;margin-top:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
         <b style="color:#8e7cff">🤖 Análise da IA — ${mandante} x ${visitante}</b>
@@ -2352,6 +2368,61 @@ async function analisarComIA(mandante, visitante, liga, botao){
   }
 }
 window.analisarComIA = analisarComIA;
+
+// ---- função genérica: manda um prompt qualquer pra IA ----
+async function chamarIA(prompt){
+  const r = await fetch(URL_ANALISE_IA, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await r.json();
+  if (!r.ok || data.erro) throw new Error(data.erro || 'Erro na IA');
+  return data.analise || '';
+}
+window.chamarIA = chamarIA;
+
+// formata texto da IA (negrito markdown + quebras de linha) de forma segura
+function formatarRespostaIA(txt){
+  return (txt || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+    .replace(/^### (.+)$/gm,'<b style="color:#8e7cff;font-size:15px">$1</b>')
+    .replace(/^## (.+)$/gm,'<b style="color:#8e7cff;font-size:16px">$1</b>')
+    .replace(/\n/g,'<br>');
+}
+window.formatarRespostaIA = formatarRespostaIA;
+
+// ---- aba Perguntar à IA ----
+async function perguntarIA(){
+  const pergunta = $('ia-pergunta').value.trim();
+  if (!pergunta){ $('ia-pergunta').focus(); return; }
+  const btn = $('btn-ia-perguntar');
+  const alvo = $('ia-resposta');
+  btn.disabled = true; btn.textContent = '⏳ Pensando...';
+  alvo.innerHTML = `<div style="background:var(--card);border:1px solid #8e7cff;border-radius:10px;padding:16px">
+    <p style="color:#8e7cff;margin:0"><b>🤖 A IA está pensando...</b></p>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin:8px 0 0">Leva alguns segundos.</p></div>`;
+  try{
+    const resposta = await chamarIA(pergunta);
+    alvo.innerHTML = `<div style="background:var(--card);border:1px solid #8e7cff;border-radius:10px;padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <b style="color:#8e7cff">🤖 Resposta da IA</b>
+        <button class="mini" onclick="navigator.clipboard.writeText(this.parentElement.parentElement.querySelector('.ia-texto').innerText);this.textContent='✅ Copiado'" style="border-color:#8e7cff;color:#8e7cff">📋 Copiar</button>
+      </div>
+      <div class="ia-texto" style="font-size:13.5px;line-height:1.6">${formatarRespostaIA(resposta)}</div>
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px;border-top:1px solid var(--linha);padding-top:8px">⚠️ Resposta gerada por IA. Não acessa dados ao vivo. Confirme informações sensíveis (escalações, lesões) em fontes atualizadas.</p>
+    </div>`;
+  }catch(e){
+    alvo.innerHTML = `<div class="aviso erro">❌ ${e.message}<br><small>Confira se a Edge "analise-ia" está no ar e o secret GEMINI_API_KEY configurado.</small></div>`;
+  }finally{
+    btn.disabled = false; btn.textContent = '🤖 Perguntar';
+  }
+}
+window.perguntarIA = perguntarIA;
+
+if ($('btn-ia-perguntar')) $('btn-ia-perguntar').addEventListener('click', perguntarIA);
+if ($('btn-ia-limpar')) $('btn-ia-limpar').addEventListener('click', () => { $('ia-pergunta').value=''; $('ia-resposta').innerHTML=''; $('ia-pergunta').focus(); });
 
 async function analisarRodada(idx){
   const j = rodadaJogos[idx];
