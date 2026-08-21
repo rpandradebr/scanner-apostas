@@ -190,6 +190,7 @@
   <nav>
     <button data-aba="aovivo" title="Jogos acontecendo agora, com placar e minuto ao vivo. Clique num jogo para abrir a análise.">🔴 Ao vivo</button>
     <button data-aba="grade" class="on" title="Todos os jogos do dia escolhido, agrupados por país e liga, com odds. Clique num jogo para a ficha completa.">📅 Grade do dia</button>
+    <button data-aba="principais" title="Só os jogos das ligas que você marcou como principais. Foco no que você opera de verdade, com menos jogos.">⭐ Ligas Principais</button>
     <button data-aba="favoritos" title="Busca as odds do dia e classifica: super favoritos, favoritos e zebras (mercado de vencedor) e mercado de gols (under/over).">⭐ Favoritos do dia</button>
     <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos para trabalhar, com nota e mercado indicado. Tem rankings por mercado (BTTS, over, under).">💡 Sugestões do dia</button>
     <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados de 0 a 100 para cada mercado (Back favorito, Under 3.5, Lay goleada, etc.). Escolha o mercado e veja o ranking.">🏆 TOP do dia</button>
@@ -270,6 +271,25 @@
     <div id="grade-ficha"></div>
     <p class="msg-vazia" id="grade-vazia">Escolha uma data e carregue a grade. Clique em qualquer jogo para abrir a ficha completa do confronto.</p>
   </section>
+
+  <!-- ================= LIGAS PRINCIPAIS ================= -->
+  <section id="aba-principais">
+    <h2>⭐ Ligas Principais</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Só os jogos das ligas que você marcou como principais. Ideal para focar no que você opera de verdade, sem se distrair com o resto. Marque suas ligas no botão de configurar.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <input type="date" id="prin-data" style="width:auto;padding:7px 10px">
+      <button class="acao" id="btn-prin-carregar">🔍 Carregar jogos</button>
+      <button class="mini" id="btn-prin-config" style="border-color:var(--amber);color:var(--amber)">⚙️ Configurar ligas principais</button>
+      <span id="prin-contador" style="font-size:12.5px;color:var(--chalk-dim);margin-left:auto"></span>
+    </div>
+    <div id="prin-config-painel" style="display:none;background:var(--pitch);border-radius:8px;padding:14px;margin-bottom:14px"></div>
+    <div id="prin-aviso"></div>
+    <div id="prin-resultado"></div>
+    <div id="prin-vazia" style="display:none;color:var(--chalk-dim);padding:16px;text-align:center"></div>
+  </section>
+
 
   <!-- ================= SCANNER ================= -->
   <section id="aba-scanner">
@@ -1033,7 +1053,7 @@ function filtraFavoritas(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v3.99";
+const APP_VERSAO = "v4.00";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1204,6 +1224,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'botsug' && typeof listarBotSug === 'function'){ listarBotSug(); }
   // lê as estatísticas de time do banco ao abrir a aba
   if (b.dataset.aba === 'statsligas' && typeof lerStatsLiga === 'function'){ lerStatsLiga(); }
+  // inicializa a data da aba Ligas Principais ao abrir
+  if (b.dataset.aba === 'principais' && typeof initPrincipais === 'function'){ initPrincipais(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -5357,6 +5379,157 @@ document.addEventListener('change', e => {
   if (e.target?.id === 'sl-ordem' || e.target?.id === 'sl-modo') renderStatsLiga();
   if (e.target?.id === 'sl-liga') lerStatsLiga();
 });
+
+
+
+// ==========================================================
+// LIGAS PRINCIPAIS — grade filtrada só nas ligas que você marca
+// ==========================================================
+// lista inicial (as que já existiam como "grandes ligas") + você adiciona/remove
+const LIGAS_PRINCIPAIS_PADRAO = [
+  'Serie A','Serie B','Copa do Brasil','Premier League','Championship',
+  'La Liga','Bundesliga','Bundesliga 2','Ligue 1','Primeira Liga',
+  'Eredivisie','Liga Profesional Argentina','UEFA Champions League',
+  'UEFA Europa League','UEFA Europa Conference League','MLS'
+];
+function getLigasPrincipais(){
+  try{
+    const salvo = localStorage.getItem('ligasPrincipais');
+    if (salvo) return JSON.parse(salvo);
+  }catch(_){}
+  return [...LIGAS_PRINCIPAIS_PADRAO];
+}
+function setLigasPrincipais(arr){ localStorage.setItem('ligasPrincipais', JSON.stringify(arr)); }
+
+let _prinJogos = [];
+async function carregarPrincipais(){
+  const botao = $('btn-prin-carregar'); botao.disabled = true;
+  aviso($('prin-aviso'), '');
+  $('prin-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:12px">⏳ Carregando...</p>';
+  try{
+    const data = $('prin-data').value;
+    const r = await chamarEdge({ acao:'grade', data });
+    const todos = r.jogos || [];
+    await carregarOddsMapa(data);
+    const principais = getLigasPrincipais();
+    // filtra só as ligas marcadas como principais
+    _prinJogos = todos.filter(j => principais.includes(j.liga));
+    desenharPrincipais();
+    const totalLigas = [...new Set(_prinJogos.map(j=>j.liga))].length;
+    $('prin-contador').textContent = `${_prinJogos.length} jogos · ${totalLigas} ligas principais (de ${todos.length} jogos no total)`;
+    $('prin-vazia').style.display = _prinJogos.length ? 'none' : 'block';
+    if (!_prinJogos.length) $('prin-vazia').innerHTML = 'Nenhum jogo das suas ligas principais nesta data.<br><small>Confira se marcou as ligas certas em "Configurar ligas principais".</small>';
+  }catch(e){ aviso($('prin-aviso'), 'Erro: '+e.message, 'erro'); }
+  finally{ botao.disabled = false; }
+}
+window.carregarPrincipais = carregarPrincipais;
+
+function desenharPrincipais(){
+  const grupos = {};
+  _prinJogos.forEach(j => {
+    const chave = `${j.pais ?? '?'} — ${j.liga ?? '?'}`;
+    (grupos[chave] = grupos[chave] || []).push(j);
+  });
+  const chaves = Object.keys(grupos).sort();
+  const cab = '<tr><th>Hora</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>1 · X · 2</th><th>O/U 2.5</th><th>Status</th></tr>';
+  $('prin-resultado').innerHTML = chaves.map(ch => {
+    const linhas = grupos[ch].map(j => {
+      const o = oddsMap[j.fixture_id];
+      const c1x2 = o?.odd_home ? `${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}` : '—';
+      const cou = o?.odd_over25 ? `O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}` : '—';
+      return `<tr class="clicavel" onclick="fichaJogo(${gradeJogos.indexOf(j)>=0?gradeJogos.indexOf(j):(gradeJogos.push(j)-1)})">
+        <td>${j.hora||''}</td><td><b>${j.mandante}</b></td><td>${j.placar||'-'}</td><td><b>${j.visitante}</b></td>
+        <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${c1x2}</td>
+        <td style="white-space:nowrap;font-family:'IBM Plex Mono',monospace;font-size:12px">${cou}</td>
+        <td>${j.status||''}</td></tr>`;
+    }).join('');
+    return `<details class="grupo" open>
+      <summary><span>${ch}</span><span class="badge">${grupos[ch].length}</span></summary>
+      <div class="tabela-scroll" style="padding:0 10px 10px"><table>${cab}${linhas}</table></div>
+    </details>`;
+  }).join('') || '';
+}
+window.desenharPrincipais = desenharPrincipais;
+
+// painel de configuração: marca/desmarca ligas principais
+async function abrirConfigPrincipais(){
+  const p = $('prin-config-painel');
+  if (p.style.display === 'block'){ p.style.display = 'none'; return; }
+  p.style.display = 'block';
+  p.innerHTML = '<p style="color:var(--chalk-dim)">⏳ Buscando ligas disponíveis...</p>';
+  // busca as ligas que aparecem no banco (dos jogos já carregados) + as principais atuais
+  let ligasDisponiveis = [];
+  try{
+    const data = $('prin-data').value || new Date().toISOString().slice(0,10);
+    const r = await chamarEdge({ acao:'grade', data });
+    ligasDisponiveis = [...new Set((r.jogos||[]).map(j => j.liga).filter(Boolean))];
+  }catch(_){}
+  const principais = getLigasPrincipais();
+  // junta as disponíveis com as já marcadas (pra não perder nenhuma) e as padrão
+  const todas = [...new Set([...principais, ...LIGAS_PRINCIPAIS_PADRAO, ...ligasDisponiveis])].sort();
+  p.innerHTML = `
+    <b style="color:var(--amber)">⚙️ Configurar ligas principais</b>
+    <p style="font-size:12.5px;color:var(--chalk-dim);margin:8px 0">
+      Marque as ligas que você quer ver na aba Ligas Principais. Fica salvo automaticamente. As ligas do dia atual aparecem aqui; digite abaixo para adicionar uma que não está na lista.
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <input type="text" id="prin-add-liga" placeholder="Adicionar liga pelo nome exato" style="flex:1;min-width:200px;padding:6px 8px">
+      <button class="mini" onclick="adicionarLigaPrincipal()">➕ Adicionar</button>
+      <button class="mini" onclick="marcarTodasPrincipais(true)">Marcar todas</button>
+      <button class="mini" onclick="marcarTodasPrincipais(false)">Desmarcar todas</button>
+    </div>
+    <div id="prin-lista-checks" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;max-height:340px;overflow-y:auto">
+      ${todas.map(liga => `
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:5px 8px;background:var(--card);border-radius:6px">
+          <input type="checkbox" style="width:auto" value="${liga.replace(/"/g,'&quot;')}" ${principais.includes(liga)?'checked':''} onchange="togglePrincipal(this)">
+          ${liga}
+        </label>`).join('')}
+    </div>
+    <p style="font-size:12px;color:var(--green);margin-top:10px" id="prin-config-status">✅ ${principais.length} ligas marcadas como principais</p>`;
+}
+window.abrirConfigPrincipais = abrirConfigPrincipais;
+
+function togglePrincipal(cb){
+  let principais = getLigasPrincipais();
+  const liga = cb.value;
+  if (cb.checked){ if (!principais.includes(liga)) principais.push(liga); }
+  else { principais = principais.filter(l => l !== liga); }
+  setLigasPrincipais(principais);
+  const st = $('prin-config-status');
+  if (st) st.textContent = `✅ ${principais.length} ligas marcadas como principais`;
+}
+window.togglePrincipal = togglePrincipal;
+
+function adicionarLigaPrincipal(){
+  const inp = $('prin-add-liga');
+  const liga = inp.value.trim();
+  if (!liga) return;
+  let principais = getLigasPrincipais();
+  if (!principais.includes(liga)){ principais.push(liga); setLigasPrincipais(principais); }
+  abrirConfigPrincipais(); abrirConfigPrincipais(); // recarrega o painel
+}
+window.adicionarLigaPrincipal = adicionarLigaPrincipal;
+
+function marcarTodasPrincipais(marcar){
+  const checks = document.querySelectorAll('#prin-lista-checks input[type=checkbox]');
+  if (marcar){
+    const todas = [...checks].map(c => c.value);
+    setLigasPrincipais([...new Set(todas)]);
+  } else {
+    setLigasPrincipais([]);
+  }
+  checks.forEach(c => c.checked = marcar);
+  const st = $('prin-config-status');
+  if (st) st.textContent = `✅ ${getLigasPrincipais().length} ligas marcadas como principais`;
+}
+window.marcarTodasPrincipais = marcarTodasPrincipais;
+
+// inicializa a data e os listeners quando a aba abre
+function initPrincipais(){
+  if ($('prin-data') && !$('prin-data').value) $('prin-data').value = new Date().toISOString().slice(0,10);
+}
+if ($('btn-prin-carregar')) $('btn-prin-carregar').addEventListener('click', carregarPrincipais);
+if ($('btn-prin-config')) $('btn-prin-config').addEventListener('click', abrirConfigPrincipais);
 
 </script>
 </body>
