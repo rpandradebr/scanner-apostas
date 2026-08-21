@@ -225,6 +225,9 @@
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
         <input type="checkbox" id="av-auto" style="width:auto"> Atualizar automático (30s)
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="av-principais" style="width:auto"> ⭐ Só ligas principais
+      </label>
       <span style="font-size:13px;color:var(--chalk-dim)" id="av-status"></span>
     </div>
     <div id="av-aviso"></div>
@@ -259,6 +262,10 @@
     <div class="linha" style="grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:6px">
       <input type="checkbox" id="grade-so-fav" style="width:auto">
       <label for="grade-so-fav" style="margin:0;cursor:pointer">Mostrar só meus campeonatos escolhidos (ignora todo o resto)</label>
+    </div>
+    <div class="linha" style="grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" id="grade-principais" style="width:auto">
+      <label for="grade-principais" style="margin:0;cursor:pointer">⭐ Mostrar só minhas ligas principais</label>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       <button class="acao" id="btn-grade">Carregar grade</button>
@@ -1095,7 +1102,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.05";
+const APP_VERSAO = "v4.06";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1331,7 +1338,7 @@ if ($('btn-gerenciar-ligas')) $('btn-gerenciar-ligas').addEventListener('click',
 $('grade-liga').addEventListener('change', desenharGrade);
 $('grade-time').addEventListener('input', desenharGrade);
 if ($('grade-status')) $('grade-status').addEventListener('change', desenharGrade);
-document.addEventListener('change', e => { if (e.target?.id === 'grade-base' || e.target?.id === 'grade-obscura' || e.target?.id === 'grade-so-fav'){ desenharGrade();
+document.addEventListener('change', e => { if (e.target?.id === 'grade-base' || e.target?.id === 'grade-obscura' || e.target?.id === 'grade-so-fav' || e.target?.id === 'grade-principais'){ desenharGrade();
   const ligas = [...new Set(semBase(gradeJogos).map(j => j.liga))].sort();
   $('grade-liga').innerHTML = '<option value="">Todos</option>' + ligas.map(l => `<option>${l}</option>`).join('');
 }});
@@ -1409,8 +1416,10 @@ function desenharGrade(){
   const encerrado = s => ['FT','AET','PEN'].includes(s);
   const aVir = s => ['NS','TBD','PST'].includes(s);
   const vivo = s => ['1H','2H','HT','ET','P','BT','LIVE','INT'].includes(s);
+  const soPrincipais = $('grade-principais') && $('grade-principais').checked;
   const lista = semBase(gradeJogos).filter(j =>
     (!liga || j.liga === liga) &&
+    (!soPrincipais || ehLigaPrincipal(j)) &&
     (!busca || j.mandante.toLowerCase().includes(busca) || j.visitante.toLowerCase().includes(busca)) &&
     (!status ||
       (status==='ocorridos' && encerrado(j.status)) ||
@@ -3375,7 +3384,11 @@ async function carregarAoVivo(){
   try{
     const r = await chamarEdge({ acao:'ao_vivo' });
     if (r.aviso){ aviso($('av-aviso'), r.aviso, 'erro'); }
-    const jogos = r.jogos || [];
+    let jogos = r.jogos || [];
+    // filtro "só ligas principais"
+    if ($('av-principais') && $('av-principais').checked){
+      jogos = jogos.filter(j => ehLigaPrincipal(j));
+    }
     if (!jogos.length){
       $('av-lista').innerHTML = '<p class="msg-vazia">Nenhum jogo ao vivo neste momento.</p>';
       $('av-status').textContent = '';
@@ -3407,6 +3420,7 @@ async function carregarAoVivo(){
   finally{ if (b) b.disabled = false; }
 }
 if ($('btn-aovivo')) $('btn-aovivo').addEventListener('click', carregarAoVivo);
+if ($('av-principais')) $('av-principais').addEventListener('change', carregarAoVivo);
 if ($('av-auto')) $('av-auto').addEventListener('change', (e) => {
   clearInterval(avTimer);
   if (e.target.checked){ avTimer = setInterval(carregarAoVivo, 30000); carregarAoVivo(); }
