@@ -209,6 +209,7 @@
     <button data-aba="banca" title="Gestão de banca: controle suas apostas reais com valor, odd, green/red/cashout e acompanhe o lucro e a evolução do saldo.">💰 Gestão de banca</button>
     <button data-aba="relatorios" title="Relatórios de desempenho: montante de green/red das apostas que você pegou, taxa por mercado, evolução e mais.">📈 Relatórios</button>
     <button data-aba="notas" title="Assertividade por faixa de nota: descubra se as notas altas (10, 9...) realmente acertam mais, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
+    <button data-aba="sonota10" title="Reúne num só lugar todos os jogos nota máxima (10) que aparecem nas Sugestões, Top do dia e alertas do bot. Seu funil de alta tendência.">🔟 Só Nota 10</button>
     <button data-aba="importar" title="Importe planilhas de resultados (CSV do football-data.co.uk ou Excel combinado) direto para o banco, sem gastar requisição da API.">📥 Importar CSV</button>
     <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
     <button data-aba="sobre" title="Sobre o sistema: objetivo, e o histórico de todas as versões com o que mudou em cada uma.">ℹ️ Sobre</button>
@@ -314,6 +315,26 @@
     </div>
     <div id="ia-resposta" style="margin-top:16px"></div>
   </section>
+
+  <!-- ================= SÓ NOTA 10 ================= -->
+  <section id="aba-sonota10">
+    <h2>🔟 Só Nota 10</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Seu funil de alta tendência. Aqui ficam reunidos <b>todos os jogos nota máxima (10)</b> que aparecem quando você gera as Sugestões, o Top do dia, ou que o bot alerta. Gere as outras abas normalmente e os nota 10 caem aqui automaticamente.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <button class="acao" id="btn-n10-atualizar">🔄 Atualizar lista</button>
+      <button class="mini" id="btn-n10-bot">📲 Puxar nota 10 do bot</button>
+      <button class="mini" id="btn-n10-limpar" style="border-color:var(--red);color:var(--red)">🗑️ Limpar</button>
+      <span id="n10-contador" style="font-size:12.5px;color:var(--chalk-dim);margin-left:auto"></span>
+    </div>
+    <div id="n10-aviso"></div>
+    <div id="n10-lista"></div>
+    <div id="n10-vazia" style="display:none;color:var(--chalk-dim);padding:20px;text-align:center">
+      Nenhum jogo nota 10 ainda. Gere as <b>Sugestões do dia</b> ou o <b>Top do dia</b> — os jogos que baterem nota máxima aparecem aqui. Ou clique em "Puxar nota 10 do bot" para trazer os alertas máximos do bot.
+    </div>
+  </section>
+
 
 
 
@@ -1102,7 +1123,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.07";
+const APP_VERSAO = "v4.08";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1275,6 +1296,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'statsligas' && typeof lerStatsLiga === 'function'){ lerStatsLiga(); }
   // inicializa a data da aba Ligas Principais ao abrir
   if (b.dataset.aba === 'principais' && typeof initPrincipais === 'function'){ initPrincipais(); }
+  // renderiza o funil Só Nota 10 ao abrir a aba
+  if (b.dataset.aba === 'sonota10' && typeof renderNota10 === 'function'){ renderNota10(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -2976,6 +2999,13 @@ async function gerarSugestoes(){
 
     desenharRankingsSug();
     sugestoes.sort((a,b2) => b2.nota - a.nota);
+    // alimenta o funil "Só Nota 10" com os jogos nota máxima
+    sugestoes.filter(s => s.nota >= 10).forEach(s => {
+      if (typeof addNota10 === 'function') addNota10({
+        mandante: s.j.mandante, visitante: s.j.visitante, liga: s.j.liga, pais: s.j.pais,
+        mercado: s.mercado, nota: 10, hora: s.j.hora, data: s.j.data_jogo || $('su-data').value, origem: 'sugestoes'
+      });
+    });
     if (!sugestoes.length){
       aviso($('su-aviso'), `Nenhum jogo atingiu a nota mínima ${corte} hoje. Dia fraco é dia de proteger banca.`, 'erro');
     } else {
@@ -4016,6 +4046,14 @@ $('btn-topdia').addEventListener('click', async () => {
       });
     }
     pontuados.sort((a,c) => c.nota - a.nota);
+    // alimenta o funil "Só Nota 10" com os jogos nota máxima
+    const mercadoNome = $('td-mercado').selectedOptions[0] ? $('td-mercado').selectedOptions[0].text : mercado;
+    pontuados.filter(p => p.nota >= 10).forEach(p => {
+      if (typeof addNota10 === 'function') addNota10({
+        mandante: p.j.mandante, visitante: p.j.visitante, liga: p.j.liga, pais: p.j.pais,
+        mercado: mercadoNome, nota: 10, hora: p.j.hora, data: p.j.data_jogo || $('td-data').value, origem: 'topdia'
+      });
+    });
     const top = pontuados.slice(0, 10);
     if (!top.length){
       const situTxt = situ === 'ocorridos' ? 'já ocorridos' : situ === 'ocorrer' ? 'a ocorrer' : '';
@@ -5791,6 +5829,113 @@ function initPrincipais(){
 }
 if ($('btn-prin-carregar')) $('btn-prin-carregar').addEventListener('click', carregarPrincipais);
 if ($('btn-prin-config')) $('btn-prin-config').addEventListener('click', abrirConfigPrincipais);
+
+
+
+// ==========================================================
+// SÓ NOTA 10 — funil central dos jogos nota máxima
+// ==========================================================
+// guarda os jogos nota 10 no localStorage (some no dia seguinte por data)
+function getNota10(){
+  try{ return JSON.parse(localStorage.getItem('sonota10')||'[]'); }catch(_){ return []; }
+}
+function setNota10(arr){ localStorage.setItem('sonota10', JSON.stringify(arr)); }
+
+// adiciona um jogo nota 10 ao funil (evita duplicar mesmo jogo+mercado)
+function addNota10(item){
+  // item: { mandante, visitante, liga, pais, mercado, nota, hora, data, origem }
+  if (!item || Number(item.nota) < 10) return; // só nota máxima
+  const lista = getNota10();
+  const chave = `${item.mandante}|${item.visitante}|${item.mercado}|${item.data||''}`;
+  if (lista.some(x => `${x.mandante}|${x.visitante}|${x.mercado}|${x.data||''}` === chave)) return; // já existe
+  lista.push({ ...item, adicionado: new Date().toISOString() });
+  setNota10(lista);
+}
+window.addNota10 = addNota10;
+
+// renderiza a lista
+function renderNota10(){
+  const lista = getNota10();
+  const alvo = $('n10-lista');
+  const vazia = $('n10-vazia');
+  if (!lista.length){
+    alvo.innerHTML = '';
+    vazia.style.display = 'block';
+    $('n10-contador').textContent = '';
+    return;
+  }
+  vazia.style.display = 'none';
+  // ordena por data e hora
+  lista.sort((a,b) => `${a.data||''} ${a.hora||''}`.localeCompare(`${b.data||''} ${b.hora||''}`));
+  const emoji = { sugestoes:'💡', topdia:'🏆', bot:'📲' };
+  const nomeOrigem = { sugestoes:'Sugestões', topdia:'Top do dia', bot:'Bot' };
+  $('n10-contador').textContent = `${lista.length} jogo${lista.length>1?'s':''} nota 10`;
+  alvo.innerHTML = lista.map((x, i) => {
+    const orig = emoji[x.origem] || '⭐';
+    return `<div class="mercado" style="border-left-color:var(--green);display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+      <div style="flex:1">
+        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${i})">🔟 ${x.mandante} x ${x.visitante}</div>
+        <div class="porque">${x.hora||''} ${x.data?('· '+x.data):''} · ${x.pais?x.pais+' — ':''}${x.liga||''}</div>
+        <div style="font-size:13px;margin-top:4px">
+          <span style="color:var(--green);font-weight:700">● ${x.mercado}</span>
+          <span style="font-size:11px;color:var(--chalk-dim);margin-left:8px">${orig} ${nomeOrigem[x.origem]||x.origem||''}</span>
+        </div>
+      </div>
+      <div style="text-align:center;min-width:70px">
+        <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:var(--green)">10</div>
+        <div style="font-size:9px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">NOTA MÁXIMA</div>
+      </div>
+      <button class="mini" onclick="removerNota10(${i})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
+    </div>`;
+  }).join('');
+}
+window.renderNota10 = renderNota10;
+
+// abre a ficha de um jogo nota 10 (procura na grade em memória)
+function abrirFichaNota10(i){
+  const x = getNota10()[i];
+  if (!x) return;
+  // tenta achar o jogo na grade já carregada
+  let idx = gradeJogos.findIndex(j => j.mandante===x.mandante && j.visitante===x.visitante);
+  if (idx < 0){
+    // adiciona um objeto mínimo para a ficha funcionar
+    idx = gradeJogos.push({ mandante:x.mandante, visitante:x.visitante, liga:x.liga, pais:x.pais, hora:x.hora, data_jogo:x.data }) - 1;
+  }
+  fichaJogo(idx);
+}
+window.abrirFichaNota10 = abrirFichaNota10;
+
+function removerNota10(i){
+  const lista = getNota10();
+  lista.splice(i, 1);
+  setNota10(lista);
+  renderNota10();
+}
+window.removerNota10 = removerNota10;
+
+// puxa os nota 10 do bot (da tabela de sugestões do bot)
+async function puxarNota10Bot(){
+  $('n10-aviso').innerHTML = '<div class="aviso">⏳ Buscando alertas nota 10 do bot...</div>';
+  try{
+    const { data } = await db.from('analises').select('*').eq('origem','vigia').gte('confianca', 10).order('criado_em', { ascending:false }).limit(100);
+    let add = 0;
+    (data||[]).forEach(r => {
+      const antes = getNota10().length;
+      addNota10({ mandante:r.mandante, visitante:r.visitante, liga:r.campeonato||'', pais:'', mercado:r.mercado_sugerido||'—', nota:10, hora:r.hora_jogo, data:r.data_jogo, origem:'bot' });
+      if (getNota10().length > antes) add++;
+    });
+    $('n10-aviso').innerHTML = '';
+    aviso($('n10-aviso'), add ? `✅ ${add} jogo(s) nota 10 do bot adicionados.` : 'Nenhum jogo nota 10 novo no bot.', add?'':'erro');
+    renderNota10();
+  }catch(e){ aviso($('n10-aviso'), 'Erro: '+e.message, 'erro'); }
+}
+window.puxarNota10Bot = puxarNota10Bot;
+
+if ($('btn-n10-atualizar')) $('btn-n10-atualizar').addEventListener('click', renderNota10);
+if ($('btn-n10-bot')) $('btn-n10-bot').addEventListener('click', puxarNota10Bot);
+if ($('btn-n10-limpar')) $('btn-n10-limpar').addEventListener('click', () => {
+  if (confirm('Limpar todos os jogos nota 10 do funil?')){ setNota10([]); renderNota10(); }
+});
 
 </script>
 </body>
