@@ -325,10 +325,21 @@
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <button class="acao" id="btn-n10-atualizar">🔄 Atualizar lista</button>
       <button class="mini" id="btn-n10-bot">📲 Puxar nota 10 do bot</button>
+      <button class="mini" id="btn-n10-conferir" style="border-color:var(--green);color:var(--green)">✅ Conferir resultados (green/red)</button>
       <button class="mini" id="btn-n10-limpar" style="border-color:var(--red);color:var(--red)">🗑️ Limpar</button>
       <span id="n10-contador" style="font-size:12.5px;color:var(--chalk-dim);margin-left:auto"></span>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:center;background:var(--pitch);padding:10px 12px;border-radius:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Situação:
+        <select id="n10-situacao" style="width:auto;padding:4px 8px">
+          <option value="">Todos</option>
+          <option value="ocorrer">Vão ocorrer</option>
+          <option value="aovivo">Ao vivo</option>
+          <option value="vivo_ocorrer">Ao vivo + vão ocorrer</option>
+          <option value="ocorridos">Já ocorreram</option>
+        </select>
+      </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Fonte:
         <select id="n10-fonte" style="width:auto;padding:4px 8px">
@@ -1158,7 +1169,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.11";
+const APP_VERSAO = "v4.12";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2877,16 +2888,14 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
     if (reg.data_jogo) q = q.eq('data_jogo', reg.data_jogo);
     const { data: existentes } = await q.limit(1);
     if (existentes?.length){
-      botao.textContent = '⚠️ já salvo';
-      botao.disabled = true;
+      if (botao){ botao.textContent = '⚠️ já salvo'; botao.disabled = true; }
       return;
     }
   }catch(_){ /* se a checagem falhar, segue e tenta salvar */ }
 
   const { error } = await db.from('analises').insert(reg);
-  if (error){ botao.textContent = '❌ erro'; return; }
-  botao.textContent = '✅ salvo';
-  botao.disabled = true;
+  if (error){ if (botao) botao.textContent = '❌ erro'; return; }
+  if (botao){ botao.textContent = '✅ salvo'; botao.disabled = true; }
   if (typeof listarAnalises === 'function') listarAnalises();
   if (typeof listarHistSug === 'function') listarHistSug();
 }
@@ -2953,6 +2962,24 @@ function desenharRankingsSug(){
   $('su-rankings').innerHTML = `<h3>Rankings por mercado (${analisadosSug.length} jogos analisados)</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">${abas}</div>${corpo}
     <p style="font-size:12px;color:var(--chalk-dim);margin-top:10px">Ranking estatístico pelo histórico — clique no jogo para a ficha completa e confira as odds antes de operar.</p>`;
+
+  // alimenta o funil "Só Nota 10": top 5 de cada mercado dos rankings
+  if (typeof coletarTop5PorMercado === 'function'){
+    const doRanking = [];
+    mercadosRank.forEach(m => {
+      const ehLay01 = m.id === 'lay01';
+      const mktNome = {btts:'AMBAS MARCAM', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', u35:'UNDER 3.5', u25:'UNDER 2.5', lay01:'LAY 0x1'}[m.id];
+      analisadosSug.forEach(c => {
+        const v = ehLay01 ? c._lay01 : mediaPct(c, m.campo);
+        doRanking.push({
+          mandante: c.j.mandante, visitante: c.j.visitante, liga: c.j.liga, pais: c.j.pais,
+          mercado: mktNome, nota: +(v/10).toFixed(1), hora: c.j.hora,
+          data: c.j.data_jogo || $('su-data').value, origem: 'sugestoes'
+        });
+      });
+    });
+    coletarTop5PorMercado(doRanking);
+  }
 }
 function trocaRanking(id){
   ['btts','o05','o15','o25','u35','u25','lay01'].forEach(x => {
@@ -5940,7 +5967,15 @@ function renderNota10(){
   else if (fNota > 0) lista = lista.filter(x => Number(x.nota) >= fNota);
   if (fDe) lista = lista.filter(x => (x.hora||'') >= fDe);
   if (fAte) lista = lista.filter(x => (x.hora||'') <= fAte);
-  const temFiltro = fFonte||fMerc||fDe||fAte||fNota>0;
+  const fSit = $('n10-situacao') ? $('n10-situacao').value : '';
+  if (fSit){
+    lista = lista.filter(x => {
+      const s = situacaoN10(x);
+      if (fSit === 'vivo_ocorrer') return s === 'aovivo' || s === 'ocorrer';
+      return s === fSit;
+    });
+  }
+  const temFiltro = fFonte||fMerc||fDe||fAte||fSit||fNota>0;
   if (!lista.length){
     alvo.innerHTML = totalGeral > 0
       ? '<p style="color:var(--chalk-dim);padding:16px;text-align:center">Nenhum jogo com esses filtros. <a href="#" onclick="limparFiltrosN10();return false" style="color:var(--amber)">Limpar filtros</a></p>'
@@ -5962,10 +5997,17 @@ function renderNota10(){
     const notaFmt = Number(x.nota).toFixed(1);
     const corNota = Number(x.nota) >= 10 ? 'var(--green)' : (Number(x.nota) >= 9.8 ? 'var(--amber)' : 'var(--chalk)');
     const idxReal = getNota10().findIndex(y => y.mandante===x.mandante && y.visitante===x.visitante && y.mercado===x.mercado && (y.data||'')===(x.data||''));
-    return `<div class="mercado" style="border-left-color:${corNota};display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+    const sit = situacaoN10(x);
+    const seloSit = sit==='aovivo' ? '<span style="font-size:10px;background:var(--red);color:#fff;padding:2px 6px;border-radius:4px;font-weight:700">🔴 AO VIVO</span>'
+      : sit==='ocorrer' ? '<span style="font-size:10px;background:var(--pitch);color:var(--chalk-dim);padding:2px 6px;border-radius:4px">⏳ vai ocorrer</span>'
+      : '<span style="font-size:10px;background:var(--pitch);color:var(--chalk-dim);padding:2px 6px;border-radius:4px">✔️ ocorreu</span>';
+    const seloGR = x.resultado === 'GREEN' ? `<span style="font-size:11px;background:var(--green);color:var(--pitch);padding:2px 7px;border-radius:4px;font-weight:800">✅ GREEN ${x.placar||''}</span>`
+      : x.resultado === 'RED' ? `<span style="font-size:11px;background:var(--red);color:#fff;padding:2px 7px;border-radius:4px;font-weight:800">❌ RED ${x.placar||''}</span>`
+      : '';
+    return `<div class="mercado" style="border-left-color:${x.resultado==='GREEN'?'var(--green)':x.resultado==='RED'?'var(--red)':corNota};display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
       <div style="flex:1">
-        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${idxReal})">${Number(x.nota)>=10?'🔟':'⭐'} ${x.mandante} x ${x.visitante}</div>
-        <div class="porque">${x.hora||''} ${x.data?('· '+x.data):''} · ${x.pais?x.pais+' — ':''}${x.liga||''}</div>
+        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${idxReal})">${Number(x.nota)>=10?'🔟':'⭐'} ${x.mandante} x ${x.visitante} ${seloGR}</div>
+        <div class="porque">${x.hora||''} ${x.data?('· '+x.data):''} · ${x.pais?x.pais+' — ':''}${x.liga||''} · ${seloSit}</div>
         <div style="font-size:13px;margin-top:4px">
           <span style="color:${corNota};font-weight:700">● ${x.mercado}</span>
           <span style="font-size:11px;color:var(--chalk-dim);margin-left:8px">${orig} ${nomeOrigem[x.origem]||x.origem||''}</span>
@@ -5975,18 +6017,78 @@ function renderNota10(){
         <div style="font-family:'Saira Condensed',sans-serif;font-size:30px;font-weight:800;color:${corNota}">${notaFmt}</div>
         <div style="font-size:9px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">NOTA</div>
       </div>
-      <button class="mini" onclick="removerNota10(${idxReal})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="mini" onclick="salvarApostaN10(${idxReal})" style="border-color:var(--amber);color:var(--amber);padding:4px 8px" title="Salvar aposta no histórico">💾</button>
+        <button class="mini" onclick="removerNota10(${idxReal})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
+      </div>
     </div>`;
   }).join('');
 }
 window.renderNota10 = renderNota10;
 
 function limparFiltrosN10(){
-  ['n10-fonte','n10-mercado','n10-hora-de','n10-hora-ate'].forEach(id => { if ($(id)) $(id).value=''; });
+  ['n10-fonte','n10-mercado','n10-hora-de','n10-hora-ate','n10-situacao'].forEach(id => { if ($(id)) $(id).value=''; });
   if ($('n10-nota-min')) $('n10-nota-min').value = '0';
   renderNota10();
 }
 window.limparFiltrosN10 = limparFiltrosN10;
+
+// calcula a situação de um jogo do funil (ocorrer / aovivo / ocorridos)
+function situacaoN10(x){
+  if (x.resultado) return 'ocorridos'; // já tem green/red conferido
+  if (!x.data || !x.hora) return 'ocorrer';
+  try{
+    const agora = new Date(new Date().toLocaleString('en-US',{timeZone:'America/Bahia'}));
+    const [h,m] = x.hora.split(':').map(Number);
+    const inicio = new Date(x.data+'T00:00:00'); inicio.setHours(h, m||0, 0, 0);
+    const diffMin = (agora - inicio)/60000;
+    if (diffMin < 0) return 'ocorrer';       // ainda não começou
+    if (diffMin < 130) return 'aovivo';        // em andamento (~2h + intervalo)
+    return 'ocorridos';                        // já terminou
+  }catch(_){ return 'ocorrer'; }
+}
+window.situacaoN10 = situacaoN10;
+
+// confere green/red dos jogos já ocorridos (busca placar no banco)
+async function conferirResultadosN10(){
+  const btn = $('btn-n10-conferir'); btn.disabled = true; btn.textContent = '⏳ Conferindo...';
+  try{
+    const lista = getNota10();
+    const ocorridos = lista.filter(x => situacaoN10(x) === 'ocorridos' && !x.resultado);
+    if (!ocorridos.length){ aviso($('n10-aviso'), 'Nenhum jogo já ocorrido pendente de conferência.', ''); btn.disabled=false; btn.textContent='✅ Conferir resultados (green/red)'; return; }
+    let conf = 0;
+    for (let i=0;i<ocorridos.length;i++){
+      const x = ocorridos[i];
+      $('n10-aviso').innerHTML = `<div class="aviso">⏳ Conferindo ${i+1}/${ocorridos.length}...</div>`;
+      try{
+        const placar = await buscarPlacar({ mandante:x.mandante, visitante:x.visitante, data_jogo:x.data });
+        if (placar){
+          const gr = confereMercado(x.mercado, placar.gm, placar.gv);
+          if (gr){ x.resultado = gr; x.placar = `${placar.gm}x${placar.gv}`; conf++; }
+        }
+      }catch(_){}
+    }
+    setNota10(lista);
+    $('n10-aviso').innerHTML='';
+    aviso($('n10-aviso'), `✅ ${conf} jogo(s) conferido(s).`, '');
+    renderNota10();
+  }catch(e){ aviso($('n10-aviso'), 'Erro: '+e.message, 'erro'); }
+  finally{ btn.disabled=false; btn.textContent='✅ Conferir resultados (green/red)'; }
+}
+window.conferirResultadosN10 = conferirResultadosN10;
+
+// salva a aposta no histórico (reaproveita salvarSugestao)
+function salvarApostaN10(i){
+  const x = getNota10()[i];
+  if (!x) return;
+  const liga = (x.pais ? x.pais + ' — ' : '') + (x.liga||'');
+  if (typeof salvarSugestao === 'function'){
+    // salvarSugestao(mand, vis, liga, mercado, nota, motivo, botao, hora, data)
+    salvarSugestao(x.mandante, x.visitante, liga, x.mercado, Number(x.nota), `Funil Só Nota 10 (${x.origem})`, null, x.hora||'', x.data||'');
+    aviso($('n10-aviso'), `💾 ${x.mandante} x ${x.visitante} salvo no histórico.`, '');
+  }
+}
+window.salvarApostaN10 = salvarApostaN10;
 
 // abre a ficha de um jogo nota 10 (procura na grade em memória)
 function abrirFichaNota10(i){
@@ -6030,7 +6132,8 @@ window.puxarNota10Bot = puxarNota10Bot;
 
 if ($('btn-n10-atualizar')) $('btn-n10-atualizar').addEventListener('click', renderNota10);
 if ($('btn-n10-limpar-filtros')) $('btn-n10-limpar-filtros').addEventListener('click', limparFiltrosN10);
-['n10-fonte','n10-mercado','n10-nota-min','n10-hora-de','n10-hora-ate'].forEach(id => {
+if ($('btn-n10-conferir')) $('btn-n10-conferir').addEventListener('click', conferirResultadosN10);
+['n10-fonte','n10-mercado','n10-nota-min','n10-hora-de','n10-hora-ate','n10-situacao'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('change', renderNota10);
 });
