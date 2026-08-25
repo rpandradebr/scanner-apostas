@@ -68,19 +68,20 @@
   .nav-overlay.aberto{opacity:1;visibility:visible}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.75}}
   /* Grupos do menu lateral */
-  .menu-item-solo{margin-bottom:2px}
-  .menu-grupo{margin:4px 0;border-radius:8px;overflow:hidden}
+  .menu-item-solo{margin-bottom:2px;flex-shrink:0}
+  .menu-grupo{margin:3px 0;flex-shrink:0}
   .menu-grupo-titulo{
     font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;
     text-transform:uppercase;letter-spacing:.05em;color:var(--amber);
-    padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
-    background:rgba(237,234,224,.04);border-radius:8px;transition:background .15s;user-select:none;
+    padding:11px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+    background:rgba(237,234,224,.06);border-radius:8px;transition:background .15s;user-select:none;
   }
-  .menu-grupo-titulo:hover{background:rgba(237,234,224,.08)}
-  .menu-seta{font-size:12px;transition:transform .2s}
+  .menu-grupo-titulo:hover{background:rgba(237,234,224,.1)}
+  .menu-seta{font-size:11px;transition:transform .2s;flex-shrink:0}
   .menu-grupo.fechado .menu-seta{transform:rotate(-90deg)}
-  .menu-grupo-itens{display:flex;flex-direction:column;gap:4px;padding:4px 0 4px 10px;margin-top:2px}
+  .menu-grupo-itens{display:flex;flex-direction:column;gap:3px;padding:4px 0 6px 8px;margin-top:3px;border-left:2px solid rgba(237,234,224,.1);margin-left:6px}
   .menu-grupo.fechado .menu-grupo-itens{display:none}
+  .menu-grupo-itens button{font-size:14.5px;padding:9px 12px}
 
   section{display:none;background:var(--card);border:1px solid rgba(237,234,224,.14);
     border-radius:var(--radius);padding:20px}
@@ -213,7 +214,7 @@
       </div>
     </div>
 
-    <div class="menu-grupo">
+    <div class="menu-grupo fechado">
       <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🔬 Análises <span class="menu-seta">▾</span></div>
       <div class="menu-grupo-itens">
         <button data-aba="scanner" title="Analisa um confronto: digite os dois times e veja o semáforo de mercados.">🎯 Scanner de mercados</button>
@@ -229,7 +230,7 @@
       </div>
     </div>
 
-    <div class="menu-grupo">
+    <div class="menu-grupo fechado">
       <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">📈 Trader <span class="menu-seta">▾</span></div>
       <div class="menu-grupo-itens">
         <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos, com nota e mercado.">💡 Sugestões do dia</button>
@@ -237,7 +238,7 @@
       </div>
     </div>
 
-    <div class="menu-grupo">
+    <div class="menu-grupo fechado">
       <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🎲 Punter <span class="menu-seta">▾</span></div>
       <div class="menu-grupo-itens">
         <button data-aba="punter-sugestoes" title="Sugestões de mercados de estatística (escanteios, cartões, desarmes, faltas, chutes).">💡 Sugestões do dia</button>
@@ -245,7 +246,7 @@
       </div>
     </div>
 
-    <div class="menu-grupo">
+    <div class="menu-grupo fechado">
       <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🎛️ Controle <span class="menu-seta">▾</span></div>
       <div class="menu-grupo-itens">
         <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático.">📋 Histórico de sugestões</button>
@@ -255,7 +256,7 @@
       </div>
     </div>
 
-    <div class="menu-grupo">
+    <div class="menu-grupo fechado">
       <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">💰 Gestão de banca <span class="menu-seta">▾</span></div>
       <div class="menu-grupo-itens">
         <button data-aba="banca" title="Controle suas apostas reais com valor, odd, green/red e acompanhe o lucro.">💰 Gestão de banca</button>
@@ -1282,7 +1283,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.15";
+const APP_VERSAO = "v4.16";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1427,22 +1428,22 @@ async function chamarEdge(params){
 // abre/fecha um grupo do menu (accordion) e salva o estado
 function toggleGrupo(el){
   const grupo = el.closest('.menu-grupo');
-  grupo.classList.toggle('fechado');
-  // salva quais grupos estão fechados
-  const fechados = [...document.querySelectorAll('.menu-grupo.fechado .menu-grupo-titulo')].map(t => t.textContent.trim());
-  try{ localStorage.setItem('menuGruposFechados', JSON.stringify(fechados)); }catch(_){}
+  const vaiabrir = grupo.classList.contains('fechado');
+  // fecha todos os outros grupos (só um aberto por vez = menu limpo)
+  document.querySelectorAll('.menu-grupo').forEach(g => { if (g !== grupo) g.classList.add('fechado'); });
+  grupo.classList.toggle('fechado', !vaiabrir);
 }
 window.toggleGrupo = toggleGrupo;
 
-// restaura o estado dos grupos (quais estavam fechados) e abre o grupo da aba ativa
+// deixa todos os grupos fechados, abre só o que contém a aba ativa
 function restaurarGruposMenu(){
-  try{
-    const fechados = JSON.parse(localStorage.getItem('menuGruposFechados')||'[]');
-    document.querySelectorAll('.menu-grupo').forEach(g => {
-      const titulo = g.querySelector('.menu-grupo-titulo').textContent.trim();
-      if (fechados.includes(titulo)) g.classList.add('fechado');
-    });
-  }catch(_){}
+  document.querySelectorAll('.menu-grupo').forEach(g => g.classList.add('fechado'));
+  // acha a aba ativa e abre o grupo dela
+  const ativo = document.querySelector('nav button.on');
+  if (ativo){
+    const grupo = ativo.closest('.menu-grupo');
+    if (grupo) grupo.classList.remove('fechado');
+  }
 }
 window.restaurarGruposMenu = restaurarGruposMenu;
 
@@ -1453,6 +1454,7 @@ function toggleMenu(){
   const aberto = nav.classList.toggle('aberto');
   ov.classList.toggle('aberto', aberto);
   btn.classList.toggle('aberto', aberto);
+  if (aberto && typeof restaurarGruposMenu === 'function') restaurarGruposMenu(); // abre o grupo da aba ativa
 }
 function fecharMenu(){
   document.querySelector('nav')?.classList.remove('aberto');
