@@ -67,6 +67,20 @@
   }
   .nav-overlay.aberto{opacity:1;visibility:visible}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.75}}
+  /* Grupos do menu lateral */
+  .menu-item-solo{margin-bottom:2px}
+  .menu-grupo{margin:4px 0;border-radius:8px;overflow:hidden}
+  .menu-grupo-titulo{
+    font-family:'Saira Condensed',sans-serif;font-weight:700;font-size:15px;
+    text-transform:uppercase;letter-spacing:.05em;color:var(--amber);
+    padding:10px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;
+    background:rgba(237,234,224,.04);border-radius:8px;transition:background .15s;user-select:none;
+  }
+  .menu-grupo-titulo:hover{background:rgba(237,234,224,.08)}
+  .menu-seta{font-size:12px;transition:transform .2s}
+  .menu-grupo.fechado .menu-seta{transform:rotate(-90deg)}
+  .menu-grupo-itens{display:flex;flex-direction:column;gap:4px;padding:4px 0 4px 10px;margin-top:2px}
+  .menu-grupo.fechado .menu-grupo-itens{display:none}
 
   section{display:none;background:var(--card);border:1px solid rgba(237,234,224,.14);
     border-radius:var(--radius);padding:20px}
@@ -188,31 +202,70 @@
   <div class="nav-overlay" id="nav-overlay" onclick="fecharMenu()"></div>
 
   <nav>
-    <button data-aba="aovivo" title="Jogos acontecendo agora, com placar e minuto ao vivo. Clique num jogo para abrir a análise.">🔴 Ao vivo</button>
-    <button data-aba="grade" class="on" title="Todos os jogos do dia escolhido, agrupados por país e liga, com odds. Clique num jogo para a ficha completa.">📅 Grade do dia</button>
-    <button data-aba="principais" title="Só os jogos das ligas que você marcou como principais. Foco no que você opera de verdade, com menos jogos.">⭐ Ligas Principais</button>
-    <button data-aba="ia" title="Faça qualquer pergunta à IA (Gemini): análise de jogos, times, mercados, estratégias.">🤖 Perguntar à IA</button>
-    <button data-aba="favoritos" title="Busca as odds do dia e classifica: super favoritos, favoritos e zebras (mercado de vencedor) e mercado de gols (under/over).">⭐ Favoritos do dia</button>
-    <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos para trabalhar, com nota e mercado indicado. Tem rankings por mercado (BTTS, over, under).">💡 Sugestões do dia</button>
-    <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados de 0 a 100 para cada mercado (Back favorito, Under 3.5, Lay goleada, etc.). Escolha o mercado e veja o ranking.">🏆 TOP do dia</button>
-    <button data-aba="scanner" title="Analisa um confronto específico: digite os dois times e veja o semáforo de mercados (Lay 1x0, 0x1, Over/Under, zebra).">🎯 Scanner de mercados</button>
-    <button data-aba="rodada" title="Escolha um campeonato e veja a análise Poisson de todos os jogos da rodada, com probabilidades de placar.">🏆 Análise da rodada</button>
-    <button data-aba="analisecompleta" title="Central de análise: ao clicar num jogo, veja desempenho por tempo, gols, cartões e escanteios das duas equipes, temporada e recorte recente.">🔬 Análise completa</button>
-    <button data-aba="historico" title="Últimos 10 jogos de qualquer time, com médias. Aqui também ficam os botões de manutenção: baixar 90 dias, colher resultados, ativar últimos-10.">📊 Histórico 10 jogos</button>
-    <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas...). Média histórica por time dos últimos 10 jogos, filtrado pelas suas ligas favoritas.">📊 Estatísticas por jogo</button>
-    <button data-aba="campeonatos" title="Estatísticas por campeonato: quais ligas são mais Under, mais Over, mais gols. E os times dentro de cada campeonato.">🏆 Campeonatos</button>
-    <button data-aba="statsligas" title="Estatísticas detalhadas dos times (chutes, escanteios, faltas, cartões, impedimentos) nas suas ligas favoritas, temporada atual.">📈 Estatísticas de time</button>
-    <button data-aba="especiais" title="Mercados especiais: rankings de times por desarmes, cartões, faltas, chutes, escanteios, passes, posse de bola e impedimentos.">📊 Mercados especiais</button>
-    <button data-aba="analises" title="Suas análises salvas. Registre o veredito, cole a análise completa e, depois do jogo, o placar para ver green/red e sua taxa de acerto.">💾 Minhas análises</button>
-    <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático. Clique em "Atualizar resultados" para o sistema apurar sozinho.">📋 Histórico de sugestões</button>
-    <button data-aba="botsug" title="Só as sugestões enviadas pelo vigia do Telegram (o bot), separadas das que você pega manualmente. Marque se pegou e veja green/red.">📲 Sugestões do bot</button>
-    <button data-aba="banca" title="Gestão de banca: controle suas apostas reais com valor, odd, green/red/cashout e acompanhe o lucro e a evolução do saldo.">💰 Gestão de banca</button>
-    <button data-aba="relatorios" title="Relatórios de desempenho: montante de green/red das apostas que você pegou, taxa por mercado, evolução e mais.">📈 Relatórios</button>
-    <button data-aba="notas" title="Assertividade por faixa de nota: descubra se as notas altas (10, 9...) realmente acertam mais, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
-    <button data-aba="sonota10" title="Reúne num só lugar todos os jogos nota máxima (10) que aparecem nas Sugestões, Top do dia e alertas do bot. Seu funil de alta tendência.">🔟 Só Nota 10</button>
-    <button data-aba="importar" title="Importe planilhas de resultados (CSV do football-data.co.uk ou Excel combinado) direto para o banco, sem gastar requisição da API.">📥 Importar CSV</button>
-    <button data-aba="ajuda" title="Manual do sistema: o que cada tela faz e o passo a passo dos principais fluxos de análise.">❓ Ajuda</button>
-    <button data-aba="sobre" title="Sobre o sistema: objetivo, e o histórico de todas as versões com o que mudou em cada uma.">ℹ️ Sobre</button>
+    <button data-aba="aovivo" class="menu-item-solo" title="Jogos acontecendo agora, com placar e minuto ao vivo.">🔴 Ao vivo</button>
+
+    <div class="menu-grupo">
+      <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">📋 Cadastros <span class="menu-seta">▾</span></div>
+      <div class="menu-grupo-itens">
+        <button data-aba="grade" class="on" title="Todos os jogos do dia, agrupados por país e liga, com odds.">📅 Grade do dia</button>
+        <button data-aba="principais" title="Só os jogos das ligas que você marcou como principais.">⭐ Ligas Principais</button>
+        <button data-aba="favoritos" title="Odds do dia classificadas: super favoritos, favoritos e zebras.">⭐ Favoritos do dia</button>
+      </div>
+    </div>
+
+    <div class="menu-grupo">
+      <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🔬 Análises <span class="menu-seta">▾</span></div>
+      <div class="menu-grupo-itens">
+        <button data-aba="scanner" title="Analisa um confronto: digite os dois times e veja o semáforo de mercados.">🎯 Scanner de mercados</button>
+        <button data-aba="rodada" title="Análise Poisson de todos os jogos de uma rodada, com probabilidades de placar.">🏆 Análise da rodada</button>
+        <button data-aba="analisecompleta" title="Desempenho por tempo, gols, cartões e escanteios das duas equipes.">🔬 Análise completa</button>
+        <button data-aba="historico" title="Últimos 10 jogos de qualquer time, com médias. Botões de manutenção do banco.">📊 Histórico 10 jogos</button>
+        <button data-aba="estats" title="Rankings de estatísticas (cartões, chutes, desarmes, faltas) por time.">📊 Estatísticas por jogo</button>
+        <button data-aba="campeonatos" title="Estatísticas por campeonato: mais Under, mais Over, mais gols.">🏆 Campeonatos</button>
+        <button data-aba="statsligas" title="Estatísticas detalhadas dos times na temporada atual.">📈 Estatísticas de time</button>
+        <button data-aba="especiais" title="Rankings de times por desarmes, cartões, faltas, chutes, escanteios, posse.">📊 Mercados especiais</button>
+        <button data-aba="analises" title="Suas análises salvas, com veredito, análise completa e green/red.">💾 Minhas análises</button>
+        <button data-aba="ia" title="Faça qualquer pergunta à IA (Gemini): jogos, times, mercados, estratégias.">🤖 Perguntar à IA</button>
+      </div>
+    </div>
+
+    <div class="menu-grupo">
+      <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">📈 Trader <span class="menu-seta">▾</span></div>
+      <div class="menu-grupo-itens">
+        <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos, com nota e mercado.">💡 Sugestões do dia</button>
+        <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados por mercado (Back favorito, Under 3.5, lays).">🏆 TOP do dia</button>
+      </div>
+    </div>
+
+    <div class="menu-grupo">
+      <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🎲 Punter <span class="menu-seta">▾</span></div>
+      <div class="menu-grupo-itens">
+        <button data-aba="punter-sugestoes" title="Sugestões de mercados de estatística (escanteios, cartões, desarmes, faltas, chutes).">💡 Sugestões do dia</button>
+        <button data-aba="punter-topdia" title="Ranking dos times por mercado de estatística com base nos dados salvos.">🏆 TOP do dia</button>
+      </div>
+    </div>
+
+    <div class="menu-grupo">
+      <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🎛️ Controle <span class="menu-seta">▾</span></div>
+      <div class="menu-grupo-itens">
+        <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático.">📋 Histórico de sugestões</button>
+        <button data-aba="botsug" title="Só as sugestões enviadas pelo vigia do Telegram (o bot).">📲 Sugestões do bot</button>
+        <button data-aba="notas" title="Assertividade por faixa de nota, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
+        <button data-aba="sonota10" title="Reúne todos os jogos nota máxima das Sugestões, Top do dia e bot.">🔟 Só Nota 10</button>
+      </div>
+    </div>
+
+    <div class="menu-grupo">
+      <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">💰 Gestão de banca <span class="menu-seta">▾</span></div>
+      <div class="menu-grupo-itens">
+        <button data-aba="banca" title="Controle suas apostas reais com valor, odd, green/red e acompanhe o lucro.">💰 Gestão de banca</button>
+        <button data-aba="relatorios" title="Relatórios de desempenho: green/red, taxa por mercado, evolução.">📈 Relatórios</button>
+      </div>
+    </div>
+
+    <button data-aba="importar" class="menu-item-solo" title="Importe planilhas de resultados (CSV) direto para o banco.">📥 Importar CSV</button>
+    <button data-aba="ajuda" class="menu-item-solo" title="Manual do sistema: o que cada tela faz.">❓ Ajuda</button>
+    <button data-aba="sobre" class="menu-item-solo" title="Sobre o sistema e o histórico de versões.">ℹ️ Sobre</button>
   </nav>
 
   <!-- ================= AO VIVO ================= -->
@@ -380,6 +433,64 @@
       Nenhum jogo de nota alta ainda. Gere as <b>Sugestões do dia</b> ou o <b>Top do dia</b> — os jogos que baterem nota 9.5 ou mais aparecem aqui. Ou clique em "Puxar nota 10 do bot" para trazer os alertas de nota alta do bot.
     </div>
   </section>
+
+  <!-- ================= PUNTER — SUGESTÕES (mercados de estatística) ================= -->
+  <section id="aba-punter-sugestoes">
+    <h2>🎲 Punter — Sugestões do dia</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Sugestões para <b>mercados de estatística</b> (escanteios, cartões, desarmes, faltas, chutes, chutes a gol, impedimentos) baseadas nos dados salvos dos times na aba Estatísticas de time. Escolha a liga e o mercado.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Liga:
+        <select id="punter-liga" style="width:auto;min-width:220px;padding:6px 8px"></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Mercado:
+        <select id="punter-mercado" style="width:auto;padding:6px 8px">
+          <option value="mediaEscanteios">🚩 Escanteios</option>
+          <option value="mediaAmarelos">🟨 Cartões amarelos</option>
+          <option value="mediaFaltas">⚠️ Faltas</option>
+          <option value="mediaChutes">🎯 Chutes</option>
+          <option value="mediaChutesGol">⚽ Chutes a gol</option>
+          <option value="mediaDesarmes">🛡️ Desarmes</option>
+          <option value="mediaImpedimentos">🚫 Impedimentos</option>
+        </select>
+      </label>
+      <button class="acao" id="btn-punter-sugerir">🎲 Gerar sugestões</button>
+    </div>
+    <div id="punter-aviso"></div>
+    <div id="punter-resultado"></div>
+  </section>
+
+  <!-- ================= PUNTER — TOP DO DIA (mercados de estatística) ================= -->
+  <section id="aba-punter-topdia">
+    <h2>🎲 Punter — TOP do dia</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Ranking dos <b>confrontos do dia</b> com maior potencial nos mercados de estatística. Cruza os dados salvos dos dois times de cada jogo (o que cada um faz + o que o adversário cede) para projetar o total esperado no mercado escolhido.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <input type="date" id="punter-td-data" style="width:auto;padding:7px 10px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Mercado:
+        <select id="punter-td-mercado" style="width:auto;padding:6px 8px">
+          <option value="mediaEscanteios">🚩 Escanteios</option>
+          <option value="mediaAmarelos">🟨 Cartões amarelos</option>
+          <option value="mediaFaltas">⚠️ Faltas</option>
+          <option value="mediaChutes">🎯 Chutes</option>
+          <option value="mediaChutesGol">⚽ Chutes a gol</option>
+          <option value="mediaImpedimentos">🚫 Impedimentos</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="punter-td-principais" style="width:auto"> ⭐ Só principais
+      </label>
+      <button class="acao" id="btn-punter-td">🎲 Gerar ranking</button>
+    </div>
+    <div id="punter-td-aviso"></div>
+    <div id="punter-td-resultado"></div>
+  </section>
+
 
 
 
@@ -1171,7 +1282,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.14";
+const APP_VERSAO = "v4.15";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1313,6 +1424,28 @@ async function chamarEdge(params){
 }
 
 // ---------- navegação por abas ----------
+// abre/fecha um grupo do menu (accordion) e salva o estado
+function toggleGrupo(el){
+  const grupo = el.closest('.menu-grupo');
+  grupo.classList.toggle('fechado');
+  // salva quais grupos estão fechados
+  const fechados = [...document.querySelectorAll('.menu-grupo.fechado .menu-grupo-titulo')].map(t => t.textContent.trim());
+  try{ localStorage.setItem('menuGruposFechados', JSON.stringify(fechados)); }catch(_){}
+}
+window.toggleGrupo = toggleGrupo;
+
+// restaura o estado dos grupos (quais estavam fechados) e abre o grupo da aba ativa
+function restaurarGruposMenu(){
+  try{
+    const fechados = JSON.parse(localStorage.getItem('menuGruposFechados')||'[]');
+    document.querySelectorAll('.menu-grupo').forEach(g => {
+      const titulo = g.querySelector('.menu-grupo-titulo').textContent.trim();
+      if (fechados.includes(titulo)) g.classList.add('fechado');
+    });
+  }catch(_){}
+}
+window.restaurarGruposMenu = restaurarGruposMenu;
+
 function toggleMenu(){
   const nav = document.querySelector('nav');
   const ov = document.getElementById('nav-overlay');
@@ -1346,6 +1479,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'principais' && typeof initPrincipais === 'function'){ initPrincipais(); }
   // renderiza o funil Só Nota 10 ao abrir a aba
   if (b.dataset.aba === 'sonota10' && typeof renderNota10 === 'function'){ renderNota10(); }
+  // inicializa as abas do Punter ao abrir
+  if ((b.dataset.aba === 'punter-sugestoes' || b.dataset.aba === 'punter-topdia') && typeof initPunter === 'function'){ initPunter(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -4815,7 +4950,7 @@ function trocaAjuda(id){
 }
 window.trocaAjuda = trocaAjuda;
 // mostra o primeiro conteúdo quando a aba abre
-document.addEventListener('DOMContentLoaded', () => { if ($('ajuda-conteudo')) trocaAjuda('fluxos'); });
+document.addEventListener('DOMContentLoaded', () => { if ($('ajuda-conteudo')) trocaAjuda('fluxos'); if (typeof restaurarGruposMenu === 'function') restaurarGruposMenu(); });
 setTimeout(() => { if ($('ajuda-conteudo') && !$('ajuda-conteudo').innerHTML) trocaAjuda('fluxos'); }, 500);
 
 
@@ -6186,6 +6321,174 @@ if ($('btn-n10-bot')) $('btn-n10-bot').addEventListener('click', puxarNota10Bot)
 if ($('btn-n10-limpar')) $('btn-n10-limpar').addEventListener('click', () => {
   if (confirm('Limpar todos os jogos nota 10 do funil?')){ setNota10([]); renderNota10(); }
 });
+
+
+
+// ==========================================================
+// PUNTER — sugestões para mercados de estatística
+// ==========================================================
+// usa os dados salvos dos times (aba Estatísticas de time) via rota stats_liga_ler
+
+const PUNTER_LIGAS = [
+  ['71','Brasileirão Série A'],['72','Brasileirão Série B'],['73','Copa do Brasil'],
+  ['39','Premier League'],['40','Championship'],['140','La Liga'],['78','Bundesliga'],
+  ['61','Ligue 1'],['135','Serie A (Itália)'],['88','Eredivisie'],['94','Primeira Liga'],
+  ['128','Liga Argentina'],['253','MLS'],['2','Champions League'],['13','Libertadores']
+];
+function popularLigasPunter(){
+  ['punter-liga'].forEach(id => {
+    const sel = $(id);
+    if (sel && !sel.options.length){
+      sel.innerHTML = PUNTER_LIGAS.map(([v,n]) => `<option value="${v}">${n}</option>`).join('');
+    }
+  });
+}
+
+const PUNTER_ROTULOS = {
+  mediaEscanteios:'🚩 Escanteios', mediaAmarelos:'🟨 Cartões amarelos', mediaFaltas:'⚠️ Faltas',
+  mediaChutes:'🎯 Chutes', mediaChutesGol:'⚽ Chutes a gol', mediaDesarmes:'🛡️ Desarmes',
+  mediaImpedimentos:'🚫 Impedimentos'
+};
+
+// Sugestões: ranking dos times da liga por um mercado (quem mais produz)
+async function gerarPunterSugestoes(){
+  const liga = $('punter-liga').value;
+  const nomeLiga = $('punter-liga').selectedOptions[0].text;
+  const mercado = $('punter-mercado').value;
+  const btn = $('btn-punter-sugerir'); btn.disabled = true;
+  aviso($('punter-aviso'),'');
+  $('punter-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:12px">⏳ Lendo dados salvos...</p>';
+  try{
+    const r = await chamarEdge({ acao:'stats_liga_ler', liga });
+    if (!r.carregado || !r.times?.length){
+      $('punter-resultado').innerHTML = '';
+      aviso($('punter-aviso'), `${nomeLiga} ainda não tem estatísticas salvas. Vá em Estatísticas de time e carregue esta liga primeiro.`, 'erro');
+      btn.disabled=false; return;
+    }
+    const cedeCampo = { mediaEscanteios:'cedeEscanteios', mediaAmarelos:'cedeAmarelos', mediaFaltas:'cedeFaltas', mediaImpedimentos:'cedeImpedimentos' }[mercado];
+    const lista = r.times.filter(t => t[mercado] != null).sort((a,b) => (b[mercado]||0) - (a[mercado]||0));
+    const media = lista.reduce((s,t) => s+(t[mercado]||0), 0) / (lista.length||1);
+    $('punter-resultado').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <h3 style="margin:0">${PUNTER_ROTULOS[mercado]} — ${nomeLiga}</h3>
+        <span style="font-size:12.5px;color:var(--chalk-dim)">Média da liga: <b style="color:var(--amber)">${media.toFixed(1)}</b> por jogo</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${lista.map((t,i) => {
+          const val = t[mercado];
+          const cede = cedeCampo && t[cedeCampo] != null ? t[cedeCampo] : null;
+          const acima = val >= media;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--card);border-radius:6px">
+            <span style="min-width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim)">${i+1}º</span>
+            <span style="flex:1;font-weight:${i<3?'700':'400'}">${t.time}</span>
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:${acima?'var(--amber)':'var(--chalk)'}">${val}</span>
+            ${cede!=null ? `<span style="font-size:11px;color:var(--chalk-dim)">cede ${cede}</span>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:10px">Os times no topo produzem mais ${PUNTER_ROTULOS[mercado].replace(/[^ -~]/g,'').trim().toLowerCase()}. "Cede" = quanto o time concede ao adversário (quando disponível). Cruze os dois lados para achar jogos de alto volume.</p>`;
+  }catch(e){ aviso($('punter-aviso'), 'Erro: '+e.message, 'erro'); $('punter-resultado').innerHTML=''; }
+  finally{ btn.disabled=false; }
+}
+window.gerarPunterSugestoes = gerarPunterSugestoes;
+
+// TOP do dia: cruza os dois times de cada jogo do dia e projeta o total do mercado
+async function gerarPunterTopDia(){
+  const data = $('punter-td-data').value;
+  const mercado = $('punter-td-mercado').value;
+  const btn = $('btn-punter-td'); btn.disabled = true;
+  aviso($('punter-td-aviso'),'');
+  $('punter-td-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:12px">⏳ Carregando jogos e cruzando estatísticas...</p>';
+  try{
+    // 1) pega os jogos do dia
+    const rg = await chamarEdge({ acao:'grade', data });
+    let jogos = (rg.jogos || []).filter(j => jogoValido(j));
+    if ($('punter-td-principais') && $('punter-td-principais').checked) jogos = jogos.filter(j => ehLigaPrincipal(j));
+    if (!jogos.length){ $('punter-td-resultado').innerHTML=''; aviso($('punter-td-aviso'), 'Nenhum jogo nesta data (ou nas suas ligas principais).', 'erro'); btn.disabled=false; return; }
+
+    // 2) mapeia ligas presentes -> carrega stats de cada liga uma vez (cache local)
+    const ligasIds = {}; // nomeLiga -> ligaId
+    PUNTER_LIGAS.forEach(([id,nome]) => { ligasIds[nome.toLowerCase()] = id; });
+    const statsCache = {};
+    const cedeCampo = { mediaEscanteios:'cedeEscanteios', mediaAmarelos:'cedeAmarelos', mediaFaltas:'cedeFaltas', mediaImpedimentos:'cedeImpedimentos' }[mercado];
+
+    // acha o ligaId de um jogo pelo nome da liga
+    function achaLigaId(nomeLiga){
+      const n = (nomeLiga||'').toLowerCase();
+      for (const [nome,id] of Object.entries(ligasIds)) if (n.includes(nome) || nome.includes(n)) return id;
+      return null;
+    }
+    async function statsDaLiga(ligaId){
+      if (statsCache[ligaId]) return statsCache[ligaId];
+      try{ const r = await chamarEdge({ acao:'stats_liga_ler', liga: ligaId }); statsCache[ligaId] = r.times || []; }
+      catch(_){ statsCache[ligaId] = []; }
+      return statsCache[ligaId];
+    }
+    function achaTime(times, nome){
+      const n = (nome||'').toLowerCase();
+      return times.find(t => (t.time||'').toLowerCase() === n)
+          || times.find(t => (t.time||'').toLowerCase().includes(n) || n.includes((t.time||'').toLowerCase()));
+    }
+
+    // 3) para cada jogo, projeta o total = (faz mandante + cede visitante + faz visitante + cede mandante)/2 aprox
+    const projs = [];
+    for (const j of jogos){
+      const ligaId = achaLigaId(j.liga);
+      if (!ligaId) continue;
+      const times = await statsDaLiga(ligaId);
+      if (!times.length) continue;
+      const tm = achaTime(times, j.mandante), tv = achaTime(times, j.visitante);
+      if (!tm || !tv) continue;
+      const fazM = tm[mercado] ?? null, fazV = tv[mercado] ?? null;
+      if (fazM == null || fazV == null) continue;
+      const cedeM = cedeCampo ? (tm[cedeCampo] ?? null) : null;
+      const cedeV = cedeCampo ? (tv[cedeCampo] ?? null) : null;
+      // projeção do total no jogo
+      let total;
+      if (cedeM != null && cedeV != null){
+        // mandante produz considerando o que o visitante cede, e vice-versa
+        total = ((fazM + cedeV)/2) + ((fazV + cedeM)/2);
+      } else {
+        total = fazM + fazV; // sem dados de "cede", soma o que cada um faz
+      }
+      projs.push({ j, total, fazM, fazV, cedeM, cedeV });
+    }
+    if (!projs.length){ $('punter-td-resultado').innerHTML=''; aviso($('punter-td-aviso'), 'Nenhum jogo com estatísticas salvas dos dois times. Carregue as ligas na aba Estatísticas de time.', 'erro'); btn.disabled=false; return; }
+    projs.sort((a,b) => b.total - a.total);
+
+    gradeJogos = gradeJogos || [];
+    $('punter-td-resultado').innerHTML = `
+      <h3 style="margin:0 0 6px">${PUNTER_ROTULOS[mercado]} — projeção por jogo (${projs.length} jogos)</h3>
+      <p style="font-size:12px;color:var(--chalk-dim);margin:0 0 12px">Total projetado = o que cada time produz cruzado com o que o adversário cede. Ordenado do maior para o menor.</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${projs.map((p,i) => {
+          const idx = gradeJogos.indexOf(p.j) >= 0 ? gradeJogos.indexOf(p.j) : (gradeJogos.push(p.j)-1);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px;background:var(--card);border-radius:6px;cursor:pointer" onclick="fichaJogo(${idx})">
+            <span style="min-width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim)">${i+1}º</span>
+            <div style="flex:1">
+              <div style="font-weight:${i<5?'700':'400'};font-size:14px">${p.j.mandante} <span style="color:var(--chalk-dim)">x</span> ${p.j.visitante}</div>
+              <div style="font-size:11px;color:var(--chalk-dim)">${p.j.hora||''} · ${p.j.pais?p.j.pais+' — ':''}${p.j.liga||''} · ${p.j.mandante}: ${p.fazM} / ${p.j.visitante}: ${p.fazV}</div>
+            </div>
+            <div style="text-align:center;min-width:64px">
+              <div style="font-family:'Saira Condensed',sans-serif;font-size:24px;font-weight:800;color:var(--amber)">${p.total.toFixed(1)}</div>
+              <div style="font-size:8.5px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">TOTAL PROJ.</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+  }catch(e){ aviso($('punter-td-aviso'), 'Erro: '+e.message, 'erro'); $('punter-td-resultado').innerHTML=''; }
+  finally{ btn.disabled=false; }
+}
+window.gerarPunterTopDia = gerarPunterTopDia;
+
+function initPunter(){
+  popularLigasPunter();
+  if ($('punter-td-data') && !$('punter-td-data').value) $('punter-td-data').value = new Date().toISOString().slice(0,10);
+}
+window.initPunter = initPunter;
+
+if ($('btn-punter-sugerir')) $('btn-punter-sugerir').addEventListener('click', gerarPunterSugestoes);
+if ($('btn-punter-td')) $('btn-punter-td').addEventListener('click', gerarPunterTopDia);
 
 </script>
 </body>
