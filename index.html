@@ -1169,7 +1169,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.12";
+const APP_VERSAO = "v4.13";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3138,6 +3138,24 @@ function pontuarJogo(c, todos){
   if (bttsComb >= 68 && mediaJogo >= 2.9)
     notas.push({ mercado:'LAY 1x0', nota: Math.min(10, 6 + (bttsComb-68)/8),
       motivo:`Ambas marcam em ${Math.round(bttsComb)}% dos jogos das duas e média projetada de ${mediaJogo.toFixed(1)} gols — 1x0 seco é minoria.` });
+
+  // ===== LAYS "MUITO FAVORITO" — versões mais rigorosas (favoritismo forte + score alto) =====
+  // LAY 0x1 MUITO FAVORITO: mandante é forte favorito, marca muito, visitante sofre muito.
+  // O 0x1 (mandante perde magro em casa) vira quase impossível.
+  const oddMand = o.odd_home ?? 99, oddVis = o.odd_away ?? 99;
+  if (oddMand <= 1.65 && oddMand < oddVis && em.pctMarcou >= 85 && ev.pctSofreu >= 75 && em.pctVit >= 55){
+    const score = (em.pctMarcou-85)/5 + (ev.pctSofreu-75)/8 + (1.65-oddMand)*8 + (em.pctVit-55)/15;
+    notas.push({ mercado:'LAY 0x1 MUITO FAVORITO', nota: Math.min(10, 7.5 + score),
+      motivo:`${c.nm} é forte favorito (@ ${fmtOdd(oddMand)}), marcou em ${em.pctMarcou}% e vence ${em.pctVit}% dos jogos; ${c.nv} sofre gol em ${ev.pctSofreu}%. O 0x1 (favorito perder magro em casa) é cenário raríssimo.` });
+  }
+  // LAY 1x0 MUITO FAVORITO: visitante é forte favorito, marca muito, mandante sofre muito.
+  // O 1x0 (mandante vencer magro) vira quase impossível.
+  if (oddVis <= 1.65 && oddVis < oddMand && ev.pctMarcou >= 85 && em.pctSofreu >= 75 && ev.pctVit >= 55){
+    const score = (ev.pctMarcou-85)/5 + (em.pctSofreu-75)/8 + (1.65-oddVis)*8 + (ev.pctVit-55)/15;
+    notas.push({ mercado:'LAY 1x0 MUITO FAVORITO', nota: Math.min(10, 7.5 + score),
+      motivo:`${c.nv} é forte favorito (@ ${fmtOdd(oddVis)}), marcou em ${ev.pctMarcou}% e vence ${ev.pctVit}% dos jogos; ${c.nm} sofre gol em ${em.pctSofreu}%. O 1x0 (mandante vencer magro sobre o favorito) é cenário raríssimo.` });
+  }
+
   if (!notas.length) return todos ? [] : null;
   notas.sort((a,b2) => b2.nota - a.nota);
   return todos ? notas : notas[0];
@@ -3161,6 +3179,8 @@ function confereMercado(mercado, gm, gv){
   if (mercado === 'BTTS' || mercado === 'AMBAS MARCAM') return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
   if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
+  if (mercado === 'LAY 0x1 MUITO FAVORITO') return (gm===0 && gv===1) ? 'RED' : 'GREEN';
+  if (mercado === 'LAY 1x0 MUITO FAVORITO') return (gm===1 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'LAY ZEBRA'){
     return gm >= gv ? 'GREEN' : 'RED';
   }
