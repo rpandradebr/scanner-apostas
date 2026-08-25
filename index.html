@@ -493,6 +493,8 @@
           <option value="btts">Ambos Marcam</option>
           <option value="lay01">Lay 0x1</option>
           <option value="lay10">Lay 1x0</option>
+          <option value="lay01_mf">Lay 0x1 Muito Favorito</option>
+          <option value="lay10_mf">Lay 1x0 Muito Favorito</option>
           <option value="lay_zebra">Lay Zebra</option>
           <option value="lay_gol_mand">Lay Goleada Mandante</option>
           <option value="lay_gol_vis">Lay Goleada Visitante</option>
@@ -1169,7 +1171,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.13";
+const APP_VERSAO = "v4.14";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2052,6 +2054,17 @@ async function escanear(){
       p10 = `Jogos das duas equipes têm pouco gol (BTTS ${bttsCombinado}%) — placar magro do mandante é cenário central.`; }
     cartoes += cartaoMercado('Lay 1x0', cor10, s10, p10);
 
+    // LAY 0x1 MUITO FAVORITO: mandante domina muito (marca ~sempre, vence muito) + visitante sofre muito
+    if (em.pctMarcou >= 85 && ev.pctSofreu >= 75 && em.pctVit >= 55){
+      cartoes += cartaoMercado('Lay 0x1 MUITO FAVORITO', 'verde', '● ALTA CONVICÇÃO',
+        `${rm.time} marcou em ${em.pctMarcou}% e venceu ${em.pctVit}% dos últimos ${em.n}; ${rv.time} sofreu gol em ${ev.pctSofreu}%. O 0x1 (favorito perder magro em casa) é cenário raríssimo. Confirme o favoritismo pela odd (ideal ≤ 1.65).`);
+    }
+    // LAY 1x0 MUITO FAVORITO: visitante domina muito + mandante sofre muito
+    if (ev.pctMarcou >= 85 && em.pctSofreu >= 75 && ev.pctVit >= 55){
+      cartoes += cartaoMercado('Lay 1x0 MUITO FAVORITO', 'verde', '● ALTA CONVICÇÃO',
+        `${rv.time} marcou em ${ev.pctMarcou}% e venceu ${ev.pctVit}% dos últimos ${ev.n}; ${rm.time} sofreu gol em ${em.pctSofreu}%. O 1x0 (mandante vencer magro sobre o favorito) é cenário raríssimo. Confirme o favoritismo pela odd (ideal ≤ 1.65).`);
+    }
+
     // OVER/UNDER
     let corOU, sOU, pOU;
     if (overCombinado >= 60){ corOU='verde'; sOU='● TENDÊNCIA: OVER 2.5';
@@ -2391,7 +2404,7 @@ APÓS COLETAR TODA A ANÁLISE NECESSÁRIA DESSE CONFRONTO, ME ENTREGUE POR FAVOR
 2- Quantos gols podem vir nesse jogo?
 3- Qual o mercado mais seguro para apostar?
 4- De 0 a 10 qual a sua confiança?
-5- AVALIAÇÃO DOS MERCADOS DE EXCHANGE (obrigatório): analise especificamente cada um destes mercados e diga se é VIÁVEL ou EVITAR, justificando: Lay 1x0, Lay 0x1, Over/Under gols (indique a linha), e Lay Zebra (lay no azarão). Indique quais valem a pena e quais evitar.
+5- AVALIAÇÃO DOS MERCADOS DE EXCHANGE (obrigatório): analise especificamente cada um destes mercados e diga se é VIÁVEL ou EVITAR, justificando: Lay 1x0, Lay 0x1, Lay 1x0 Muito Favorito (quando o visitante for forte favorito), Lay 0x1 Muito Favorito (quando o mandante for forte favorito), Over/Under gols (indique a linha), e Lay Zebra (lay no azarão). Indique quais valem a pena e quais evitar.
 ⚠️ Não fique em cima do muro, justifique cada conclusão`;
 }
 async function copiarPrompt(mandante, visitante, liga, botao){
@@ -3951,6 +3964,18 @@ function pontuarTD(mercado, o, em, ev){
     case 'lay10': {
       // 1x0 improvável: jogo de gols dos dois lados
       return clamp(bttsComb * 0.6 + overComb * 0.4);
+    }
+    case 'lay01_mf': {
+      // 0x1 MUITO FAVORITO: mandante forte favorito pelas odds + score alto + visitante sofre muito
+      const oddMand = o.odd_home ?? 99, oddVis = o.odd_away ?? 99;
+      if (!(oddMand <= 1.65 && oddMand < oddVis && em.pctMarcou >= 85 && ev.pctSofreu >= 75 && em.pctVit >= 55)) return null;
+      return clamp(75 + (em.pctMarcou-85) + (ev.pctSofreu-75)*0.6 + (1.65-oddMand)*40 + (em.pctVit-55)*0.4);
+    }
+    case 'lay10_mf': {
+      // 1x0 MUITO FAVORITO: visitante forte favorito pelas odds + score alto + mandante sofre muito
+      const oddMand = o.odd_home ?? 99, oddVis = o.odd_away ?? 99;
+      if (!(oddVis <= 1.65 && oddVis < oddMand && ev.pctMarcou >= 85 && em.pctSofreu >= 75 && ev.pctVit >= 55)) return null;
+      return clamp(75 + (ev.pctMarcou-85) + (em.pctSofreu-75)*0.6 + (1.65-oddVis)*40 + (ev.pctVit-55)*0.4);
     }
     case 'lay_zebra': {
       if (temOdds){
