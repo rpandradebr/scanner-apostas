@@ -1283,7 +1283,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.17";
+const APP_VERSAO = "v4.18";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2553,6 +2553,40 @@ async function copiarPrompt(mandante, visitante, liga, botao){
 }
 window.copiarPrompt = copiarPrompt;
 
+// monta um bloco com os dados REAIS do sistema para a IA analisar (em vez de inventar)
+function montarDadosReais(mandante, visitante, em, ev, o){
+  const linha = (nome, st) => {
+    if (!st) return `${nome}: sem dados históricos suficientes no sistema.`;
+    return `${nome} (últimos ${st.n||10} jogos): média ${st.mediaPro} gols marcados e ${st.mediaContra} sofridos por jogo; vence ${st.pctVit}%, marca em ${st.pctMarcou}%, sofre gol em ${st.pctSofreu}%; jogos com Over 2.5: ${st.pctOver}%; ambas marcam (BTTS): ${st.pctBtts}%.`;
+  };
+  let odds = '';
+  if (o && o.odd_home){
+    odds = `\nODDS DO MERCADO (casa/empate/fora): ${o.odd_home} / ${o.odd_draw||'-'} / ${o.odd_away}. `
+      + `O favorito pelas odds é ${(o.odd_home<=o.odd_away)?mandante:visitante}.`;
+  }
+  return `\n\n===== DADOS REAIS DO SISTEMA (use ESTES números, são atuais e verificados) =====
+${linha(mandante, em)}
+${linha(visitante, ev)}${odds}
+=================================================================`;
+}
+window.montarDadosReais = montarDadosReais;
+
+// prompt para a IA: mesma estrutura, mas com dados reais e SEM inventar escalação
+function montarPromptIA(mandante, visitante, liga, blocoDados){
+  const base = montarPrompt(mandante, visitante, liga);
+  const instrucaoAntiInvencao = `
+
+⚠️⚠️ REGRAS CRÍTICAS DE HONESTIDADE (leia antes de responder):
+- Você NÃO tem acesso a dados ao vivo nem à escalação atual. Seu conhecimento de elencos pode estar desatualizado.
+- NUNCA invente escalações, nomes de jogadores, contratações ou lesões. Se você não tem certeza ATUAL de quem está no time, diga claramente: "Não tenho a escalação atual confirmada — confirme na fonte oficial ~1h antes."
+- Nos pontos 3 e 4 (formação e desfalques), NÃO liste jogadores específicos a menos que tenha certeza. Prefira falar do estilo tático geral e avisar que a escalação precisa ser confirmada.
+- Para os números (médias, gols, over, BTTS), USE EXCLUSIVAMENTE os DADOS REAIS DO SISTEMA fornecidos abaixo. Não invente estatísticas.
+- Baseie sua análise de mercados nos dados reais fornecidos, não em suposições sobre jogadores.
+${blocoDados}`;
+  return base + instrucaoAntiInvencao;
+}
+window.montarPromptIA = montarPromptIA;
+
 // ---- Análise com IA (Gemini) direto no site ----
 const URL_ANALISE_IA = SUPABASE_URL + '/functions/v1/analise-ia';
 async function analisarComIA(mandante, visitante, liga, botao){
@@ -2567,7 +2601,19 @@ async function analisarComIA(mandante, visitante, liga, botao){
   </div>`;
   alvo.scrollIntoView({ behavior:'smooth', block:'nearest' });
   try{
-    const prompt = montarPrompt(mandante, visitante, liga);
+    // busca os dados REAIS dos dois times no sistema (para a IA não inventar)
+    let blocoDados = '';
+    try{
+      const jFicha = gradeJogos[gradeJogos.findIndex(g => g.mandante===mandante && g.visitante===visitante)] || {};
+      const [em, ev] = await Promise.all([
+        estatisticasComCache(mandante, jFicha.mandante_id, false),
+        estatisticasComCache(visitante, jFicha.visitante_id, false),
+      ]);
+      const o = jFicha.fixture_id ? oddsMap[jFicha.fixture_id] : null;
+      blocoDados = montarDadosReais(mandante, visitante, em, ev, o);
+    }catch(_){ blocoDados = '\n(Dados estatísticos do sistema indisponíveis para este jogo.)'; }
+
+    const prompt = montarPromptIA(mandante, visitante, liga, blocoDados);
     const r = await fetch(URL_ANALISE_IA, {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
@@ -2586,7 +2632,7 @@ async function analisarComIA(mandante, visitante, liga, botao){
         <button class="mini" onclick="navigator.clipboard.writeText(this.parentElement.parentElement.querySelector('.ia-texto').innerText);this.textContent='✅ Copiado'" style="border-color:#8e7cff;color:#8e7cff">📋 Copiar</button>
       </div>
       <div class="ia-texto" style="font-size:13.5px;line-height:1.6">${analiseHtml}</div>
-      <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px;border-top:1px solid var(--linha);padding-top:8px">⚠️ Análise gerada por IA com base no conhecimento do modelo. A IA não acessa dados ao vivo (escalação do dia, lesões de última hora). Sempre confirme a escalação oficial ~1h antes e valide a odd na exchange.</p>
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px;border-top:1px solid var(--linha);padding-top:8px">⚠️ A IA analisou usando os dados estatísticos reais do sistema. Ela foi instruída a não inventar escalações — mas ainda não acessa notícias ao vivo. Confirme a escalação oficial e lesões ~1h antes na fonte oficial, e valide a odd na exchange.</p>
     </div>`;
   }catch(e){
     alvo.innerHTML = `<div class="aviso erro" style="margin-top:12px">❌ Falha: ${e.message}</div>`;
