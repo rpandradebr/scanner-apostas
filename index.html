@@ -1312,7 +1312,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.20";
+const APP_VERSAO = "v4.21";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6619,17 +6619,22 @@ async function gerarPanoramaRodada(){
     const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
     const nomeLigaNorm = norm(nomeLiga);
     const nomeLigaBanco = norm(rs.liga || ''); // nome que veio dos stats salvos
+    const paisLiga = norm(rs.pais || '');       // país da liga escolhida (evita homônimos: Serie A BR x IT)
     for (const d of datas){
       try{
         const rg = await chamarEdge({ acao:'grade', data: d });
         (rg.jogos||[]).forEach(j => {
           const lid = String(j.liga_id||'');
           const ljogo = norm(j.liga);
-          const casa = lid === String(liga)              // por id (grade nova)
-            || (ljogo && (ljogo === nomeLigaNorm || ljogo === nomeLigaBanco))  // nome exato
-            || (nomeLigaBanco && ljogo.includes(nomeLigaBanco))               // nome dos stats salvos
-            || (ljogo && nomeLigaNorm.includes(ljogo));                       // parcial
-          if (casa) jogos.push(j);
+          const pjogo = norm(j.pais);
+          // casamento por ID é definitivo; por nome, só se o PAÍS também bater (evita homônimos)
+          const casaPorId = lid && lid === String(liga);
+          const casaPorNome = !lid && paisLiga && pjogo === paisLiga && (
+            ljogo === nomeLigaNorm || ljogo === nomeLigaBanco ||
+            (nomeLigaBanco && ljogo.includes(nomeLigaBanco)) ||
+            (ljogo && nomeLigaNorm.includes(ljogo))
+          );
+          if (casaPorId || casaPorNome) jogos.push(j);
         });
       }catch(_){}
     }
