@@ -202,6 +202,14 @@
   </header>
   <div class="nav-overlay" id="nav-overlay" onclick="fecharMenu()"></div>
 
+  <!-- Modal de detalhes do time -->
+  <div id="time-modal-overlay" onclick="fecharTimeModal(event)" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;padding:20px;overflow-y:auto">
+    <div id="time-modal" onclick="event.stopPropagation()" style="max-width:760px;margin:20px auto;background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:20px;position:relative">
+      <button onclick="fecharTimeModal()" style="position:absolute;top:12px;right:12px;background:var(--pitch);border:1px solid var(--linha);color:var(--chalk);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px">✕</button>
+      <div id="time-modal-conteudo"><p style="color:var(--chalk-dim);padding:20px;text-align:center">⏳ Carregando...</p></div>
+    </div>
+  </div>
+
   <nav>
     <button data-aba="aovivo" class="menu-item-solo" title="Jogos acontecendo agora, com placar e minuto ao vivo.">🔴 Ao vivo</button>
 
@@ -1312,7 +1320,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.21";
+const APP_VERSAO = "v4.22";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5889,17 +5897,17 @@ function renderStatsLiga(){
       ${lista.map((t,i) => {
         const pct = max>0 ? Math.round(t[est]/max*100) : 0;
         const acimaMedia = t[est] >= media;
-        return `<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="verJogadoresTime('${t.time.replace(/'/g,String.fromCharCode(92,39))}')" title="Ver jogadores de ${t.time}">
+        return `<div style="display:flex;align-items:center;gap:10px">
           <span style="min-width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim)">${i+1}º</span>
-          <span style="min-width:150px;font-size:13px;font-weight:${i<3?'700':'400'}">${t.time} <span style="font-size:10px;color:var(--chalk-dim)">👤</span></span>
-          <div style="flex:1;background:var(--pitch);border-radius:4px;height:22px;overflow:hidden;position:relative;min-width:80px">
+          <span style="min-width:150px;font-size:13px;font-weight:${i<3?'700':'400'};cursor:pointer" onclick="abrirTimeModal('${t.time.replace(/'/g,String.fromCharCode(92,39))}', '${$('sl-liga').value}', null)" title="Ver painel completo de ${t.time}">${t.time} <span style="font-size:10px;color:var(--amber)">📊</span></span>
+          <div style="flex:1;background:var(--pitch);border-radius:4px;height:22px;overflow:hidden;position:relative;min-width:80px;cursor:pointer" onclick="verJogadoresTime('${t.time.replace(/'/g,String.fromCharCode(92,39))}')" title="Ver jogadores">
             <div style="width:${pct}%;height:100%;background:${acimaMedia?'var(--amber)':'var(--chalk-dim)'};border-radius:4px"></div>
             <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700">${t[est]}${sufixo}</span>
           </div>
         </div>`;
       }).join('')}
     </div>
-    <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px">Clique num time para ver os jogadores. Barras em destaque = acima da média da liga.</p>
+    <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:12px">Clique no <b>nome</b> (📊) para o painel completo do time, ou na <b>barra</b> para ver os jogadores. Barras em destaque = acima da média da liga.</p>
     <div id="sl-jogadores"></div>`;
 }
 window.renderStatsLiga = renderStatsLiga;
@@ -6466,9 +6474,9 @@ async function gerarPunterSugestoes(){
           const val = t[mercado];
           const cede = cedeCampo && t[cedeCampo] != null ? t[cedeCampo] : null;
           const acima = val >= media;
-          return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--card);border-radius:6px">
+          return `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--card);border-radius:6px;cursor:pointer" onclick="abrirTimeModal('${(t.time||'').replace(/'/g,String.fromCharCode(92,39))}', '${liga}', null)" title="Ver painel completo de ${t.time}">
             <span style="min-width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim)">${i+1}º</span>
-            <span style="flex:1;font-weight:${i<3?'700':'400'}">${t.time}</span>
+            <span style="flex:1;font-weight:${i<3?'700':'400'}">${t.time} <span style="font-size:10px;color:var(--amber)">📊</span></span>
             <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;color:${acima?'var(--amber)':'var(--chalk)'}">${val}</span>
             ${cede!=null ? `<span style="font-size:11px;color:var(--chalk-dim)">cede ${cede}</span>` : ''}
           </div>`;
@@ -6706,6 +6714,191 @@ function initPanorama(){
 window.initPanorama = initPanorama;
 
 if ($('btn-pr-gerar')) $('btn-pr-gerar').addEventListener('click', gerarPanoramaRodada);
+
+
+
+// ==========================================================
+// MODAL DE DETALHES DO TIME — leque completo de dados
+// ==========================================================
+// abre por cima em qualquer aba. Usa dados salvos (grátis) + gols por minuto (API sob demanda)
+function fecharTimeModal(ev){
+  if (ev && ev.target && ev.target.id !== 'time-modal-overlay' && ev.type === 'click') {
+    // só fecha se clicou no overlay ou no X
+    if (ev.target.id !== 'time-modal-overlay') return;
+  }
+  $('time-modal-overlay').style.display = 'none';
+}
+window.fecharTimeModal = fecharTimeModal;
+
+// cache dos stats de liga já lidos (evita reler)
+const _statsLigaCache = {};
+async function statsLigaParaModal(ligaId){
+  if (_statsLigaCache[ligaId]) return _statsLigaCache[ligaId];
+  const r = await chamarEdge({ acao:'stats_liga_ler', liga: ligaId });
+  _statsLigaCache[ligaId] = r;
+  return r;
+}
+
+// monta as barras de gols por minuto
+function barrasMinuto(dados, cor){
+  if (!dados) return '<p style="font-size:12px;color:var(--chalk-dim)">Sem dados de minutagem.</p>';
+  const faixas = ['0-15','16-30','31-45','46-60','61-75','76-90'];
+  const vals = faixas.map(f => {
+    const d = dados[f];
+    return d ? (parseInt(d.total)||0) : 0;
+  });
+  const max = Math.max(...vals, 1);
+  return `<div style="display:flex;gap:4px;align-items:flex-end;height:70px;margin-top:6px">
+    ${faixas.map((f,i) => {
+      const h = Math.round((vals[i]/max)*60)+4;
+      const pct = dados[f]?.percentage || '';
+      return `<div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--chalk-dim)">${vals[i]}</div>
+        <div style="background:${cor};height:${h}px;border-radius:3px 3px 0 0" title="${f}min: ${vals[i]} gols ${pct}"></div>
+        <div style="font-size:8.5px;color:var(--chalk-dim);margin-top:2px">${f}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function abrirTimeModal(nomeTime, ligaId, timeId){
+  const overlay = $('time-modal-overlay');
+  const alvo = $('time-modal-conteudo');
+  overlay.style.display = 'block';
+  alvo.innerHTML = `<p style="color:var(--chalk-dim);padding:20px;text-align:center">⏳ Carregando dados de ${nomeTime}...</p>`;
+
+  // 1) dados salvos da liga (grátis)
+  let t = null, nomeLiga = '';
+  try{
+    const rs = await statsLigaParaModal(ligaId);
+    nomeLiga = rs.liga || '';
+    if (rs.times?.length){
+      const n = (nomeTime||'').toLowerCase();
+      t = rs.times.find(x => (x.time||'').toLowerCase() === n)
+       || rs.times.find(x => (x.time||'').toLowerCase().includes(n) || n.includes((x.time||'').toLowerCase()));
+    }
+  }catch(_){}
+
+  const bloco = (titulo, faz, cede, unidade) => {
+    if (faz == null) return '';
+    return `<div style="background:var(--pitch);border-radius:8px;padding:10px;text-align:center;min-width:100px">
+      <div style="font-size:11px;color:var(--chalk-dim);margin-bottom:3px">${titulo}</div>
+      <div style="font-family:'Saira Condensed',sans-serif;font-size:24px;font-weight:800;color:var(--amber)">${faz}</div>
+      ${cede!=null ? `<div style="font-size:10px;color:var(--chalk-dim);margin-top:2px">cede ${cede}</div>` : ''}
+    </div>`;
+  };
+
+  let dadosSalvos = '';
+  if (t){
+    dadosSalvos = `
+      <h3 style="margin:14px 0 8px;font-size:15px">📊 Médias por jogo (${t.jogos} jogos · ${nomeLiga})</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${bloco('🎯 Chutes', t.mediaChutes, t.cedeChutes)}
+        ${bloco('⚽ Chutes a gol', t.mediaChutesGol, t.cedeChutesGol)}
+        ${bloco('🚩 Escanteios', t.mediaEscanteios, t.cedeEscanteios)}
+        ${bloco('⚠️ Faltas', t.mediaFaltas, t.cedeFaltas)}
+        ${bloco('🟨 Cartões', t.mediaAmarelos, t.cedeAmarelos)}
+        ${bloco('🚫 Impedimentos', t.mediaImpedimentos, t.cedeImpedimentos)}
+        ${t.mediaDesarmes!=null ? bloco('🛡️ Desarmes', t.mediaDesarmes, null) : ''}
+        ${bloco('📈 Posse %', t.mediaPosse, null)}
+        ${bloco('🔄 Passes', t.mediaPasses, null)}
+      </div>
+      <h3 style="margin:16px 0 8px;font-size:15px">🏟️ Chutes: casa vs fora</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${bloco('Chutes HT geral', t.mediaChutes, null)}
+        ${bloco('Chutes em casa', t.mediaChutesCasa, null)}
+        ${bloco('Chutes fora', t.mediaChutesFora, null)}
+        ${bloco('Passes em casa', t.mediaPassesCasa, null)}
+        ${bloco('Passes fora', t.mediaPassesFora, null)}
+      </div>`;
+  } else {
+    dadosSalvos = `<div class="aviso" style="margin-top:12px">Estatísticas detalhadas deste time não estão salvas. Carregue a liga em <b>Estatísticas de time</b> para ver chutes, escanteios, faltas, etc.</div>`;
+  }
+
+  // monta o cabeçalho e o corpo inicial (com os dados salvos)
+  alvo.innerHTML = `
+    <h2 style="margin:0 0 2px;padding-right:40px">${nomeTime}</h2>
+    <p style="font-size:12px;color:var(--chalk-dim);margin:0 0 8px">${nomeLiga||''}</p>
+    ${dadosSalvos}
+    <div id="time-modal-minutos"><h3 style="margin:16px 0 8px;font-size:15px">⏱️ Gols por minuto</h3><p style="font-size:12px;color:var(--chalk-dim)">⏳ Buscando na API...</p></div>`;
+
+  // 2) gols por minuto + casa/fora (analise_completa, sob demanda)
+  // se não veio timeId, tenta resolver pelo nome (rota historico devolve time_id)
+  if (!timeId){
+    try{
+      const rh = await chamarEdge({ acao:'historico', time: nomeTime });
+      if (rh.time_id) timeId = rh.time_id;
+    }catch(_){}
+  }
+  if (timeId){
+    try{
+      const params = { acao:'analise_completa', time_id: timeId, liga_id: ligaId };
+      const r = await chamarEdge(params);
+      const s = r.resumo;
+      if (s){
+        const co = (v) => v==null?'–':v;
+        $('time-modal-minutos').innerHTML = `
+          <h3 style="margin:16px 0 8px;font-size:15px">⏱️ Gols por minuto (temporada)</h3>
+          <div style="background:var(--pitch);border-radius:8px;padding:12px">
+            <b style="color:var(--green);font-size:13px">⚽ Quando MARCA</b>
+            ${barrasMinuto(s.golsProMinuto,'var(--green)')}
+            <b style="color:var(--red);font-size:13px;display:block;margin-top:12px">🥅 Quando SOFRE</b>
+            ${barrasMinuto(s.golsContraMinuto,'var(--red)')}
+          </div>
+          <h3 style="margin:16px 0 8px;font-size:15px">🏟️ Desempenho casa vs fora</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;background:var(--pitch);border-radius:8px;padding:12px">
+              <b style="color:var(--amber)">🏠 Em casa</b>
+              <div style="font-size:13px;margin-top:6px;line-height:1.7">
+                ${co(s.casa?.j)} jogos · ${co(s.casa?.v)}V ${co(s.casa?.e)}E ${co(s.casa?.d)}D<br>
+                Gols: ${co(s.casa?.gp)} pró / ${co(s.casa?.gc)} contra<br>
+                Média: ${co(s.mediaGolsProCasa)} feitos / ${co(s.mediaGolsContraCasa)} sofridos
+              </div>
+            </div>
+            <div style="flex:1;min-width:200px;background:var(--pitch);border-radius:8px;padding:12px">
+              <b style="color:var(--amber)">✈️ Fora</b>
+              <div style="font-size:13px;margin-top:6px;line-height:1.7">
+                ${co(s.fora?.j)} jogos · ${co(s.fora?.v)}V ${co(s.fora?.e)}E ${co(s.fora?.d)}D<br>
+                Gols: ${co(s.fora?.gp)} pró / ${co(s.fora?.gc)} contra<br>
+                Média: ${co(s.mediaGolsProFora)} feitos / ${co(s.mediaGolsContraFora)} sofridos
+              </div>
+            </div>
+          </div>
+          <h3 style="margin:16px 0 8px;font-size:15px">📋 Resumo da temporada</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${bloco('Jogos', s.jogos, null)}
+            ${bloco('Clean sheets', s.cleanSheet, null)}
+            ${bloco('Não marcou', s.faltaMarcar, null)}
+            ${bloco('🟨 total', s.cartoesAmarelos?.total?.total ?? somaCartoes(s.cartoesAmarelos), null)}
+          </div>
+          ${s.formaRecente ? `<p style="margin-top:12px;font-size:13px"><b>Forma recente:</b> <span style="font-family:'IBM Plex Mono',monospace">${formatarForma(s.formaRecente)}</span></p>` : ''}`;
+      } else {
+        $('time-modal-minutos').innerHTML = '<p style="font-size:12px;color:var(--chalk-dim)">Gols por minuto indisponíveis para este time nesta temporada.</p>';
+      }
+    }catch(e){
+      $('time-modal-minutos').innerHTML = `<p style="font-size:12px;color:var(--chalk-dim)">Não foi possível buscar gols por minuto: ${e.message}</p>`;
+    }
+  } else {
+    $('time-modal-minutos').innerHTML = '<p style="font-size:12px;color:var(--chalk-dim)">Clique num time que tenha ID para ver gols por minuto e casa/fora.</p>';
+  }
+}
+window.abrirTimeModal = abrirTimeModal;
+
+// soma cartões amarelos de todas as faixas de minuto (a API divide por minuto)
+function somaCartoes(obj){
+  if (!obj) return '–';
+  let soma = 0;
+  Object.values(obj).forEach(v => { if (v && v.total) soma += parseInt(v.total)||0; });
+  return soma || '–';
+}
+function formatarForma(f){
+  if (!f) return '';
+  return f.slice(-10).split('').map(c => {
+    const cor = c==='W'?'var(--green)':c==='L'?'var(--red)':'var(--chalk-dim)';
+    const letra = c==='W'?'V':c==='L'?'D':'E';
+    return `<span style="color:${cor};font-weight:700">${letra}</span>`;
+  }).join(' ');
+}
 
 </script>
 </body>
