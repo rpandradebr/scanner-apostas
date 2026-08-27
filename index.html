@@ -243,6 +243,7 @@
       <div class="menu-grupo-itens">
         <button data-aba="punter-sugestoes" title="Sugestões de mercados de estatística (escanteios, cartões, desarmes, faltas, chutes).">💡 Sugestões do dia</button>
         <button data-aba="punter-topdia" title="Ranking dos times por mercado de estatística com base nos dados salvos.">🏆 TOP do dia</button>
+        <button data-aba="punter-rodada" title="Panorama de uma rodada inteira: todos os jogos do campeonato com as linhas de desarmes, faltas, cartões, escanteios e chutes dos dois times.">📋 Panorama da rodada</button>
       </div>
     </div>
 
@@ -491,6 +492,25 @@
     <div id="punter-td-aviso"></div>
     <div id="punter-td-resultado"></div>
   </section>
+
+  <!-- ================= PUNTER — PANORAMA DA RODADA ================= -->
+  <section id="aba-punter-rodada">
+    <h2>📋 Panorama da rodada</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Escolha o campeonato e veja <b>todos os jogos da rodada</b> com as linhas estatísticas dos dois times: desarmes, faltas, cartões, escanteios e chutes. Cada número mostra a média do time (o que produz) e, quando disponível, o que o adversário cede. Usa os dados salvos na aba Estatísticas de time.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Campeonato:
+        <select id="pr-liga" style="width:auto;min-width:220px;padding:6px 8px"></select>
+      </label>
+      <input type="date" id="pr-data" style="width:auto;padding:7px 10px" title="Data da rodada (ou deixe em branco para os próximos jogos)">
+      <button class="acao" id="btn-pr-gerar">📋 Ver panorama</button>
+    </div>
+    <div id="pr-aviso"></div>
+    <div id="pr-resultado"></div>
+  </section>
+
 
 
 
@@ -928,7 +948,7 @@
   <section id="aba-campeonatos">
     <h2>🏆 Estatísticas por campeonato</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">
-      Perfil de gols de cada campeonato com base nos jogos já carregados no banco (não gasta requisição da API). Descubra quais ligas são mais Under, mais Over, mais BTTS — para caçar cada mercado onde ele mais acontece. Clique num campeonato para ver os times dentro dele.
+      Perfil de gols de cada campeonato com base nos jogos já carregados no banco (não gasta requisição da API). Por padrão mostra só a <b>temporada atual</b> (últimos 12 meses) para não misturar temporadas antigas. Descubra quais ligas são mais Under, mais Over, mais BTTS. Clique num campeonato para ver os times dentro dele.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <button class="acao" id="btn-gerar-campeonatos">📊 Gerar estatísticas</button>
@@ -942,6 +962,15 @@
           <option value="pctBtts">Mais Ambas marcam</option>
           <option value="mediaGols">Mais gols (média)</option>
           <option value="jogos">Maior amostra</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Período:
+        <select id="camp-temporada" style="width:auto;padding:4px 8px">
+          <option value="12">Temporada atual (12 meses)</option>
+          <option value="6">Últimos 6 meses</option>
+          <option value="3">Últimos 3 meses</option>
+          <option value="0">Tudo (todas temporadas)</option>
         </select>
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
@@ -1283,7 +1312,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.18";
+const APP_VERSAO = "v4.19";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1483,6 +1512,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'sonota10' && typeof renderNota10 === 'function'){ renderNota10(); }
   // inicializa as abas do Punter ao abrir
   if ((b.dataset.aba === 'punter-sugestoes' || b.dataset.aba === 'punter-topdia') && typeof initPunter === 'function'){ initPunter(); }
+  // inicializa o panorama da rodada ao abrir
+  if (b.dataset.aba === 'punter-rodada' && typeof initPanorama === 'function'){ initPanorama(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -5338,7 +5369,14 @@ async function gerarStatsCampeonatos(){
   const alvo = $('campeonatos-conteudo');
   alvo.innerHTML = '<p class="msg-vazia">⏳ Calculando (do banco, sem gastar API)...</p>';
   try{
-    const r = await chamarEdge({ acao:'stats_campeonatos' });
+    // calcula a data de corte pela temporada escolhida
+    const meses = $('camp-temporada') ? parseInt($('camp-temporada').value) : 12;
+    let desde = '2000-01-01'; // "Tudo" = data bem antiga
+    if (meses > 0){
+      const d = new Date(); d.setMonth(d.getMonth() - meses);
+      desde = d.toISOString().slice(0,10);
+    }
+    const r = await chamarEdge({ acao:'stats_campeonatos', desde });
     _campData = r.campeonatos || [];
     if (!_campData.length){ alvo.innerHTML = '<div class="aviso"><b>Ainda não há jogos encerrados no banco.</b><br><br>Esta aba calcula o perfil de gols de cada liga a partir de jogos que já terminaram (com placar). Para popular:<br>1. Vá em <b>📅 Grade do dia</b><br>2. Escolha uma data <b>passada</b> (ontem, anteontem, semana passada)<br>3. Gere a grade — os jogos com placar ficam salvos<br>4. Repita para alguns dias e volte aqui<br><br>Ou use <b>📥 Importar CSV</b> para carregar resultados em massa de uma vez (não gasta requisição).</div>'; return; }
     renderCampeonatos();
@@ -6539,6 +6577,118 @@ window.initPunter = initPunter;
 
 if ($('btn-punter-sugerir')) $('btn-punter-sugerir').addEventListener('click', gerarPunterSugestoes);
 if ($('btn-punter-td')) $('btn-punter-td').addEventListener('click', gerarPunterTopDia);
+
+
+
+// ==========================================================
+// PANORAMA DA RODADA — todos os jogos do campeonato com linhas estatísticas
+// ==========================================================
+function popularLigasPanorama(){
+  const sel = $('pr-liga');
+  if (sel && !sel.options.length){
+    sel.innerHTML = PUNTER_LIGAS.map(([v,n]) => `<option value="${v}">${n}</option>`).join('');
+  }
+}
+
+async function gerarPanoramaRodada(){
+  const liga = $('pr-liga').value;
+  const nomeLiga = $('pr-liga').selectedOptions[0].text;
+  const data = $('pr-data').value;
+  const btn = $('btn-pr-gerar'); btn.disabled = true;
+  aviso($('pr-aviso'),'');
+  $('pr-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:12px">⏳ Carregando jogos e cruzando estatísticas...</p>';
+  try{
+    // 1) lê os stats salvos da liga
+    const rs = await chamarEdge({ acao:'stats_liga_ler', liga });
+    if (!rs.carregado || !rs.times?.length){
+      $('pr-resultado').innerHTML=''; 
+      aviso($('pr-aviso'), `${nomeLiga} ainda não tem estatísticas salvas. Vá em Estatísticas de time e carregue esta liga primeiro.`, 'erro');
+      btn.disabled=false; return;
+    }
+    const times = rs.times;
+    function achaTime(nome){
+      const n = (nome||'').toLowerCase();
+      return times.find(t => (t.time||'').toLowerCase() === n)
+          || times.find(t => (t.time||'').toLowerCase().includes(n) || n.includes((t.time||'').toLowerCase()));
+    }
+
+    // 2) pega os jogos da liga (na data escolhida, ou próximos dias)
+    let jogos = [];
+    const datas = data ? [data] : listarProximosDias(4); // hoje + 3 dias se não escolher data
+    for (const d of datas){
+      try{
+        const rg = await chamarEdge({ acao:'grade', data: d });
+        (rg.jogos||[]).forEach(j => { if (String(j.liga_id)===String(liga) || (j.liga||'').toLowerCase().includes(nomeLiga.toLowerCase().split(' ')[0])) jogos.push(j); });
+      }catch(_){}
+    }
+    // dedup por fixture
+    const vistos = new Set();
+    jogos = jogos.filter(j => { const k = j.fixture_id||`${j.mandante}-${j.visitante}`; if (vistos.has(k)) return false; vistos.add(k); return true; });
+    if (!jogos.length){ $('pr-resultado').innerHTML=''; aviso($('pr-aviso'), 'Nenhum jogo encontrado para esta liga nesta data. Tente outra data ou deixe em branco para os próximos dias.', 'erro'); btn.disabled=false; return; }
+
+    // 3) monta o panorama
+    const mercados = [
+      ['🚩 Escanteios','mediaEscanteios','cedeEscanteios'],
+      ['🟨 Cartões','mediaAmarelos','cedeAmarelos'],
+      ['⚠️ Faltas','mediaFaltas','cedeFaltas'],
+      ['🎯 Chutes','mediaChutes','cedeChutes'],
+      ['⚽ Chutes a gol','mediaChutesGol','cedeChutesGol'],
+      ['🛡️ Desarmes','mediaDesarmes',null],
+    ];
+    gradeJogos = gradeJogos || [];
+    let html = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:12px">${jogos.length} jogo(s) · ${nomeLiga}. Cada linha: <b>mandante</b> / <b>visitante</b> (média por jogo). Clique no confronto para abrir a ficha.</p>`;
+    jogos.forEach(j => {
+      const tm = achaTime(j.mandante), tv = achaTime(j.visitante);
+      const idx = gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1);
+      const linhasMercado = mercados.map(([nome,campo]) => {
+        const vm = tm && tm[campo]!=null ? tm[campo] : '–';
+        const vv = tv && tv[campo]!=null ? tv[campo] : '–';
+        // soma projetada (quando ambos têm dado)
+        const soma = (typeof vm==='number' && typeof vv==='number') ? (vm+vv).toFixed(1) : '–';
+        return `<tr>
+          <td style="text-align:left;padding:4px 8px">${nome}</td>
+          <td style="text-align:center;padding:4px 8px;font-family:'IBM Plex Mono',monospace">${vm}</td>
+          <td style="text-align:center;padding:4px 8px;font-family:'IBM Plex Mono',monospace">${vv}</td>
+          <td style="text-align:center;padding:4px 8px;font-family:'IBM Plex Mono',monospace;color:var(--amber);font-weight:700">${soma}</td>
+        </tr>`;
+      }).join('');
+      const semDados = (!tm || !tv) ? `<div style="font-size:11px;color:var(--red);padding:4px 8px">⚠️ ${!tm?j.mandante:''} ${!tv?j.visitante:''} sem estatísticas salvas — carregue a liga completa em Estatísticas de time.</div>` : '';
+      html += `<div style="background:var(--card);border-radius:8px;padding:10px;margin-bottom:10px">
+        <div style="cursor:pointer;font-weight:700;font-size:15px;margin-bottom:6px" onclick="fichaJogo(${idx})">
+          ${j.mandante} <span style="color:var(--chalk-dim)">x</span> ${j.visitante}
+          <span style="font-size:11px;color:var(--chalk-dim);font-weight:400">${j.hora||''} ${j.data_jogo?('· '+j.data_jogo):''}</span>
+        </div>
+        ${semDados}
+        <div class="tabela-scroll"><table class="comp" style="font-size:12.5px;width:100%">
+          <tr>
+            <th style="text-align:left">Mercado</th>
+            <th style="text-align:center">${j.mandante}</th>
+            <th style="text-align:center">${j.visitante}</th>
+            <th style="text-align:center">Total proj.</th>
+          </tr>
+          ${linhasMercado}
+        </table></div>
+      </div>`;
+    });
+    $('pr-resultado').innerHTML = html;
+  }catch(e){ aviso($('pr-aviso'), 'Erro: '+e.message, 'erro'); $('pr-resultado').innerHTML=''; }
+  finally{ btn.disabled=false; }
+}
+window.gerarPanoramaRodada = gerarPanoramaRodada;
+
+// helper: lista os próximos N dias em YYYY-MM-DD
+function listarProximosDias(n){
+  const arr = [];
+  for (let i=0;i<n;i++){ const d = new Date(); d.setDate(d.getDate()+i); arr.push(d.toISOString().slice(0,10)); }
+  return arr;
+}
+
+function initPanorama(){
+  popularLigasPanorama();
+}
+window.initPanorama = initPanorama;
+
+if ($('btn-pr-gerar')) $('btn-pr-gerar').addEventListener('click', gerarPanoramaRodada);
 
 </script>
 </body>
