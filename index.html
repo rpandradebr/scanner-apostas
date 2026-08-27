@@ -1312,7 +1312,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.19";
+const APP_VERSAO = "v4.20";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6615,10 +6615,22 @@ async function gerarPanoramaRodada(){
     // 2) pega os jogos da liga (na data escolhida, ou próximos dias)
     let jogos = [];
     const datas = data ? [data] : listarProximosDias(4); // hoje + 3 dias se não escolher data
+    // normaliza nome para casar liga (remove acentos, minúsculo)
+    const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+    const nomeLigaNorm = norm(nomeLiga);
+    const nomeLigaBanco = norm(rs.liga || ''); // nome que veio dos stats salvos
     for (const d of datas){
       try{
         const rg = await chamarEdge({ acao:'grade', data: d });
-        (rg.jogos||[]).forEach(j => { if (String(j.liga_id)===String(liga) || (j.liga||'').toLowerCase().includes(nomeLiga.toLowerCase().split(' ')[0])) jogos.push(j); });
+        (rg.jogos||[]).forEach(j => {
+          const lid = String(j.liga_id||'');
+          const ljogo = norm(j.liga);
+          const casa = lid === String(liga)              // por id (grade nova)
+            || (ljogo && (ljogo === nomeLigaNorm || ljogo === nomeLigaBanco))  // nome exato
+            || (nomeLigaBanco && ljogo.includes(nomeLigaBanco))               // nome dos stats salvos
+            || (ljogo && nomeLigaNorm.includes(ljogo));                       // parcial
+          if (casa) jogos.push(j);
+        });
       }catch(_){}
     }
     // dedup por fixture
