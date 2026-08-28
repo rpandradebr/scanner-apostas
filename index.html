@@ -1368,7 +1368,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.25";
+const APP_VERSAO = "v4.26";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6825,14 +6825,14 @@ async function gerarRankingMercados(){
     gradeJogos = gradeJogos || [];
     // mercados a rankear: [rótulo, campoFaz, campoCede]
     const mercados = [
-      ['🛡️ Desarmes','mediaDesarmes',null],
-      ['🎯 Chutes','mediaChutes','cedeChutes'],
-      ['⚽ Chutes a gol','mediaChutesGol','cedeChutesGol'],
-      ['🏠 Chutes HT (casa/fora)','__chutesHT',null],
-      ['🚩 Escanteios','mediaEscanteios','cedeEscanteios'],
-      ['⚠️ Faltas','mediaFaltas','cedeFaltas'],
-      ['🟨 Cartões','mediaAmarelos','cedeAmarelos'],
-      ['🚫 Impedimentos','mediaImpedimentos','cedeImpedimentos'],
+      ['🛡️ Desarmes','mediaDesarmes',null,'Tackles'],
+      ['🎯 Chutes','mediaChutes','cedeChutes','Total Shots'],
+      ['⚽ Chutes a gol','mediaChutesGol','cedeChutesGol','Shots on Goal'],
+      ['🏠 Chutes HT (casa/fora)','__chutesHT',null,'Total Shots'],
+      ['🚩 Escanteios','mediaEscanteios','cedeEscanteios','Corner Kicks'],
+      ['⚠️ Faltas','mediaFaltas','cedeFaltas','Fouls'],
+      ['🟨 Cartões','mediaAmarelos','cedeAmarelos','Yellow Cards'],
+      ['🚫 Impedimentos','mediaImpedimentos','cedeImpedimentos','Offsides'],
     ];
     // projeta o total de cada jogo para um mercado
     function projeta(j, campo, cede){
@@ -6853,7 +6853,7 @@ async function gerarRankingMercados(){
 
     let html = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:14px">${jogos.length} jogo(s) analisado(s) · ${nomeLiga}. Para cada mercado, os jogos com <b>maior volume projetado</b> (soma dos dois times). Clique num jogo para a ficha.</p>`;
 
-    mercados.forEach(([rotulo, campo, cede]) => {
+    mercados.forEach(([rotulo, campo, cede, tipoApi], mi) => {
       const ranking = jogos
         .map(j => ({ j, total: projeta(j, campo, cede) }))
         .filter(x => x.total != null)
@@ -6862,7 +6862,6 @@ async function gerarRankingMercados(){
         html += `<div style="margin-bottom:16px"><h3 style="margin:0 0 6px;font-size:15px">${rotulo}</h3><p style="font-size:12px;color:var(--chalk-dim)">Sem dados salvos para este mercado nesta liga.</p></div>`;
         return;
       }
-      const melhor = ranking[0], pior = ranking[ranking.length-1];
       html += `<div style="margin-bottom:18px;background:var(--card);border-radius:10px;padding:14px">
         <h3 style="margin:0 0 10px;font-size:16px">${rotulo}</h3>
         <div style="display:flex;flex-direction:column;gap:5px">
@@ -6870,11 +6869,18 @@ async function gerarRankingMercados(){
             const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
             const destaque = i===0 ? 'border-left:3px solid var(--green)' : (i===ranking.length-1 && ranking.length>2 ? 'border-left:3px solid var(--red)' : 'border-left:3px solid transparent');
             const tag = i===0 ? '<span style="font-size:9.5px;background:var(--green);color:var(--pitch);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">MELHOR</span>' : (i===ranking.length-1 && ranking.length>2 ? '<span style="font-size:9.5px;background:var(--red);color:#fff;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">MENOR</span>' : '');
-            return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--pitch);border-radius:6px;cursor:pointer;${destaque}" onclick="fichaJogo(${idx})">
-              <span style="min-width:22px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--chalk-dim)">${i+1}º</span>
-              <span style="flex:1;font-size:13.5px;font-weight:${i===0?'700':'400'}">${x.j.mandante} <span style="color:var(--chalk-dim)">x</span> ${x.j.visitante}${tag}</span>
-              <span style="font-size:11px;color:var(--chalk-dim)">${x.j.hora||''}</span>
-              <span style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:800;color:${i===0?'var(--green)':'var(--amber)'};min-width:50px;text-align:right">${x.total.toFixed(1)}</span>
+            const rowId = `pr-hist-${mi}-${i}`;
+            const mid = x.j._tm?.time_id || x.j.mandante_id || '';
+            const vid = x.j._tv?.time_id || x.j.visitante_id || '';
+            const arg = `'${rowId}','${(x.j.mandante||'').replace(/'/g,"\\'")}','${mid}','${(x.j.visitante||'').replace(/'/g,"\\'")}','${vid}','${tipoApi}','${rotulo.replace(/'/g,"\\'")}'`;
+            return `<div>
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--pitch);border-radius:6px;cursor:pointer;${destaque}" onclick="toggleHistMercado(${arg})">
+                <span style="min-width:22px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--chalk-dim)">${i+1}º</span>
+                <span style="flex:1;font-size:13.5px;font-weight:${i===0?'700':'400'}">${x.j.mandante} <span style="color:var(--chalk-dim)">x</span> ${x.j.visitante}${tag} <span style="font-size:10px;color:var(--amber)">▾ histórico</span></span>
+                <span style="font-size:11px;color:var(--chalk-dim)">${x.j.hora||''}</span>
+                <span style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:800;color:${i===0?'var(--green)':'var(--amber)'};min-width:50px;text-align:right">${x.total.toFixed(1)}</span>
+              </div>
+              <div id="${rowId}" style="display:none;margin:2px 0 8px"></div>
             </div>`;
           }).join('')}
         </div>
@@ -6885,6 +6891,66 @@ async function gerarRankingMercados(){
   finally{ btn.disabled=false; }
 }
 window.gerarRankingMercados = gerarRankingMercados;
+
+// abre/fecha o histórico do mercado dos dois times, inline abaixo do jogo
+async function toggleHistMercado(rowId, mandante, mid, visitante, vid, tipoApi, rotulo){
+  const box = $(rowId);
+  if (!box) return;
+  // se já está aberto, fecha
+  if (box.style.display === 'block'){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<p style="font-size:12px;color:var(--chalk-dim);padding:8px">⏳ Buscando últimos 10 jogos dos dois times...</p>';
+
+  // monta a tabela de histórico de um time
+  function tabelaTime(nome, jogos){
+    if (!jogos || !jogos.length) return `<div style="flex:1;min-width:240px"><b style="font-size:13px">${nome}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem dados.</p></div>`;
+    let somaFez=0, somaCedeu=0, nf=0, nc=0;
+    const linhas = jogos.map(g => {
+      if (typeof g.fez==='number'){ somaFez+=g.fez; nf++; }
+      if (typeof g.cedeu==='number'){ somaCedeu+=g.cedeu; nc++; }
+      return `<tr>
+        <td style="padding:3px 6px;font-size:11.5px">${g.casa?'🏠':'✈️'} ${g.adversario}</td>
+        <td style="padding:3px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--amber);font-weight:700">${g.fez ?? '–'}</td>
+        <td style="padding:3px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk-dim)">${g.cedeu ?? '–'}</td>
+      </tr>`;
+    }).join('');
+    const mediaFez = nf ? (somaFez/nf).toFixed(1) : '–';
+    const mediaCedeu = nc ? (somaCedeu/nc).toFixed(1) : '–';
+    return `<div style="flex:1;min-width:240px">
+      <b style="font-size:13px">${nome}</b>
+      <table style="width:100%;margin-top:4px;border-collapse:collapse">
+        <tr style="border-bottom:1px solid var(--linha)">
+          <th style="text-align:left;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Adversário</th>
+          <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Fez</th>
+          <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Cedeu</th>
+        </tr>
+        ${linhas}
+        <tr style="border-top:2px solid var(--linha)">
+          <td style="padding:4px 6px;font-size:11.5px;font-weight:700">Média</td>
+          <td style="padding:4px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:800;color:var(--amber)">${mediaFez}</td>
+          <td style="padding:4px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:var(--chalk-dim)">${mediaCedeu}</td>
+        </tr>
+      </table>
+    </div>`;
+  }
+
+  try{
+    const [rm, rv] = await Promise.all([
+      mid ? chamarEdge({ acao:'stats_time_jogos', time_id: mid, mercado: tipoApi, n: 10 }) : Promise.resolve({ jogos:[] }),
+      vid ? chamarEdge({ acao:'stats_time_jogos', time_id: vid, mercado: tipoApi, n: 10 }) : Promise.resolve({ jogos:[] }),
+    ]);
+    box.innerHTML = `<div style="background:var(--pitch);border-radius:8px;padding:12px;margin-top:2px">
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin:0 0 8px">${rotulo} — últimos 10 jogos. <b style="color:var(--amber)">Fez</b> = o que o time produziu · <b>Cedeu</b> = o que o adversário fez contra ele.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${tabelaTime(mandante, rm.jogos)}
+        ${tabelaTime(visitante, rv.jogos)}
+      </div>
+    </div>`;
+  }catch(e){
+    box.innerHTML = `<p style="font-size:12px;color:var(--red);padding:8px">Erro ao buscar histórico: ${e.message}</p>`;
+  }
+}
+window.toggleHistMercado = toggleHistMercado;
 
 // helper: lista os próximos N dias em YYYY-MM-DD
 function listarProximosDias(n){
