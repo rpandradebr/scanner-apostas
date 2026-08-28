@@ -259,6 +259,7 @@
       <div class="menu-grupo-titulo" onclick="toggleGrupo(this)">🎛️ Controle <span class="menu-seta">▾</span></div>
       <div class="menu-grupo-itens">
         <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático.">📋 Histórico de sugestões</button>
+        <button data-aba="meusjogos" title="Só os jogos que você salvou com o botão 💾, sem as sugestões do bot. Seu funil pessoal concentrado.">⭐ Meus jogos</button>
         <button data-aba="botsug" title="Só as sugestões enviadas pelo vigia do Telegram (o bot).">📲 Sugestões do bot</button>
         <button data-aba="notas" title="Assertividade por faixa de nota, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
         <button data-aba="sonota10" title="Reúne todos os jogos nota máxima das Sugestões, Top do dia e bot.">🔟 Só Nota 10</button>
@@ -1236,6 +1237,52 @@
     <div class="tabela-scroll"><table id="hs-tabela"></table></div>
   </section>
 
+  <!-- ================= MEUS JOGOS ================= -->
+  <section id="aba-meusjogos">
+    <h2>⭐ Meus jogos</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Só os jogos que <b>você salvou</b> com o botão 💾 (nas Sugestões, Top do dia ou Só Nota 10). Aqui não entram as sugestões do bot — é o seu funil pessoal, concentrado num lugar só. Mesmos filtros e green/red automático do histórico.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <button class="acao" id="btn-mj-atualizar">🔄 Atualizar resultados</button>
+      <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="mj-status"></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Mercado:
+        <select id="mj-filtro-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Data:
+        <input type="date" id="mj-filtro-data" style="width:auto;padding:4px 8px">
+        <button class="mini" onclick="$('mj-filtro-data').value='';listarMeusJogos()">limpar</button>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="mj-filtro-pegas" style="width:auto"> Só apostas que peguei
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Situação:
+        <select id="mj-filtro-situacao" style="width:auto;padding:4px 8px">
+          <option value="todos">Todos</option>
+          <option value="ocorrer">Só os que vão ocorrer</option>
+          <option value="ocorridos">Só os que já ocorreram</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Ordenar por:
+        <select id="mj-ordem" style="width:auto;padding:4px 8px">
+          <option value="recente">Mais recentes primeiro</option>
+          <option value="hora">Hora do jogo (crescente)</option>
+          <option value="hora-desc">Hora do jogo (decrescente)</option>
+          <option value="nota">Maior nota</option>
+          <option value="mercado">Mercado (A-Z)</option>
+        </select>
+      </label>
+    </div>
+    <div id="mj-painel"></div>
+    <div id="mj-aviso"></div>
+    <div class="tabela-scroll"><table id="mj-tabela"></table></div>
+  </section>
+
+
   <!-- ================= SUGESTÕES DO BOT ================= -->
   <section id="aba-botsug">
     <h2>📲 Sugestões do bot (vigia do Telegram)</h2>
@@ -1320,7 +1367,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.22";
+const APP_VERSAO = "v4.23";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1522,6 +1569,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if ((b.dataset.aba === 'punter-sugestoes' || b.dataset.aba === 'punter-topdia') && typeof initPunter === 'function'){ initPunter(); }
   // inicializa o panorama da rodada ao abrir
   if (b.dataset.aba === 'punter-rodada' && typeof initPanorama === 'function'){ initPanorama(); }
+  // renderiza Meus jogos ao abrir a aba
+  if (b.dataset.aba === 'meusjogos' && typeof listarMeusJogos === 'function'){ listarMeusJogos(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -3507,12 +3556,13 @@ $('btn-atualizar-res').addEventListener('click', async () => {
   finally{ b.disabled = false; }
 });
 
-async function listarHistSug(){
+async function listarHistSug(pref, origemFixa){
+  pref = pref || 'hs';
   if (typeof renderConfigAlerta === 'function') renderConfigAlerta();
   const { data, error } = await db.from('analises').select('*')
-    .in('origem',['sugestao','vigia']).order('criado_em',{ascending:false}).limit(200);
-  if (error){ aviso($('hs-aviso'), 'Erro: '+error.message,'erro'); return; }
-  if (!data?.length){ $('hs-tabela').innerHTML=''; $('hs-painel').innerHTML='<p class="msg-vazia">Nenhuma sugestão salva ainda. Salve sugestões na aba 💡 Sugestões do dia.</p>'; return; }
+    .in('origem', origemFixa==='sugestao' ? ['sugestao'] : ['sugestao','vigia']).order('criado_em',{ascending:false}).limit(300);
+  if (error){ aviso($(pref+'-aviso'), 'Erro: '+error.message,'erro'); return; }
+  if (!data?.length){ $(pref+'-tabela').innerHTML=''; $(pref+'-painel').innerHTML=(origemFixa ? '<p class="msg-vazia">Você ainda não salvou nenhum jogo. Use o botão 💾 nas abas de Sugestões, Top do dia ou Só Nota 10.</p>' : '<p class="msg-vazia">Nenhuma sugestão salva ainda. Salve sugestões na aba 💡 Sugestões do dia.</p>'); return; }
 
   // preenche a hora dos jogos que não têm (salvos antes da v3.46), cruzando com a grade do dia
   const semHora = data.filter(a => !a.hora_jogo && a.data_jogo);
@@ -3551,7 +3601,7 @@ async function listarHistSug(){
   const painelPegas = totalPegas
     ? `<div class="aviso" style="margin-bottom:10px"><b>💰 Suas apostas de verdade (marcadas como "peguei"):</b> ${totalPegas} apostas · ${pegasG} green / ${pegasR} red · <b style="color:${pegasG/totalPegas>=0.5?'var(--green)':'var(--red)'}">${Math.round(pegasG/totalPegas*100)}% de acerto</b></div>`
     : '';
-  $('hs-painel').innerHTML = painelPegas + '<p style="font-size:13px;color:var(--chalk-dim);margin-bottom:4px">Taxa geral por mercado (todas as sugestões salvas):</p><div class="placar-box">' +
+  $(pref+'-painel').innerHTML = painelPegas + '<p style="font-size:13px;color:var(--chalk-dim);margin-bottom:4px">Taxa geral por mercado (todas as sugestões salvas):</p><div class="placar-box">' +
     Object.entries(mercados).map(([m,v]) => {
       const t = v.g+v.r;
       return `<div class="stat"><b>${t?Math.round(v.g/t*100):0}%</b><span>${m} · ${v.g}G/${v.r}R</span></div>`;
@@ -3561,10 +3611,10 @@ async function listarHistSug(){
 
   const pill = r => r==='GREEN' ? '<span class="pill g">GREEN</span>' : r==='RED' ? '<span class="pill r">RED</span>' : '<span class="pill n">aguardando</span>';
   // ordenação escolhida
-  const ordem = $('hs-ordem') ? $('hs-ordem').value : 'recente';
-  const filtroData = $('hs-filtro-data') ? $('hs-filtro-data').value : '';
+  const ordem = $(pref+'-ordem') ? $(pref+'-ordem').value : 'recente';
+  const filtroData = $(pref+'-filtro-data') ? $(pref+'-filtro-data').value : '';
   // popula o select de mercados com os que existem nas sugestões (uma vez)
-  const selMerc = $('hs-filtro-mercado');
+  const selMerc = $(pref+'-filtro-mercado');
   if (selMerc){
     const mercadosUnicos = [...new Set(data.map(a => a.mercado_sugerido).filter(Boolean))].sort();
     const atual = selMerc.value;
@@ -3574,13 +3624,15 @@ async function listarHistSug(){
   const filtroMercado = selMerc ? selMerc.value : '';
   let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
   if (filtroMercado) dataFiltrada = dataFiltrada.filter(a => a.mercado_sugerido === filtroMercado);
-  // filtro por origem (manual vs vigia)
-  const filtroOrigem = $('hs-filtro-origem') ? $('hs-filtro-origem').value : '';
-  if (filtroOrigem === 'vigia') dataFiltrada = dataFiltrada.filter(a => a.origem === 'vigia');
-  else if (filtroOrigem === 'manual') dataFiltrada = dataFiltrada.filter(a => a.origem !== 'vigia');
-  if ($('hs-filtro-pegas') && $('hs-filtro-pegas').checked) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
+  // filtro por origem (manual vs vigia) — ignorado quando a aba já é fixa (Meus jogos)
+  if (!origemFixa){
+    const filtroOrigem = $(pref+'-filtro-origem') ? $(pref+'-filtro-origem').value : '';
+    if (filtroOrigem === 'vigia') dataFiltrada = dataFiltrada.filter(a => a.origem === 'vigia');
+    else if (filtroOrigem === 'manual') dataFiltrada = dataFiltrada.filter(a => a.origem !== 'vigia');
+  }
+  if ($(pref+'-filtro-pegas') && $(pref+'-filtro-pegas').checked) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
   // filtro de situação (a ocorrer / ocorridos) pela data+hora do jogo
-  const filtroSit = $('hs-filtro-situacao') ? $('hs-filtro-situacao').value : 'todos';
+  const filtroSit = $(pref+'-filtro-situacao') ? $(pref+'-filtro-situacao').value : 'todos';
   if (filtroSit !== 'todos'){
     const agoraBahia = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bahia' }));
     const jaOcorreu = (a) => {
@@ -3604,7 +3656,7 @@ async function listarHistSug(){
     if (ordem === 'mercado') return (a.mercado_sugerido||'').localeCompare(b.mercado_sugerido||'');
     return 0;
   });
-  $('hs-tabela').innerHTML =
+  $(pref+'-tabela').innerHTML =
     '<tr><th>Data</th><th>Hora</th><th>Jogo</th><th>Mercado</th><th>Nota</th><th>Placar</th><th>Resultado</th><th>Peguei?</th><th>Banca</th></tr>' +
     dataFiltrada.map(a => `<tr>
       <td>${a.data_jogo ?? ''}</td>
@@ -3617,11 +3669,11 @@ async function listarHistSug(){
       <td><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--chalk-dim)">
         <input type="checkbox" style="width:auto" ${a.aposta_feita?'checked':''} onchange="marcarApostaFeita(${a.id}, this.checked)"> ${a.aposta_feita?'sim':'não'}
       </label></td>
-      <td><button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button> <button class="mini" onclick="excluirSugestao(${a.id}, 'hist')" title="Excluir esta sugestão" style="border-color:var(--red);color:var(--red)">🗑️</button></td>
+      <td><button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button> <button class="mini" onclick="excluirSugestao(${a.id}, origemFixa ? 'meus' : 'hist')" title="Excluir esta sugestão" style="border-color:var(--red);color:var(--red)">🗑️</button></td>
     </tr>`).join('');
 }
 async function marcarApostaFeita(id, feita){
-  try{ await db.from('analises').update({ aposta_feita: feita }).eq('id', id); listarHistSug(); }
+  try{ await db.from('analises').update({ aposta_feita: feita }).eq('id', id); listarHistSug(); if (typeof listarMeusJogos === 'function' && $('mj-tabela') && $('mj-tabela').innerHTML) listarMeusJogos(); }
   catch(e){ alert('Erro ao marcar: ' + e.message); }
 }
 window.marcarApostaFeita = marcarApostaFeita;
@@ -3634,6 +3686,7 @@ async function excluirSugestao(id, ondeAtualizar){
     if (error){ alert('Erro ao excluir: '+error.message); return; }
     // atualiza a lista correspondente
     if (ondeAtualizar === 'bot' && typeof listarBotSug === 'function') listarBotSug();
+    else if (ondeAtualizar === 'meus' && typeof listarMeusJogos === 'function') listarMeusJogos();
     else if (typeof listarHistSug === 'function') listarHistSug();
     if (typeof listarAnalises === 'function') listarAnalises();
   }catch(e){ alert('Erro: '+e.message); }
@@ -3724,6 +3777,21 @@ window.confirmarIntegracao = confirmarIntegracao;
 
 document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao' || e.target?.id === 'hs-filtro-origem') listarHistSug(); });
 listarHistSug();
+
+// ---- MEUS JOGOS: só os que você salvou (origem manual), mesmos filtros ----
+function listarMeusJogos(){ listarHistSug('mj', 'sugestao'); }
+window.listarMeusJogos = listarMeusJogos;
+document.addEventListener('change', e => {
+  if (['mj-ordem','mj-filtro-data','mj-filtro-mercado','mj-filtro-pegas','mj-filtro-situacao'].includes(e.target?.id)) listarMeusJogos();
+});
+// botão atualizar resultados da aba Meus jogos (reusa a atualização do histórico)
+if ($('btn-mj-atualizar')) $('btn-mj-atualizar').addEventListener('click', async () => {
+  const btnHist = $('btn-atualizar-res');
+  const st = $('mj-status'); if (st) st.textContent = '⏳ Atualizando...';
+  if (btnHist){ btnHist.click(); }
+  // aguarda um instante e re-renderiza meus jogos com os resultados novos
+  setTimeout(() => { listarMeusJogos(); if (st) st.textContent = '✅ Atualizado.'; }, 4000);
+});
 
 
 // ==========================================================
