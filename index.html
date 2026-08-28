@@ -1368,7 +1368,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.26";
+const APP_VERSAO = "v4.27";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6872,7 +6872,7 @@ async function gerarRankingMercados(){
             const rowId = `pr-hist-${mi}-${i}`;
             const mid = x.j._tm?.time_id || x.j.mandante_id || '';
             const vid = x.j._tv?.time_id || x.j.visitante_id || '';
-            const arg = `'${rowId}','${(x.j.mandante||'').replace(/'/g,"\\'")}','${mid}','${(x.j.visitante||'').replace(/'/g,"\\'")}','${vid}','${tipoApi}','${rotulo.replace(/'/g,"\\'")}'`;
+            const arg = `'${rowId}','${(x.j.mandante||'').replace(/'/g,"\\'")}','${mid}','${(x.j.visitante||'').replace(/'/g,"\\'")}','${vid}','${tipoApi}','${rotulo.replace(/'/g,"\\'")}','${liga}','${campo}'`;
             return `<div>
               <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--pitch);border-radius:6px;cursor:pointer;${destaque}" onclick="toggleHistMercado(${arg})">
                 <span style="min-width:22px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--chalk-dim)">${i+1}º</span>
@@ -6893,7 +6893,7 @@ async function gerarRankingMercados(){
 window.gerarRankingMercados = gerarRankingMercados;
 
 // abre/fecha o histórico do mercado dos dois times, inline abaixo do jogo
-async function toggleHistMercado(rowId, mandante, mid, visitante, vid, tipoApi, rotulo){
+async function toggleHistMercado(rowId, mandante, mid, visitante, vid, tipoApi, rotulo, ligaId, campo){
   const box = $(rowId);
   if (!box) return;
   // se já está aberto, fecha
@@ -6945,12 +6945,78 @@ async function toggleHistMercado(rowId, mandante, mid, visitante, vid, tipoApi, 
         ${tabelaTime(mandante, rm.jogos)}
         ${tabelaTime(visitante, rv.jogos)}
       </div>
+      <div style="margin-top:10px;text-align:center">
+        <button class="mini" onclick="toggleJogadoresMercado('${rowId}-jog','${(mandante||'').replace(/'/g,"\\'")}','${(visitante||'').replace(/'/g,"\\'")}','${ligaId}','${campo}','${rotulo.replace(/'/g,"\\'")}')" style="border-color:var(--amber);color:var(--amber)">👤 Ver jogadores deste mercado</button>
+      </div>
+      <div id="${rowId}-jog" style="display:none;margin-top:8px"></div>
     </div>`;
   }catch(e){
     box.innerHTML = `<p style="font-size:12px;color:var(--red);padding:8px">Erro ao buscar histórico: ${e.message}</p>`;
   }
 }
 window.toggleHistMercado = toggleHistMercado;
+
+// mostra os jogadores dos dois times rankeados pelo mercado
+async function toggleJogadoresMercado(boxId, mandante, visitante, ligaId, campo, rotulo){
+  const box = $(boxId);
+  if (!box) return;
+  if (box.style.display === 'block'){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<p style="font-size:12px;color:var(--chalk-dim);padding:8px">⏳ Carregando jogadores...</p>';
+
+  // mapa: campo do mercado -> campo do jogador
+  const campoJog = {
+    mediaDesarmes:'mediaDesarmes', mediaChutes:'mediaChutes', mediaChutesGol:'mediaChutesGol',
+    __chutesHT:'mediaChutes', mediaFaltas:'faltas', mediaAmarelos:'amarelos',
+  }[campo] || 'mediaChutes';
+  // mercados sem dado por jogador (escanteios, impedimentos) — a API não fornece individual
+  const semJogador = ['mediaEscanteios','mediaImpedimentos'].includes(campo);
+  if (semJogador){
+    box.innerHTML = `<p style="font-size:12px;color:var(--chalk-dim);padding:8px">Este mercado (${rotulo}) não tem estatística por jogador na API — é coletivo do time.</p>`;
+    return;
+  }
+
+  function tabelaJog(nome, jogadores){
+    if (!jogadores || !jogadores.length) return `<div style="flex:1;min-width:240px"><b style="font-size:13px">${nome}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem dados de jogadores. Carregue a liga em Estatísticas de time.</p></div>`;
+    const usaMedia = campoJog.startsWith('media');
+    const ordenados = [...jogadores].filter(j => (j[campoJog]||0) > 0).sort((a,b) => (b[campoJog]||0)-(a[campoJog]||0)).slice(0,8);
+    if (!ordenados.length) return `<div style="flex:1;min-width:240px"><b style="font-size:13px">${nome}</b><p style="font-size:11px;color:var(--chalk-dim)">Nenhum jogador com registro neste mercado.</p></div>`;
+    return `<div style="flex:1;min-width:240px">
+      <b style="font-size:13px">${nome}</b>
+      <table style="width:100%;margin-top:4px;border-collapse:collapse">
+        <tr style="border-bottom:1px solid var(--linha)">
+          <th style="text-align:left;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Jogador</th>
+          <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Pos</th>
+          <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">${usaMedia?'Média':'Total'}</th>
+          <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Jogos</th>
+        </tr>
+        ${ordenados.map((j,i) => `<tr>
+          <td style="padding:3px 6px;font-size:11.5px;font-weight:${i<3?'700':'400'}">${j.nome}</td>
+          <td style="padding:3px 6px;text-align:center;font-size:10.5px;color:var(--chalk-dim)">${traduzPos(j.posicao)}</td>
+          <td style="padding:3px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;color:var(--amber)">${j[campoJog]??'–'}</td>
+          <td style="padding:3px 6px;text-align:center;font-size:11px;color:var(--chalk-dim)">${j.jogos??'–'}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+  }
+
+  try{
+    const [rm, rv] = await Promise.all([
+      chamarEdge({ acao:'stats_jogadores_time', liga: ligaId, time: mandante }),
+      chamarEdge({ acao:'stats_jogadores_time', liga: ligaId, time: visitante }),
+    ]);
+    box.innerHTML = `<div style="background:var(--card);border-radius:8px;padding:12px">
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin:0 0 8px">${rotulo} por jogador — top 8 de cada time (temporada atual).</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${tabelaJog(mandante, rm.jogadores)}
+        ${tabelaJog(visitante, rv.jogadores)}
+      </div>
+    </div>`;
+  }catch(e){
+    box.innerHTML = `<p style="font-size:12px;color:var(--red);padding:8px">Erro ao buscar jogadores: ${e.message}</p>`;
+  }
+}
+window.toggleJogadoresMercado = toggleJogadoresMercado;
 
 // helper: lista os próximos N dias em YYYY-MM-DD
 function listarProximosDias(n){
