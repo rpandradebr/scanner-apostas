@@ -506,7 +506,7 @@
   <section id="aba-punter-rodada">
     <h2>📋 Panorama da rodada</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
-      Escolha o campeonato e veja <b>todos os jogos da rodada</b> com as linhas estatísticas dos dois times: desarmes, faltas, cartões, escanteios e chutes. Cada número mostra a média do time (o que produz) e, quando disponível, o que o adversário cede. Usa os dados salvos na aba Estatísticas de time.
+      Escolha o campeonato e veja a rodada de duas formas: <b>Ver panorama</b> mostra todos os jogos com as linhas dos dois times; <b>Melhores por mercado</b> rankeia os jogos e destaca os melhores confrontos para cada mercado (desarmes, chutes, chutes HT, escanteios, faltas, cartões). Tudo com base no histórico salvo em Estatísticas de time.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
@@ -515,6 +515,7 @@
       </label>
       <input type="date" id="pr-data" style="width:auto;padding:7px 10px" title="Data da rodada (ou deixe em branco para os próximos jogos)">
       <button class="acao" id="btn-pr-gerar">📋 Ver panorama</button>
+      <button class="acao" id="btn-pr-ranking" style="background:var(--amber)">🏆 Melhores por mercado</button>
     </div>
     <div id="pr-aviso"></div>
     <div id="pr-resultado"></div>
@@ -1367,7 +1368,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.23";
+const APP_VERSAO = "v4.24";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6666,6 +6667,44 @@ function popularLigasPanorama(){
   }
 }
 
+// helper compartilhado: busca os jogos da liga na data + os stats salvos dos dois times de cada jogo
+async function buscarJogosComStats(liga, nomeLiga, data){
+  const rs = await chamarEdge({ acao:'stats_liga_ler', liga });
+  if (!rs.carregado || !rs.times?.length){
+    return { erro: `${nomeLiga} ainda não tem estatísticas salvas. Vá em Estatísticas de time e carregue esta liga primeiro.` };
+  }
+  const times = rs.times;
+  const achaTime = (nome) => {
+    const n = (nome||'').toLowerCase();
+    return times.find(t => (t.time||'').toLowerCase() === n)
+        || times.find(t => (t.time||'').toLowerCase().includes(n) || n.includes((t.time||'').toLowerCase()));
+  };
+  let jogos = [];
+  const datas = data ? [data] : listarProximosDias(4);
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+  const nomeLigaNorm = norm(nomeLiga), nomeLigaBanco = norm(rs.liga || ''), paisLiga = norm(rs.pais || '');
+  for (const d of datas){
+    try{
+      const rg = await chamarEdge({ acao:'grade', data: d });
+      (rg.jogos||[]).forEach(j => {
+        const lid = String(j.liga_id||''), ljogo = norm(j.liga), pjogo = norm(j.pais);
+        const casaPorId = lid && lid === String(liga);
+        const casaPorNome = !lid && paisLiga && pjogo === paisLiga && (
+          ljogo === nomeLigaNorm || ljogo === nomeLigaBanco ||
+          (nomeLigaBanco && ljogo.includes(nomeLigaBanco)) || (ljogo && nomeLigaNorm.includes(ljogo))
+        );
+        if (casaPorId || casaPorNome) jogos.push(j);
+      });
+    }catch(_){}
+  }
+  const vistos = new Set();
+  jogos = jogos.filter(j => { const k = j.fixture_id||`${j.mandante}-${j.visitante}`; if (vistos.has(k)) return false; vistos.add(k); return true; });
+  // anexa os stats dos dois times
+  jogos.forEach(j => { j._tm = achaTime(j.mandante); j._tv = achaTime(j.visitante); });
+  return { jogos, liga: rs.liga, pais: rs.pais };
+}
+window.buscarJogosComStats = buscarJogosComStats;
+
 async function gerarPanoramaRodada(){
   const liga = $('pr-liga').value;
   const nomeLiga = $('pr-liga').selectedOptions[0].text;
@@ -6769,6 +6808,84 @@ async function gerarPanoramaRodada(){
 }
 window.gerarPanoramaRodada = gerarPanoramaRodada;
 
+// RANKING POR MERCADO: destaca os melhores jogos da rodada para cada mercado estatístico
+async function gerarRankingMercados(){
+  const liga = $('pr-liga').value;
+  const nomeLiga = $('pr-liga').selectedOptions[0].text;
+  const data = $('pr-data').value;
+  const btn = $('btn-pr-ranking'); btn.disabled = true;
+  aviso($('pr-aviso'),'');
+  $('pr-resultado').innerHTML = '<p style="color:var(--chalk-dim);padding:12px">⏳ Analisando a rodada e rankeando por mercado...</p>';
+  try{
+    const res = await buscarJogosComStats(liga, nomeLiga, data);
+    if (res.erro){ $('pr-resultado').innerHTML=''; aviso($('pr-aviso'), res.erro, 'erro'); btn.disabled=false; return; }
+    const jogos = res.jogos.filter(j => j._tm && j._tv); // só jogos com stats dos dois
+    if (!jogos.length){ $('pr-resultado').innerHTML=''; aviso($('pr-aviso'), 'Nenhum jogo com estatísticas salvas dos dois times. Carregue a liga em Estatísticas de time.', 'erro'); btn.disabled=false; return; }
+
+    gradeJogos = gradeJogos || [];
+    // mercados a rankear: [rótulo, campoFaz, campoCede]
+    const mercados = [
+      ['🛡️ Desarmes','mediaDesarmes',null],
+      ['🎯 Chutes','mediaChutes','cedeChutes'],
+      ['⚽ Chutes a gol','mediaChutesGol','cedeChutesGol'],
+      ['🏠 Chutes HT (casa/fora)','__chutesHT',null],
+      ['🚩 Escanteios','mediaEscanteios','cedeEscanteios'],
+      ['⚠️ Faltas','mediaFaltas','cedeFaltas'],
+      ['🟨 Cartões','mediaAmarelos','cedeAmarelos'],
+      ['🚫 Impedimentos','mediaImpedimentos','cedeImpedimentos'],
+    ];
+    // projeta o total de cada jogo para um mercado
+    function projeta(j, campo, cede){
+      const tm = j._tm, tv = j._tv;
+      // caso especial: chutes HT = chutes em casa do mandante + chutes fora do visitante
+      if (campo === '__chutesHT'){
+        const cm = tm.mediaChutesCasa, cv = tv.mediaChutesFora;
+        if (cm == null || cv == null) return null;
+        return cm + cv;
+      }
+      const fm = tm[campo], fv = tv[campo];
+      if (fm == null || fv == null) return null;
+      if (cede && tm[cede] != null && tv[cede] != null){
+        return ((fm + tv[cede])/2) + ((fv + tm[cede])/2);
+      }
+      return fm + fv;
+    }
+
+    let html = `<p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:14px">${jogos.length} jogo(s) analisado(s) · ${nomeLiga}. Para cada mercado, os jogos com <b>maior volume projetado</b> (soma dos dois times). Clique num jogo para a ficha.</p>`;
+
+    mercados.forEach(([rotulo, campo, cede]) => {
+      const ranking = jogos
+        .map(j => ({ j, total: projeta(j, campo, cede) }))
+        .filter(x => x.total != null)
+        .sort((a,b) => b.total - a.total);
+      if (!ranking.length){
+        html += `<div style="margin-bottom:16px"><h3 style="margin:0 0 6px;font-size:15px">${rotulo}</h3><p style="font-size:12px;color:var(--chalk-dim)">Sem dados salvos para este mercado nesta liga.</p></div>`;
+        return;
+      }
+      const melhor = ranking[0], pior = ranking[ranking.length-1];
+      html += `<div style="margin-bottom:18px;background:var(--card);border-radius:10px;padding:14px">
+        <h3 style="margin:0 0 10px;font-size:16px">${rotulo}</h3>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          ${ranking.map((x,i) => {
+            const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
+            const destaque = i===0 ? 'border-left:3px solid var(--green)' : (i===ranking.length-1 && ranking.length>2 ? 'border-left:3px solid var(--red)' : 'border-left:3px solid transparent');
+            const tag = i===0 ? '<span style="font-size:9.5px;background:var(--green);color:var(--pitch);padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">MELHOR</span>' : (i===ranking.length-1 && ranking.length>2 ? '<span style="font-size:9.5px;background:var(--red);color:#fff;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:6px">MENOR</span>' : '');
+            return `<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--pitch);border-radius:6px;cursor:pointer;${destaque}" onclick="fichaJogo(${idx})">
+              <span style="min-width:22px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--chalk-dim)">${i+1}º</span>
+              <span style="flex:1;font-size:13.5px;font-weight:${i===0?'700':'400'}">${x.j.mandante} <span style="color:var(--chalk-dim)">x</span> ${x.j.visitante}${tag}</span>
+              <span style="font-size:11px;color:var(--chalk-dim)">${x.j.hora||''}</span>
+              <span style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:800;color:${i===0?'var(--green)':'var(--amber)'};min-width:50px;text-align:right">${x.total.toFixed(1)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    });
+    $('pr-resultado').innerHTML = html;
+  }catch(e){ aviso($('pr-aviso'), 'Erro: '+e.message, 'erro'); $('pr-resultado').innerHTML=''; }
+  finally{ btn.disabled=false; }
+}
+window.gerarRankingMercados = gerarRankingMercados;
+
 // helper: lista os próximos N dias em YYYY-MM-DD
 function listarProximosDias(n){
   const arr = [];
@@ -6782,6 +6899,7 @@ function initPanorama(){
 window.initPanorama = initPanorama;
 
 if ($('btn-pr-gerar')) $('btn-pr-gerar').addEventListener('click', gerarPanoramaRodada);
+if ($('btn-pr-ranking')) $('btn-pr-ranking').addEventListener('click', gerarRankingMercados);
 
 
 
