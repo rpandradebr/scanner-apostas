@@ -1368,7 +1368,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.31";
+const APP_VERSAO = "v4.33";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2634,7 +2634,7 @@ APÓS COLETAR TODA A ANÁLISE NECESSÁRIA DESSE CONFRONTO, ME ENTREGUE POR FAVOR
 2- Quantos gols podem vir nesse jogo?
 3- Qual o mercado mais seguro para apostar?
 4- De 0 a 10 qual a sua confiança?
-5- AVALIAÇÃO DOS MERCADOS DE EXCHANGE (obrigatório): analise especificamente cada um destes mercados e diga se é VIÁVEL ou EVITAR, justificando: Lay 1x0, Lay 0x1, Lay 1x0 Muito Favorito (quando o visitante for forte favorito), Lay 0x1 Muito Favorito (quando o mandante for forte favorito), Over/Under gols (indique a linha), e Lay Zebra (lay no azarão). Indique quais valem a pena e quais evitar.
+5- AVALIAÇÃO DOS MERCADOS DE EXCHANGE (obrigatório): analise especificamente cada um destes mercados e diga se é VIÁVEL ou EVITAR, justificando: Lay 1x0, Lay 0x1, Lay 2x0, Lay 0x2, Lay 1x0 Muito Favorito (quando o visitante for forte favorito), Lay 0x1 Muito Favorito (quando o mandante for forte favorito), Lay Goleada Mandante e Lay Goleada Visitante (contra o time marcar 4+ gols e vencer), Over/Under gols (indique a linha, considerando Over 2.5, Over 3.5, Under 3.5 e Under 4.5), e Lay Zebra (lay no azarão). Para o Under 4.5, lembre que é mercado de altíssima chance mas odd baixa — avalie se compensa. Indique quais valem a pena e quais evitar.
 ⚠️ Não fique em cima do muro, justifique cada conclusão`;
 }
 async function copiarPrompt(mandante, visitante, liga, botao){
@@ -3764,6 +3764,7 @@ async function integrarBanca(idAnalise){
           <div><label style="font-size:12px;color:var(--chalk-dim)">Nome da banca/pessoa</label><input id="int-banca" placeholder="Minha banca, João..." list="int-lista-bancas"></div>
           <div><label style="font-size:12px;color:var(--chalk-dim)">Valor (R$)</label><input type="number" id="int-valor" placeholder="0,00" step="0.01"></div>
           <div><label style="font-size:12px;color:var(--chalk-dim)">Odd de entrada</label><input type="number" id="int-odd" placeholder="0,00" step="0.01"></div>
+          <div style="grid-column:1/3"><label style="font-size:12px;color:var(--chalk-dim)">Comissão da casa (%) <span style="font-size:10px;opacity:.7">— exchange cobra sobre o lucro (ex: 5)</span></label><input type="number" id="int-comissao" placeholder="0" step="0.1" list="int-lista-comissoes"><datalist id="int-lista-comissoes"><option value="0"><option value="2"><option value="4.5"><option value="5"><option value="6.5"></datalist></div>
           <div style="grid-column:1/3"><label style="font-size:12px;color:var(--chalk-dim)">Resultado</label>
             <select id="int-resultado" style="width:100%;padding:6px 8px">
               <option value="pendente">Pendente</option>
@@ -3805,6 +3806,7 @@ async function confirmarIntegracao(idAnalise){
     casa_aposta: document.getElementById('int-casa').value.trim(),
     nome_banca: document.getElementById('int-banca').value.trim(),
     valor, odd, resultado, odd_saida: oddSaida,
+    comissao: parseFloat(document.getElementById('int-comissao').value) || 0,
   };
   reg.lucro = calcLucro(reg);
   try{
