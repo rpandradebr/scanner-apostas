@@ -1368,7 +1368,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.28";
+const APP_VERSAO = "v4.29";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3206,6 +3206,9 @@ function desenharRankingsSug(){
     { id:'lay01',   titulo:'🚫 Lay 0x1',         campo:'_lay01',     dica:'Improvável terminar 0x1 (visitante vencer magro) — ordenado por nota' },
     { id:'lay10',   titulo:'🚫 Lay 1x0',         campo:'_lay10',     dica:'Improvável terminar 1x0 (mandante vencer magro) — ordenado por nota' },
     { id:'lay20',   titulo:'🚫 Lay 2x0',         campo:'_lay20',     dica:'Improvável terminar 2x0 (mandante vencer por 2 sem tomar) — ordenado por nota' },
+    { id:'lay02',   titulo:'🚫 Lay 0x2',         campo:'_lay02',     dica:'Improvável terminar 0x2 (visitante vencer por 2 sem tomar) — ordenado por nota' },
+    { id:'laygm',   titulo:'🚫 Lay Goleada Mandante', campo:'_laygm', dica:'Improvável o mandante golear (vencer por 3+) — ordenado por nota' },
+    { id:'laygv',   titulo:'🚫 Lay Goleada Visitante', campo:'_laygv', dica:'Improvável o visitante golear (vencer por 3+) — ordenado por nota' },
     { id:'layz',    titulo:'🐢 Lay Zebra',       campo:'_layz',      dica:'Improvável o azarão vencer — ordenado por nota' },
   ];
   // calcula a nota de Lay 0x1 de cada jogo (Poisson): improvável terminar 0x1 + tendência over
@@ -3229,6 +3232,14 @@ function desenharRankingsSug(){
     // Lay 2x0: improvável terminar exatamente 2x0
     const p20 = poisL(2,lMand) * poisL(0,lVis);
     c._lay20 = Math.min(100, Math.round((1-p20)*100*0.9 + over*0.1));
+    // Lay 0x2: improvável terminar exatamente 0x2 (visitante vence por 2 sem tomar)
+    const p02 = poisL(0,lMand) * poisL(2,lVis);
+    c._lay02 = Math.min(100, Math.round((1-p02)*100*0.9 + over*0.1));
+    // Lay Goleada Mandante: improvável o mandante vencer por 3+.
+    // nota alta quando o mandante goleia pouco e o visitante é goleado pouco
+    c._laygm = Math.min(100, Math.max(0, Math.round(100 - (parseFloat(c.em.pctGoleadaPro)*0.6 + parseFloat(c.ev.pctGoleadaContra)*0.4))));
+    // Lay Goleada Visitante: improvável o visitante vencer por 3+
+    c._laygv = Math.min(100, Math.max(0, Math.round(100 - (parseFloat(c.ev.pctGoleadaPro)*0.6 + parseFloat(c.em.pctGoleadaContra)*0.4))));
     // Lay Zebra: improvável o azarão vencer. Favorito pela % de vitória + gols.
     const favMand = (parseFloat(c.em.pctVit)||0) >= (parseFloat(c.ev.pctVit)||0);
     const pctVitFav = favMand ? c.em.pctVit : c.ev.pctVit;
@@ -3241,8 +3252,8 @@ function desenharRankingsSug(){
   ).join('');
   let corpo = '';
   mercadosRank.forEach((m,i) => {
-    const ehLay = ['lay01','lay10','lay20','layz'].includes(m.id);
-    const campoLay = { lay01:'_lay01', lay10:'_lay10', lay20:'_lay20', layz:'_layz' }[m.id];
+    const ehLay = ['lay01','lay10','lay20','lay02','laygm','laygv','layz'].includes(m.id);
+    const campoLay = { lay01:'_lay01', lay10:'_lay10', lay20:'_lay20', lay02:'_lay02', laygm:'_laygm', laygv:'_laygv', layz:'_layz' }[m.id];
     const lista = analisadosSug.map(c => ({ c, v: ehLay ? c[campoLay] : mediaPct(c, m.campo) }))
       .sort((a,b) => b.v - a.v).slice(0, 15);
     corpo += `<div class="rk-corpo" id="rkc-${m.id}" style="display:${i===0?'block':'none'}">
@@ -3251,9 +3262,12 @@ function desenharRankingsSug(){
       <tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>${ehLay?'Nota':m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th><th>Salvar</th></tr>
       ${lista.map(x => {
         const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
-        const mktSist = {btts:'BTTS', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', o35:'OVER 3.5', u35:'UNDER 3.5', u45:'UNDER 4.5', u25:'UNDER 2.5', lay01:'LAY 0x1', lay10:'LAY 1x0', lay20:'LAY 2x0', layz:'LAY ZEBRA'}[m.id];
+        const mktSist = {btts:'BTTS', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', o35:'OVER 3.5', u35:'UNDER 3.5', u45:'UNDER 4.5', u25:'UNDER 2.5', lay01:'LAY 0x1', lay10:'LAY 1x0', lay20:'LAY 2x0', lay02:'LAY 0x2', laygm:'LAY GOLEADA MANDANTE', laygv:'LAY GOLEADA VISITANTE', layz:'LAY ZEBRA'}[m.id];
         const detalhe = ehLay
-          ? (m.id==='layz' ? `Favorito vence ${Math.max(x.c.em.pctVit,x.c.ev.pctVit)}%` : `Over médio ${Math.round((x.c.em.pctOver+x.c.ev.pctOver)/2)}% · improvável ${mktSist.replace('LAY ','')}`)
+          ? (m.id==='layz' ? `Favorito vence ${Math.max(x.c.em.pctVit,x.c.ev.pctVit)}%`
+             : m.id==='laygm' ? `${x.c.nm} goleia ${x.c.em.pctGoleadaPro}% · improvável golear`
+             : m.id==='laygv' ? `${x.c.nv} goleia ${x.c.ev.pctGoleadaPro}% · improvável golear`
+             : `Over médio ${Math.round((x.c.em.pctOver+x.c.ev.pctOver)/2)}% · improvável ${mktSist.replace('LAY ','')}`)
           : `${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%`;
         const mostrarV = ehLay ? (x.v/10).toFixed(1) : x.v + '%';
         return `<tr class="clicavel">
@@ -3274,9 +3288,9 @@ function desenharRankingsSug(){
   if (typeof coletarTop5PorMercado === 'function'){
     const doRanking = [];
     mercadosRank.forEach(m => {
-      const ehLay = ['lay01','lay10','lay20','layz'].includes(m.id);
-      const campoLay = { lay01:'_lay01', lay10:'_lay10', lay20:'_lay20', layz:'_layz' }[m.id];
-      const mktNome = {btts:'AMBAS MARCAM', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', o35:'OVER 3.5', u35:'UNDER 3.5', u45:'UNDER 4.5', u25:'UNDER 2.5', lay01:'LAY 0x1', lay10:'LAY 1x0', lay20:'LAY 2x0', layz:'LAY ZEBRA'}[m.id];
+      const ehLay = ['lay01','lay10','lay20','lay02','laygm','laygv','layz'].includes(m.id);
+      const campoLay = { lay01:'_lay01', lay10:'_lay10', lay20:'_lay20', lay02:'_lay02', laygm:'_laygm', laygv:'_laygv', layz:'_layz' }[m.id];
+      const mktNome = {btts:'AMBAS MARCAM', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', o35:'OVER 3.5', u35:'UNDER 3.5', u45:'UNDER 4.5', u25:'UNDER 2.5', lay01:'LAY 0x1', lay10:'LAY 1x0', lay20:'LAY 2x0', lay02:'LAY 0x2', laygm:'LAY GOLEADA MANDANTE', laygv:'LAY GOLEADA VISITANTE', layz:'LAY ZEBRA'}[m.id];
       analisadosSug.forEach(c => {
         const v = ehLay ? c[campoLay] : mediaPct(c, m.campo);
         doRanking.push({
@@ -3488,6 +3502,7 @@ function confereMercado(mercado, gm, gv){
   if (mercado === 'BTTS' || mercado === 'AMBAS MARCAM') return (gm > 0 && gv > 0) ? 'GREEN' : 'RED';
   if (mercado === 'LAY 1x0')   return (gm===1 && gv===0) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 2x0')   return (gm===2 && gv===0) ? 'RED' : 'GREEN';
+  if (mercado === 'LAY 0x2')   return (gm===0 && gv===2) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 0x1')   return (gm===0 && gv===1) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 0x1 MUITO FAVORITO') return (gm===0 && gv===1) ? 'RED' : 'GREEN';
   if (mercado === 'LAY 1x0 MUITO FAVORITO') return (gm===1 && gv===0) ? 'RED' : 'GREEN';
