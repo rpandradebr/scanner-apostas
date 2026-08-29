@@ -1368,7 +1368,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.29";
+const APP_VERSAO = "v4.31";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2211,8 +2211,8 @@ function estatisticas(jogos, comoMandante){
     if (pro + contra <= 3) under35++;
     if (pro + contra <= 4) under45++;
     if (pro > 0 && contra > 0) btts++;
-    if (pro - contra >= 3) goleadaPro++;
-    if (contra - pro >= 3) goleadaContra++;
+    if (pro >= 4 && pro > contra) goleadaPro++;
+    if (contra >= 4 && contra > pro) goleadaContra++;
   });
   const n = encerrados.length || 1;
   return {
@@ -3207,8 +3207,8 @@ function desenharRankingsSug(){
     { id:'lay10',   titulo:'🚫 Lay 1x0',         campo:'_lay10',     dica:'Improvável terminar 1x0 (mandante vencer magro) — ordenado por nota' },
     { id:'lay20',   titulo:'🚫 Lay 2x0',         campo:'_lay20',     dica:'Improvável terminar 2x0 (mandante vencer por 2 sem tomar) — ordenado por nota' },
     { id:'lay02',   titulo:'🚫 Lay 0x2',         campo:'_lay02',     dica:'Improvável terminar 0x2 (visitante vencer por 2 sem tomar) — ordenado por nota' },
-    { id:'laygm',   titulo:'🚫 Lay Goleada Mandante', campo:'_laygm', dica:'Improvável o mandante golear (vencer por 3+) — ordenado por nota' },
-    { id:'laygv',   titulo:'🚫 Lay Goleada Visitante', campo:'_laygv', dica:'Improvável o visitante golear (vencer por 3+) — ordenado por nota' },
+    { id:'laygm',   titulo:'🚫 Lay Goleada Mandante', campo:'_laygm', dica:'Improvável o mandante golear (marcar 4+ e vencer) — ordenado por nota' },
+    { id:'laygv',   titulo:'🚫 Lay Goleada Visitante', campo:'_laygv', dica:'Improvável o visitante golear (marcar 4+ e vencer) — ordenado por nota' },
     { id:'layz',    titulo:'🐢 Lay Zebra',       campo:'_layz',      dica:'Improvável o azarão vencer — ordenado por nota' },
   ];
   // calcula a nota de Lay 0x1 de cada jogo (Poisson): improvável terminar 0x1 + tendência over
@@ -3235,10 +3235,10 @@ function desenharRankingsSug(){
     // Lay 0x2: improvável terminar exatamente 0x2 (visitante vence por 2 sem tomar)
     const p02 = poisL(0,lMand) * poisL(2,lVis);
     c._lay02 = Math.min(100, Math.round((1-p02)*100*0.9 + over*0.1));
-    // Lay Goleada Mandante: improvável o mandante vencer por 3+.
+    // Lay Goleada Mandante: improvável o mandante golear (marcar 4+ e vencer).
     // nota alta quando o mandante goleia pouco e o visitante é goleado pouco
     c._laygm = Math.min(100, Math.max(0, Math.round(100 - (parseFloat(c.em.pctGoleadaPro)*0.6 + parseFloat(c.ev.pctGoleadaContra)*0.4))));
-    // Lay Goleada Visitante: improvável o visitante vencer por 3+
+    // Lay Goleada Visitante: improvável o visitante golear (marcar 4+ e vencer)
     c._laygv = Math.min(100, Math.max(0, Math.round(100 - (parseFloat(c.ev.pctGoleadaPro)*0.6 + parseFloat(c.em.pctGoleadaContra)*0.4))));
     // Lay Zebra: improvável o azarão vencer. Favorito pela % de vitória + gols.
     const favMand = (parseFloat(c.em.pctVit)||0) >= (parseFloat(c.ev.pctVit)||0);
@@ -3304,10 +3304,12 @@ function desenharRankingsSug(){
   }
 }
 function trocaRanking(id){
-  ['btts','o05','o15','o25','u35','u25','lay01'].forEach(x => {
-    const btn = $('rk-'+x), corpo = $('rkc-'+x);
+  // pega todos os mercados presentes (dinâmico — não precisa atualizar lista ao add mercado)
+  document.querySelectorAll('[id^="rkc-"]').forEach(corpo => {
+    const x = corpo.id.replace('rkc-','');
+    const btn = $('rk-'+x);
     if (btn){ btn.style.borderColor = x===id?'var(--amber)':''; btn.style.color = x===id?'var(--amber)':''; }
-    if (corpo) corpo.style.display = x===id?'block':'none';
+    corpo.style.display = x===id?'block':'none';
   });
 }
 window.trocaRanking = trocaRanking;
@@ -3514,11 +3516,12 @@ function confereMercado(mercado, gm, gv){
     return gm > gv ? 'GREEN' : 'RED';
   }
   if (mercado === 'LAY GOLEADA MANDANTE'){
-    // lay goleada mandante: perde se o mandante golear (3+ de diferença)
-    return (gm - gv >= 3) ? 'RED' : 'GREEN';
+    // lay goleada mandante: perde se o mandante golear (marcar 4+ E vencer)
+    return (gm >= 4 && gm > gv) ? 'RED' : 'GREEN';
   }
   if (mercado === 'LAY GOLEADA VISITANTE'){
-    return (gv - gm >= 3) ? 'RED' : 'GREEN';
+    // lay goleada visitante: perde se o visitante golear (marcar 4+ E vencer)
+    return (gv >= 4 && gv > gm) ? 'RED' : 'GREEN';
   }
   return null;
 }
@@ -4245,8 +4248,8 @@ const MERCADOS_TD = {
   lay01_mf: { nome:'Lay 0x1 Muito Favorito', dica:'Mandante forte favorito — 0x1 raríssimo' },
   lay10_mf: { nome:'Lay 1x0 Muito Favorito', dica:'Visitante forte favorito — 1x0 raríssimo' },
   lay_zebra: { nome:'Lay Zebra', dica:'Contra o azarão vencer' },
-  lay_gol_mand: { nome:'Lay Goleada Mandante', dica:'Contra o mandante vencer por 3+' },
-  lay_gol_vis: { nome:'Lay Goleada Visitante', dica:'Contra o visitante vencer por 3+' },
+  lay_gol_mand: { nome:'Lay Goleada Mandante', dica:'Contra o mandante golear (marcar 4+ e vencer)' },
+  lay_gol_vis: { nome:'Lay Goleada Visitante', dica:'Contra o visitante golear (marcar 4+ e vencer)' },
 };
 
 // pontua um jogo (0-100) para um mercado, usando odds (o) e stats das duas equipes (em/ev)
@@ -5099,7 +5102,7 @@ const AJUDA_CONTEUDO = {
         <dt>Lay 0x1</dt><dd>Aposta <b>contra</b> o placar exato 0x1. Ganha em qualquer resultado que não seja 0x1.</dd>
         <dt>Lay 1x0</dt><dd>Aposta <b>contra</b> o placar exato 1x0. Ganha em qualquer resultado diferente de 1x0.</dd>
         <dt>Lay Zebra</dt><dd>Aposta <b>contra o azarão</b> vencer. Ganha se o favorito vencer ou empatar.</dd>
-        <dt>Lay Goleada</dt><dd>Aposta <b>contra</b> uma equipe vencer por 3+ de diferença.</dd>
+        <dt>Lay Goleada</dt><dd>Aposta <b>contra</b> uma equipe golear, ou seja, marcar 4+ gols e vencer a partida (4x0, 4x1, 5x4, etc.).</dd>
         <dt>Back Favorito</dt><dd>Aposta <b>a favor</b> do favorito vencer.</dd>
         <dt>🛡️ Desarmes</dt><dd>Linha de desarmes esperados no jogo. Some as médias das equipes; se a casa oferece linha abaixo, o over tem valor. Só confiável nas grandes ligas.</dd>
       </dl>
