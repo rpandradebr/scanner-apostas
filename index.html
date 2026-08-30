@@ -218,6 +218,14 @@
   </header>
   <div class="nav-overlay" id="nav-overlay" onclick="fecharMenu()"></div>
 
+  <!-- Modal de jogos anteriores + confronto direto -->
+  <div id="ja-modal-overlay" onclick="fecharJaModal(event)" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;padding:20px;overflow-y:auto">
+    <div id="ja-modal" onclick="event.stopPropagation()" style="max-width:820px;margin:20px auto;background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:20px;position:relative">
+      <button onclick="fecharJaModal()" style="position:absolute;top:12px;right:12px;background:var(--pitch);border:1px solid var(--linha);color:var(--chalk);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px">✕</button>
+      <div id="ja-modal-conteudo"><p style="color:var(--chalk-dim);padding:20px;text-align:center">⏳ Carregando...</p></div>
+    </div>
+  </div>
+
   <!-- Modal de detalhes do time -->
   <div id="time-modal-overlay" onclick="fecharTimeModal(event)" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9998;padding:20px;overflow-y:auto">
     <div id="time-modal" onclick="event.stopPropagation()" style="max-width:760px;margin:20px auto;background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:20px;position:relative">
@@ -1436,7 +1444,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.36";
+const APP_VERSAO = "v4.37";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3345,7 +3353,7 @@ function desenharRankingsSug(){
           <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${mostrarV}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-size:12px;color:var(--chalk-dim)">${detalhe}</td>
-          <td><button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}')">💾</button></td>
+          <td style="white-space:nowrap"><button class="mini" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.mandante_id||''}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.visitante_id||''}','${mktSist}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}')">💾</button></td>
         </tr>`;
       }).join('')}
       </table></div></div>`;
@@ -3501,7 +3509,6 @@ async function gerarSugestoes(){
             <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
             <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((s.j.pais?s.j.pais+' — ':'')+(s.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this, '${s.j.hora||''}', '${s.j.data_jogo||$('su-data').value||''}')">💾 Salvar no histórico</button>
           </div>
-          <div id="sug-ja-${s.j.fixture_id}" style="display:none;margin-top:8px"></div>
         </div>`).join('') + '</div>' +
         '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo) e conferir a odd na exchange.</p>';
     }
@@ -3509,13 +3516,19 @@ async function gerarSugestoes(){
   finally{ b.disabled = false; }
 }
 
-// abre/fecha os jogos anteriores dos dois times de uma sugestão (só os jogos, com placar)
+// fecha o modal de jogos anteriores
+function fecharJaModal(ev){
+  if (ev && ev.target && ev.target.id !== 'ja-modal-overlay') return;
+  $('ja-modal-overlay').style.display = 'none';
+}
+window.fecharJaModal = fecharJaModal;
+
+// abre o modal com os 10 últimos jogos de cada time + os 5 confrontos diretos
 async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, mercado){
-  const box = $(boxId);
-  if (!box) return;
-  if (box.style.display === 'block'){ box.style.display = 'none'; return; }
-  box.style.display = 'block';
-  box.innerHTML = '<p style="font-size:12px;color:var(--chalk-dim);padding:8px">⏳ Buscando últimos jogos dos dois times...</p>';
+  const overlay = $('ja-modal-overlay');
+  const alvo = $('ja-modal-conteudo');
+  overlay.style.display = 'block';
+  alvo.innerHTML = `<p style="color:var(--chalk-dim);padding:20px;text-align:center">⏳ Buscando jogos de ${mandante} e ${visitante}...</p>`;
 
   function listaJogos(nomeTime, idTime, jogos){
     if (!jogos || !jogos.length) return `<div style="flex:1;min-width:240px"><b style="font-size:13px">${nomeTime}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem jogos recentes.</p></div>`;
@@ -3532,21 +3545,21 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
       else if (meusGols < golsAdv) cor = 'var(--red)';
       let tag = '';
       if (mercado && (mercado.includes('OVER') || mercado.includes('AMBAS'))){
-        if (total >= 3) tag = '<span style="font-size:9px;color:var(--green)">▲ muitos gols</span>';
-        else if (total <= 1) tag = '<span style="font-size:9px;color:var(--red)">▼ poucos</span>';
+        if (total >= 3) tag = '<span style="font-size:9px;color:var(--green)">▲</span>';
+        else if (total <= 1) tag = '<span style="font-size:9px;color:var(--red)">▼</span>';
       }
       if (mercado && mercado.includes('UNDER')){
-        if (total <= 2) tag = '<span style="font-size:9px;color:var(--green)">▼ poucos gols</span>';
-        else if (total >= 4) tag = '<span style="font-size:9px;color:var(--red)">▲ muitos</span>';
+        if (total <= 2) tag = '<span style="font-size:9px;color:var(--green)">▼</span>';
+        else if (total >= 4) tag = '<span style="font-size:9px;color:var(--red)">▲</span>';
       }
-      const zerou = meusGols === 0 ? '<span style="font-size:9px;color:var(--red)">não marcou</span>' : '';
+      const zerou = meusGols === 0 ? '<span style="font-size:9px;color:var(--red)">s/ marcar</span>' : '';
       return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid rgba(237,234,224,.06)">
         <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${cor};min-width:34px">${meusGols ?? '-'}x${golsAdv ?? '-'}</span>
         <span style="flex:1;font-size:12px">${souMandante?'🏠':'✈️'} ${adv}</span>
         ${tag} ${zerou}
       </div>`;
     }).join('');
-    let somaFez=0, somaSof=0, zeros=0, semMarcar=0, n=0;
+    let somaFez=0, somaSof=0, zeros=0, semMarcar=0, ambas=0, over25=0, n=0;
     jogos.slice(0,10).forEach(g => {
       const souMandante = ehMandante(g);
       const meus = souMandante ? g.gols_mandante : g.gols_visitante;
@@ -3555,29 +3568,56 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
       somaFez+=meus; somaSof+=adv; n++;
       if (meus+adv===0) zeros++;
       if (meus===0) semMarcar++;
+      if (meus>0&&adv>0) ambas++;
+      if (meus+adv>=3) over25++;
     });
     const mediaFez = n?(somaFez/n).toFixed(1):'-', mediaSof = n?(somaSof/n).toFixed(1):'-';
+    const pct = (x)=> n?Math.round(x/n*100):0;
     return `<div style="flex:1;min-width:240px">
-      <b style="font-size:13px">${nomeTime}</b>
+      <b style="font-size:14px">${nomeTime}</b>
       <div style="margin:4px 0">${linhas}</div>
-      <p style="font-size:11px;color:var(--chalk-dim);margin-top:4px">Últimos ${n}: marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b> · ${zeros} jogo(s) 0x0 · ${semMarcar}x não marcou</p>
+      <div style="font-size:11px;color:var(--chalk-dim);margin-top:6px;line-height:1.6">
+        Marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b> por jogo<br>
+        Over 2.5: <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas: <b style="color:var(--amber)">${pct(ambas)}%</b> · Over 0.5: <b style="color:var(--green)">${pct(n-zeros)}%</b><br>
+        ${zeros} jogo(s) 0x0 · ${semMarcar}x não marcou
+      </div>
     </div>`;
   }
 
+  function listaH2H(jogos){
+    if (!jogos || !jogos.length) return '<p style="font-size:12px;color:var(--chalk-dim)">Sem confrontos diretos recentes na base.</p>';
+    let over25=0, ambas=0, zeros=0, n=0;
+    const linhas = jogos.map(g => {
+      const total = (g.gols_mandante??0)+(g.gols_visitante??0);
+      if (g.gols_mandante!=null){ n++; if(total>=3)over25++; if(g.gols_mandante>0&&g.gols_visitante>0)ambas++; if(total===0)zeros++; }
+      return `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid rgba(237,234,224,.06)">
+        <span style="font-size:11px;color:var(--chalk-dim);min-width:70px">${g.data||''}</span>
+        <span style="flex:1;font-size:12.5px">${g.mandante} <b style="color:var(--amber);font-family:'IBM Plex Mono',monospace">${g.gols_mandante??'-'}x${g.gols_visitante??'-'}</b> ${g.visitante}</span>
+      </div>`;
+    }).join('');
+    const pct=(x)=>n?Math.round(x/n*100):0;
+    return `${linhas}<p style="font-size:11px;color:var(--chalk-dim);margin-top:6px">Nos ${n} confronto(s): Over 2.5 <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas <b style="color:var(--amber)">${pct(ambas)}%</b> · ${zeros} sem gols</p>`;
+  }
+
   try{
-    const [rm, rv] = await Promise.all([
+    const [rm, rv, rh2h] = await Promise.all([
       chamarEdge(mid ? { acao:'historico', time: mandante, id: mid } : { acao:'historico', time: mandante }),
       chamarEdge(vid ? { acao:'historico', time: visitante, id: vid } : { acao:'historico', time: visitante }),
+      (mid && vid) ? chamarEdge({ acao:'confronto_direto', t1: mid, t2: vid, n: 5 }) : Promise.resolve({ jogos: [] }),
     ]);
-    box.innerHTML = `<div style="background:var(--pitch);border-radius:8px;padding:12px">
-      <p style="font-size:11.5px;color:var(--chalk-dim);margin:0 0 8px">📋 Últimos jogos que embasaram a sugestão de <b style="color:var(--amber)">${mercado}</b>. 🏠 em casa · ✈️ fora. Placar na perspectiva do time.</p>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">
+    alvo.innerHTML = `
+      <h2 style="margin:0 0 4px;padding-right:40px;font-size:19px">${mandante} <span style="color:var(--chalk-dim);font-size:15px">x</span> ${visitante}</h2>
+      <p style="font-size:12px;color:var(--chalk-dim);margin:0 0 14px">Jogos que embasaram a sugestão de <b style="color:var(--amber)">${mercado||'—'}</b></p>
+      <h3 style="font-size:14px;margin:0 0 8px">📋 Últimos 10 jogos de cada time</h3>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:18px">
         ${listaJogos(mandante, mid, rm.jogos)}
         ${listaJogos(visitante, vid, rv.jogos)}
       </div>
-    </div>`;
+      <h3 style="font-size:14px;margin:0 0 8px">⚔️ Últimos confrontos diretos</h3>
+      <div style="background:var(--pitch);border-radius:8px;padding:10px">${listaH2H(rh2h.jogos)}</div>
+      <p style="font-size:10.5px;color:var(--chalk-dim);margin-top:10px">🏠 em casa · ✈️ fora · ▲ muitos gols · ▼ poucos. Placar dos jogos individuais na perspectiva do time.</p>`;
   }catch(e){
-    box.innerHTML = `<p style="font-size:12px;color:var(--red);padding:8px">Erro ao buscar jogos: ${e.message}</p>`;
+    alvo.innerHTML = `<p style="font-size:13px;color:var(--red);padding:12px">Erro ao buscar: ${e.message}</p>`;
   }
 }
 window.toggleJogosAnteriores = toggleJogosAnteriores;
@@ -4742,6 +4782,7 @@ $('btn-topdia').addEventListener('click', async () => {
               <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
                 <button class="mini" onclick="event.stopPropagation();copiarPrompt('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${(x.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
                 <button class="mini" onclick="event.stopPropagation();fichaJogo(${idx})">🔎 Ficha</button>
+                <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.j.mandante_id||''}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.j.visitante_id||''}','${(mktConfere||m.nome||'').replace(/'/g,String.fromCharCode(92,39))}')">📋 Jogos anteriores</button>
                 <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="event.stopPropagation();abrirAnaliseCompleta(${idx})">🔬 Análise completa</button>
                 ${mktConfere ? `<button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.j.pais?x.j.pais+' — ':'')+(x.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktConfere}',${(x.nota/10).toFixed(1)},'TOP do dia ${m.nome}: ${x.nota} pontos', this, '${x.j.hora||''}', '${x.j.data_jogo||$('td-data').value||''}')">💾 Salvar</button>` : ''}
               </div>
