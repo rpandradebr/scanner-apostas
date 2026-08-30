@@ -260,6 +260,7 @@
       <div class="menu-grupo-itens">
         <button data-aba="histsug" title="Todas as sugestões que você salvou, com green/red automático.">📋 Histórico de sugestões</button>
         <button data-aba="meusjogos" title="Só os jogos que você salvou com o botão 💾, sem as sugestões do bot. Seu funil pessoal concentrado.">⭐ Meus jogos</button>
+        <button data-aba="apostaspeguei" title="Só as apostas que você marcou como 'peguei'. Tela enxuta com botão de integrar direto à Gestão de banca.">✅ Apostas que peguei</button>
         <button data-aba="botsug" title="Só as sugestões enviadas pelo vigia do Telegram (o bot).">📲 Sugestões do bot</button>
         <button data-aba="notas" title="Assertividade por faixa de nota, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
         <button data-aba="sonota10" title="Reúne todos os jogos nota máxima das Sugestões, Top do dia e bot.">🔟 Só Nota 10</button>
@@ -1204,6 +1205,9 @@
         <button class="mini" onclick="$('hs-filtro-data').value='';listarHistSug()">limpar</button>
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
+        <input type="checkbox" id="hs-so-hoje" checked style="width:auto"> 📅 Só jogos de hoje
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
         <input type="checkbox" id="hs-filtro-pegas" style="width:auto"> Só apostas que peguei
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
@@ -1283,6 +1287,43 @@
     <div class="tabela-scroll"><table id="mj-tabela"></table></div>
   </section>
 
+  <!-- ================= APOSTAS QUE PEGUEI ================= -->
+  <section id="aba-apostaspeguei">
+    <h2>✅ Apostas que peguei</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Só as apostas que você marcou como <b>peguei</b> (de qualquer aba). Tela enxuta pra acompanhar o que está em jogo e enviar direto pra <b>Gestão de banca</b> com o botão 💰 Integrar.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <button class="acao" id="btn-ap-atualizar">🔄 Atualizar resultados</button>
+      <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="ap-status"></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Mercado:
+        <select id="ap-filtro-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Situação:
+        <select id="ap-filtro-situacao" style="width:auto;padding:4px 8px">
+          <option value="todos">Todas</option>
+          <option value="ocorrer">Só as que vão ocorrer</option>
+          <option value="ocorridos">Só as que já ocorreram</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Ordenar por:
+        <select id="ap-ordem" style="width:auto;padding:4px 8px">
+          <option value="recente">Mais recentes primeiro</option>
+          <option value="hora">Hora do jogo (crescente)</option>
+          <option value="nota">Maior nota</option>
+          <option value="mercado">Mercado (A-Z)</option>
+        </select>
+      </label>
+    </div>
+    <div id="ap-painel"></div>
+    <div id="ap-aviso"></div>
+    <div class="tabela-scroll"><table id="ap-tabela"></table></div>
+  </section>
+
+
 
   <!-- ================= SUGESTÕES DO BOT ================= -->
   <section id="aba-botsug">
@@ -1296,6 +1337,17 @@
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
         Mercado:
         <select id="bot-filtro-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Nota mín:
+        <select id="bot-filtro-nota" style="width:auto;padding:4px 8px">
+          <option value="0">Todas</option>
+          <option value="7">7+</option>
+          <option value="8">8+</option>
+          <option value="9">9+</option>
+          <option value="9.5">9.5+</option>
+          <option value="10">Só 10</option>
+        </select>
       </label>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer">
         <input type="checkbox" id="bot-filtro-pegas" style="width:auto"> Só apostas que peguei
@@ -1368,7 +1420,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.33";
+const APP_VERSAO = "v4.34";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1572,6 +1624,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'punter-rodada' && typeof initPanorama === 'function'){ initPanorama(); }
   // renderiza Meus jogos ao abrir a aba
   if (b.dataset.aba === 'meusjogos' && typeof listarMeusJogos === 'function'){ listarMeusJogos(); }
+  // renderiza Apostas que peguei ao abrir
+  if (b.dataset.aba === 'apostaspeguei' && typeof listarApostasPeguei === 'function'){ listarApostasPeguei(); }
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
 
@@ -3600,11 +3654,11 @@ $('btn-atualizar-res').addEventListener('click', async () => {
   finally{ b.disabled = false; }
 });
 
-async function listarHistSug(pref, origemFixa){
+async function listarHistSug(pref, origemFixa, soPegasFixo){
   pref = pref || 'hs';
   if (typeof renderConfigAlerta === 'function') renderConfigAlerta();
   const { data, error } = await db.from('analises').select('*')
-    .in('origem', origemFixa==='sugestao' ? ['sugestao'] : ['sugestao','vigia']).order('criado_em',{ascending:false}).limit(300);
+    .in('origem', origemFixa==='sugestao' ? ['sugestao','vigia'] : ['sugestao','vigia']).order('criado_em',{ascending:false}).limit(300);
   if (error){ aviso($(pref+'-aviso'), 'Erro: '+error.message,'erro'); return; }
   if (!data?.length){ $(pref+'-tabela').innerHTML=''; $(pref+'-painel').innerHTML=(origemFixa ? '<p class="msg-vazia">Você ainda não salvou nenhum jogo. Use o botão 💾 nas abas de Sugestões, Top do dia ou Só Nota 10.</p>' : '<p class="msg-vazia">Nenhuma sugestão salva ainda. Salve sugestões na aba 💡 Sugestões do dia.</p>'); return; }
 
@@ -3667,14 +3721,24 @@ async function listarHistSug(pref, origemFixa){
   }
   const filtroMercado = selMerc ? selMerc.value : '';
   let dataFiltrada = filtroData ? data.filter(a => a.data_jogo === filtroData) : data;
+  // no Histórico (não em Meus jogos), sem filtro de data escolhido, mostra só HOJE por padrão — tela enxuta
+  if (!origemFixa && !filtroData){
+    const hojeBahia = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bahia' })).toISOString().slice(0,10);
+    const soHoje = $(pref+'-so-hoje');
+    const mostrarSoHoje = soHoje ? soHoje.checked : true; // padrão: só hoje
+    if (mostrarSoHoje) dataFiltrada = dataFiltrada.filter(a => a.data_jogo === hojeBahia);
+  }
   if (filtroMercado) dataFiltrada = dataFiltrada.filter(a => a.mercado_sugerido === filtroMercado);
   // filtro por origem (manual vs vigia) — ignorado quando a aba já é fixa (Meus jogos)
   if (!origemFixa){
     const filtroOrigem = $(pref+'-filtro-origem') ? $(pref+'-filtro-origem').value : '';
     if (filtroOrigem === 'vigia') dataFiltrada = dataFiltrada.filter(a => a.origem === 'vigia');
     else if (filtroOrigem === 'manual') dataFiltrada = dataFiltrada.filter(a => a.origem !== 'vigia');
+  } else {
+    // Meus jogos: mostra os manuais (todos) + os do bot que você marcou como "peguei"
+    dataFiltrada = dataFiltrada.filter(a => a.origem !== 'vigia' || a.aposta_feita);
   }
-  if ($(pref+'-filtro-pegas') && $(pref+'-filtro-pegas').checked) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
+  if (($(pref+'-filtro-pegas') && $(pref+'-filtro-pegas').checked) || soPegasFixo) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
   // filtro de situação (a ocorrer / ocorridos) pela data+hora do jogo
   const filtroSit = $(pref+'-filtro-situacao') ? $(pref+'-filtro-situacao').value : 'todos';
   if (filtroSit !== 'todos'){
@@ -3821,7 +3885,7 @@ async function confirmarIntegracao(idAnalise){
 window.confirmarIntegracao = confirmarIntegracao;
 
 
-document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao' || e.target?.id === 'hs-filtro-origem') listarHistSug(); });
+document.addEventListener('change', e => { if (e.target?.id === 'hs-ordem' || e.target?.id === 'hs-filtro-data' || e.target?.id === 'hs-filtro-mercado' || e.target?.id === 'hs-filtro-pegas' || e.target?.id === 'hs-filtro-situacao' || e.target?.id === 'hs-filtro-origem' || e.target?.id === 'hs-so-hoje') listarHistSug(); });
 listarHistSug();
 
 // ---- MEUS JOGOS: só os que você salvou (origem manual), mesmos filtros ----
@@ -3829,6 +3893,19 @@ function listarMeusJogos(){ listarHistSug('mj', 'sugestao'); }
 window.listarMeusJogos = listarMeusJogos;
 document.addEventListener('change', e => {
   if (['mj-ordem','mj-filtro-data','mj-filtro-mercado','mj-filtro-pegas','mj-filtro-situacao'].includes(e.target?.id)) listarMeusJogos();
+});
+
+// ---- APOSTAS QUE PEGUEI: só as marcadas como peguei, de qualquer origem ----
+function listarApostasPeguei(){ listarHistSug('ap', 'sugestao', true); }
+window.listarApostasPeguei = listarApostasPeguei;
+document.addEventListener('change', e => {
+  if (['ap-ordem','ap-filtro-mercado','ap-filtro-situacao'].includes(e.target?.id)) listarApostasPeguei();
+});
+if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async () => {
+  const btnHist = $('btn-atualizar-res');
+  const st = $('ap-status'); if (st) st.textContent = '⏳ Atualizando...';
+  if (btnHist){ btnHist.click(); }
+  setTimeout(() => { listarApostasPeguei(); if (st) st.textContent = '✅ Atualizado.'; }, 4000);
 });
 // botão atualizar resultados da aba Meus jogos (reusa a atualização do histórico)
 if ($('btn-mj-atualizar')) $('btn-mj-atualizar').addEventListener('click', async () => {
@@ -5835,6 +5912,9 @@ async function listarBotSug(){
 
   let lista = todas;
   if (fMerc) lista = lista.filter(a => a.mercado_sugerido === fMerc);
+  const fNota = $('bot-filtro-nota') ? Number($('bot-filtro-nota').value) : 0;
+  if (fNota === 10) lista = lista.filter(a => Number(a.confianca) >= 10);
+  else if (fNota > 0) lista = lista.filter(a => Number(a.confianca) >= fNota);
   if (soPegas) lista = lista.filter(a => a.aposta_feita);
   if (fSit === 'ocorrer') lista = lista.filter(a => !jaOcorreu(a));
   else if (fSit === 'ocorridos') lista = lista.filter(a => jaOcorreu(a));
@@ -5849,8 +5929,8 @@ async function listarBotSug(){
     // detecta jogos nota 10 (confianca >= 10) ainda pendentes de resultado
     const notaMax = todas.filter(a => Number(a.confianca) >= 10 && !a.resultado_auto);
     const bannerNota10 = notaMax.length
-      ? `<div style="width:100%;background:linear-gradient(90deg,var(--amber),#ff9500);color:var(--pitch);padding:12px 16px;border-radius:8px;margin-bottom:10px;font-weight:700;animation:pulse 2s infinite">
-          🚨 ${notaMax.length} ALERTA${notaMax.length>1?'S':''} NOTA MÁXIMA 10.0 ${notaMax.length>1?'PENDENTES':'PENDENTE'}: ${notaMax.slice(0,3).map(a=>`${a.mandante} x ${a.visitante}`).join(' · ')}
+      ? `<div onclick="$('bot-filtro-nota').value='10';listarBotSug();" style="width:100%;background:linear-gradient(90deg,var(--amber),#ff9500);color:var(--pitch);padding:12px 16px;border-radius:8px;margin-bottom:10px;font-weight:700;animation:pulse 2s infinite;cursor:pointer" title="Clique para ver só os jogos nota 10">
+          🚨 ${notaMax.length} ALERTA${notaMax.length>1?'S':''} NOTA MÁXIMA 10.0 ${notaMax.length>1?'PENDENTES':'PENDENTE'}: ${notaMax.slice(0,3).map(a=>`${a.mandante} x ${a.visitante}`).join(' · ')} <span style="text-decoration:underline;font-size:12px">— clique para ver</span>
         </div>`
       : '';
     $('bot-resumo').innerHTML = bannerNota10 + `
@@ -5892,7 +5972,7 @@ window.marcarApostaFeitaBot = marcarApostaFeitaBot;
 
 if ($('btn-bot-atualizar')) $('btn-bot-atualizar').addEventListener('click', atualizarResultadosBot);
 document.addEventListener('change', e => {
-  if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao'].includes(e.target?.id)) listarBotSug();
+  if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao','bot-filtro-nota'].includes(e.target?.id)) listarBotSug();
 });
 
 
