@@ -1436,7 +1436,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.35";
+const APP_VERSAO = "v4.36";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3497,15 +3497,90 @@ async function gerarSugestoes(){
           })()}
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
+            <button class="mini" onclick="toggleJogosAnteriores('sug-ja-${s.j.fixture_id}','${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.mandante_id||''}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante_id||''}','${s.mercado}')" style="border-color:var(--amber);color:var(--amber)">📋 Jogos anteriores</button>
             <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
             <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((s.j.pais?s.j.pais+' — ':'')+(s.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this, '${s.j.hora||''}', '${s.j.data_jogo||$('su-data').value||''}')">💾 Salvar no histórico</button>
           </div>
+          <div id="sug-ja-${s.j.fixture_id}" style="display:none;margin-top:8px"></div>
         </div>`).join('') + '</div>' +
         '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo) e conferir a odd na exchange.</p>';
     }
   } catch(e){ aviso($('su-aviso'), 'Falha: ' + e.message, 'erro'); }
   finally{ b.disabled = false; }
 }
+
+// abre/fecha os jogos anteriores dos dois times de uma sugestão (só os jogos, com placar)
+async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, mercado){
+  const box = $(boxId);
+  if (!box) return;
+  if (box.style.display === 'block'){ box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<p style="font-size:12px;color:var(--chalk-dim);padding:8px">⏳ Buscando últimos jogos dos dois times...</p>';
+
+  function listaJogos(nomeTime, idTime, jogos){
+    if (!jogos || !jogos.length) return `<div style="flex:1;min-width:240px"><b style="font-size:13px">${nomeTime}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem jogos recentes.</p></div>`;
+    const norm = s => (s||'').toLowerCase();
+    const ehMandante = (g) => (idTime && String(g.mandante_id)===String(idTime)) || norm(g.mandante) === norm(nomeTime);
+    const linhas = jogos.slice(0,10).map(g => {
+      const souMandante = ehMandante(g);
+      const meusGols = souMandante ? g.gols_mandante : g.gols_visitante;
+      const golsAdv = souMandante ? g.gols_visitante : g.gols_mandante;
+      const adv = souMandante ? g.visitante : g.mandante;
+      const total = (meusGols ?? 0) + (golsAdv ?? 0);
+      let cor = 'var(--chalk-dim)';
+      if (meusGols > golsAdv) cor = 'var(--green)';
+      else if (meusGols < golsAdv) cor = 'var(--red)';
+      let tag = '';
+      if (mercado && (mercado.includes('OVER') || mercado.includes('AMBAS'))){
+        if (total >= 3) tag = '<span style="font-size:9px;color:var(--green)">▲ muitos gols</span>';
+        else if (total <= 1) tag = '<span style="font-size:9px;color:var(--red)">▼ poucos</span>';
+      }
+      if (mercado && mercado.includes('UNDER')){
+        if (total <= 2) tag = '<span style="font-size:9px;color:var(--green)">▼ poucos gols</span>';
+        else if (total >= 4) tag = '<span style="font-size:9px;color:var(--red)">▲ muitos</span>';
+      }
+      const zerou = meusGols === 0 ? '<span style="font-size:9px;color:var(--red)">não marcou</span>' : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid rgba(237,234,224,.06)">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${cor};min-width:34px">${meusGols ?? '-'}x${golsAdv ?? '-'}</span>
+        <span style="flex:1;font-size:12px">${souMandante?'🏠':'✈️'} ${adv}</span>
+        ${tag} ${zerou}
+      </div>`;
+    }).join('');
+    let somaFez=0, somaSof=0, zeros=0, semMarcar=0, n=0;
+    jogos.slice(0,10).forEach(g => {
+      const souMandante = ehMandante(g);
+      const meus = souMandante ? g.gols_mandante : g.gols_visitante;
+      const adv = souMandante ? g.gols_visitante : g.gols_mandante;
+      if (meus==null||adv==null) return;
+      somaFez+=meus; somaSof+=adv; n++;
+      if (meus+adv===0) zeros++;
+      if (meus===0) semMarcar++;
+    });
+    const mediaFez = n?(somaFez/n).toFixed(1):'-', mediaSof = n?(somaSof/n).toFixed(1):'-';
+    return `<div style="flex:1;min-width:240px">
+      <b style="font-size:13px">${nomeTime}</b>
+      <div style="margin:4px 0">${linhas}</div>
+      <p style="font-size:11px;color:var(--chalk-dim);margin-top:4px">Últimos ${n}: marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b> · ${zeros} jogo(s) 0x0 · ${semMarcar}x não marcou</p>
+    </div>`;
+  }
+
+  try{
+    const [rm, rv] = await Promise.all([
+      chamarEdge(mid ? { acao:'historico', time: mandante, id: mid } : { acao:'historico', time: mandante }),
+      chamarEdge(vid ? { acao:'historico', time: visitante, id: vid } : { acao:'historico', time: visitante }),
+    ]);
+    box.innerHTML = `<div style="background:var(--pitch);border-radius:8px;padding:12px">
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin:0 0 8px">📋 Últimos jogos que embasaram a sugestão de <b style="color:var(--amber)">${mercado}</b>. 🏠 em casa · ✈️ fora. Placar na perspectiva do time.</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${listaJogos(mandante, mid, rm.jogos)}
+        ${listaJogos(visitante, vid, rv.jogos)}
+      </div>
+    </div>`;
+  }catch(e){
+    box.innerHTML = `<p style="font-size:12px;color:var(--red);padding:8px">Erro ao buscar jogos: ${e.message}</p>`;
+  }
+}
+window.toggleJogosAnteriores = toggleJogosAnteriores;
 
 function pontuarJogo(c, todos){
   const { o, em, ev } = c;
