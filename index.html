@@ -267,6 +267,7 @@
       <div class="menu-grupo-itens">
         <button data-aba="sugestoes" title="O funil do dia: cruza odds e histórico e sugere os melhores jogos, com nota e mercado.">💡 Sugestões do dia</button>
         <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados por mercado (Back favorito, Under 3.5, lays).">🏆 TOP do dia</button>
+        <button data-aba="metodo0x0" title="Times que vêm de 0x0 (1 ou 2 seguidos) — tendência de estourar e voltar a marcar gols.">🎯 Método 0x0</button>
       </div>
     </div>
 
@@ -706,6 +707,36 @@
     <div id="td-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
     <div id="td-lista"></div>
   </section>
+
+  <!-- ================= MÉTODO 0x0 ================= -->
+  <section id="aba-metodo0x0">
+    <h2>🎯 Método 0x0</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">
+      Times que vêm de <b>0x0</b> tendem a "estourar" e voltar a marcar. Esta aba varre os jogos do dia e mostra onde pelo menos um dos times vem de jogo(s) 0x0 — ideal para entrar a favor de gols (Over 0.5, Over 1.5, o time marcar). Usa os últimos jogos reais de cada equipe.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <input type="date" id="m0-data" style="width:auto;padding:7px 10px" title="Dia dos jogos (em branco = hoje)">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Veio de:
+        <select id="m0-qtd" style="width:auto;padding:7px 10px">
+          <option value="1">1 jogo 0x0</option>
+          <option value="2">2 jogos 0x0 seguidos</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Ligas:
+        <select id="m0-ligas" style="width:auto;padding:7px 10px">
+          <option value="fav">Só minhas favoritas</option>
+          <option value="todas">Todas (mais lento)</option>
+        </select>
+      </label>
+      <button class="acao" id="btn-m0-gerar">🔍 Buscar</button>
+    </div>
+    <div id="m0-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
+    <div id="m0-aviso"></div>
+    <div id="m0-lista"></div>
+  </section>
+
 
   <!-- ================= HISTÓRICO ================= -->
   <section id="aba-historico">
@@ -1444,7 +1475,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.37";
+const APP_VERSAO = "v4.38";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -7064,6 +7095,94 @@ async function gerarPanoramaRodada(){
   finally{ btn.disabled=false; }
 }
 window.gerarPanoramaRodada = gerarPanoramaRodada;
+
+// ===================== MÉTODO 0x0 =====================
+// varre os jogos do dia e acha times que vêm de 0x0 (1 ou 2 seguidos)
+async function gerarMetodo0x0(){
+  const btn = $('btn-m0-gerar'); btn.disabled = true;
+  const data = $('m0-data').value;
+  const qtdExigida = parseInt($('m0-qtd').value);
+  const soFav = $('m0-ligas').value === 'fav';
+  aviso($('m0-aviso'), ''); $('m0-lista').innerHTML = '';
+  $('m0-status').textContent = '⏳ Buscando a grade do dia...';
+
+  // verifica se os últimos N jogos de um time terminaram 0x0
+  function vemDeZeroAZero(jogos, nomeTime, idTime, n){
+    if (!jogos || jogos.length < n) return null;
+    const norm = s => (s||'').toLowerCase();
+    const ehMand = g => (idTime && String(g.mandante_id)===String(idTime)) || norm(g.mandante)===norm(nomeTime);
+    // os jogos já vêm ordenados do mais recente pro mais antigo
+    const ultimos = jogos.slice(0, n);
+    const todosZero = ultimos.every(g => (g.gols_mandante===0 && g.gols_visitante===0));
+    if (!todosZero) return null;
+    // detalhes dos jogos 0x0
+    return ultimos.map(g => {
+      const souMand = ehMand(g);
+      const adv = souMand ? g.visitante : g.mandante;
+      return { adv, casa: souMand, data: g.data || '' };
+    });
+  }
+
+  try{
+    const rg = await chamarEdge(data ? { acao:'grade', data } : { acao:'grade' });
+    let jogos = (rg.jogos ?? []).filter(j => jogoValido(j) && j.mandante_id && j.visitante_id);
+    // filtra por favoritas
+    if (soFav && typeof getLigasFav === 'function'){
+      const fav = getLigasFav();
+      if (fav.length){
+        const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        jogos = jogos.filter(j => { const nome = norm(`${j.pais} — ${j.liga}`); return fav.some(f => { const [p,l]=f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l||nome.includes(l.trim())); }); });
+      }
+    }
+    // só jogos que ainda vão ocorrer (usa o default 'ocorrer' do filtraSituacao)
+    jogos = filtraSituacao(jogos, null);
+    if (!jogos.length){ $('m0-status').textContent=''; aviso($('m0-aviso'), soFav ? 'Nenhum jogo das suas ligas favoritas hoje. Troque para "Todas" ou marque ligas favoritas.' : 'Nenhum jogo hoje.', 'erro'); btn.disabled=false; return; }
+
+    $('m0-status').textContent = `⏳ Analisando ${jogos.length} jogos (buscando histórico dos times)...`;
+    const achados = [];
+    let proc = 0;
+    for (const j of jogos){
+      proc++;
+      if (proc % 5 === 0) $('m0-status').textContent = `⏳ Analisando ${proc}/${jogos.length}...`;
+      try{
+        const [rm, rv] = await Promise.all([
+          chamarEdge({ acao:'historico', time: j.mandante, id: j.mandante_id }),
+          chamarEdge({ acao:'historico', time: j.visitante, id: j.visitante_id }),
+        ]);
+        const mZero = vemDeZeroAZero(rm.jogos, j.mandante, j.mandante_id, qtdExigida);
+        const vZero = vemDeZeroAZero(rv.jogos, j.visitante, j.visitante_id, qtdExigida);
+        if (mZero || vZero) achados.push({ j, mZero, vZero });
+      }catch(_){}
+    }
+
+    $('m0-status').textContent = `✅ ${achados.length} jogo(s) com time vindo de ${qtdExigida} jogo(s) 0x0.`;
+    if (!achados.length){ aviso($('m0-aviso'), 'Nenhum time vindo de 0x0 nos jogos de hoje com esse critério. Tente "1 jogo 0x0" ou amplie as ligas.', 'erro'); btn.disabled=false; return; }
+
+    $('m0-lista').innerHTML = achados.map(a => {
+      const idx = gradeJogos.indexOf(a.j) >= 0 ? gradeJogos.indexOf(a.j) : (gradeJogos.push(a.j)-1);
+      const badge = (nome, zeros) => {
+        if (!zeros) return '';
+        const detalhes = zeros.map(z => `${z.casa?'🏠':'✈️'} 0x0 vs ${z.adv}`).join(' · ');
+        return `<div style="margin-top:4px"><span style="background:var(--amber);color:var(--pitch);padding:2px 8px;border-radius:5px;font-weight:700;font-size:12px">${nome} vem de ${zeros.length}x 0x0</span> <span style="font-size:11.5px;color:var(--chalk-dim)">${detalhes}</span></div>`;
+      };
+      return `<div class="mercado verde" style="border-left-color:var(--amber)">
+        <div class="nome" style="cursor:pointer" onclick="fichaJogo(${idx})">${a.j.mandante} x ${a.j.visitante}</div>
+        <div class="porque">${a.j.hora||''} · ${a.j.pais} — ${a.j.liga}</div>
+        ${badge(a.j.mandante, a.mZero)}
+        ${badge(a.j.visitante, a.vZero)}
+        <div style="margin-top:8px;font-size:12.5px;color:var(--green)">💡 Entrada a favor de gols: Over 0.5, Over 1.5 ou o time marcar</div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mini" onclick="fichaJogo(${idx})">🔎 Ficha</button>
+          <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="toggleJogosAnteriores('','${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.mandante_id||''}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante_id||''}','OVER 0.5')">📋 Jogos anteriores</button>
+          <button class="mini" onclick="salvarSugestao('${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((a.j.pais?a.j.pais+' — ':'')+(a.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','OVER 0.5',7,'Método 0x0: ${(a.mZero?a.j.mandante:a.j.visitante)} vem de ${qtdExigida}x 0x0', this, '${a.j.hora||''}', '${a.j.data_jogo||data||''}')">💾 Salvar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){ aviso($('m0-aviso'), 'Erro: '+e.message, 'erro'); $('m0-status').textContent=''; }
+  finally{ btn.disabled = false; }
+}
+window.gerarMetodo0x0 = gerarMetodo0x0;
+if ($('btn-m0-gerar')) $('btn-m0-gerar').addEventListener('click', gerarMetodo0x0);
 
 // RANKING POR MERCADO: destaca os melhores jogos da rodada para cada mercado estatístico
 async function gerarRankingMercados(){
