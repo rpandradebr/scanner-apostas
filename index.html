@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Scanner de Apostas — Grade, Sinais e Conferência</title>
+<title>RPA Bet Scanner — Grade, Sinais e Conferência</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -22,7 +22,14 @@
     color:var(--chalk);font-family:'IBM Plex Sans',system-ui,sans-serif;
     min-height:100vh;padding:22px 14px 60px;
   }
-  .wrap{max-width:1080px;margin:0 auto}
+  /* marca d'água RPA Bet Scanner (radar + cifrão) — fixa, bem suave atrás do conteúdo */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' viewBox='0 0 150 150'%3E%3Cg fill='none'%3E%3Ccircle cx='75' cy='75' r='60' stroke='%23FFC53D' stroke-width='4'/%3E%3Ccircle cx='75' cy='75' r='40' stroke='%23FFC53D' stroke-width='2.5'/%3E%3Ccircle cx='75' cy='75' r='20' stroke='%23FFC53D' stroke-width='2'/%3E%3Cpath d='M75 75 L125 50' stroke='%234CC470' stroke-width='4' stroke-linecap='round'/%3E%3Ctext x='75' y='88' font-family='sans-serif' font-size='42' font-weight='800' fill='%23FFC53D' text-anchor='middle'%3E%24%3C/text%3E%3C/g%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right -60px center;background-size:420px;
+    opacity:.045;
+  }
+  .wrap{max-width:1080px;margin:0 auto;position:relative;z-index:1}
   header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;margin-bottom:18px}
   h1{font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:clamp(30px,5vw,44px);
      line-height:.95;text-transform:uppercase}
@@ -193,7 +200,16 @@
       <button class="hamburguer" id="btn-menu" onclick="toggleMenu()" title="Menu" aria-label="Abrir menu">
         <span></span><span></span><span></span>
       </button>
-      <h1>Scanner <span>de Apostas</span></h1>
+      <div style="display:flex;align-items:center;gap:12px">
+        <svg width="46" height="46" viewBox="0 0 46 46" fill="none" style="flex-shrink:0" aria-hidden="true">
+          <circle cx="23" cy="23" r="20" stroke="var(--amber)" stroke-width="2.5"/>
+          <circle cx="23" cy="23" r="12" stroke="var(--amber)" stroke-width="1.5" opacity=".5"/>
+          <circle cx="23" cy="23" r="3" fill="var(--amber)"/>
+          <path d="M23 23 L38 15" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="34" cy="17" r="2.5" fill="var(--green)"/>
+        </svg>
+        <h1><span>RPA</span> Bet <span>Scanner</span></h1>
+      </div>
     </div>
     <div style="text-align:right">
       <div class="versao" id="versao"></div>
@@ -797,7 +813,7 @@
 
   <!-- ================= AJUDA ================= -->
   <section id="aba-ajuda">
-    <h2>❓ Ajuda — Manual do Scanner de Apostas</h2>
+    <h2>❓ Ajuda — Manual do RPA Bet Scanner</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">Aqui você aprende o que cada tela faz e o passo a passo dos principais fluxos. Clique nas abas abaixo.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       <button class="mini" id="ajsub-fluxos" style="border-color:var(--amber);color:var(--amber)" onclick="trocaAjuda('fluxos')">🚦 Passo a passo</button>
@@ -811,12 +827,12 @@
 
   <!-- ================= SOBRE ================= -->
   <section id="aba-sobre">
-    <h2>ℹ️ Sobre o Scanner de Apostas</h2>
+    <h2>ℹ️ Sobre o RPA Bet Scanner</h2>
 
     <div class="ajuda-card" style="margin-bottom:16px">
       <h3 style="margin-top:0">🎯 Objetivo</h3>
       <p style="line-height:1.6">
-        O Scanner de Apostas é uma central de análise para apostas esportivas de futebol, focada em mercados de exchange (Betfair, Betfair-like). Ele cruza <b>odds do dia</b> com o <b>histórico das equipes</b> para pontuar cada jogo de 0 a 100 em vários mercados (Under 3.5, Lay 0x1, Lay 1x0, Lay zebra, Lay goleada, Over, Ambas marcam), ajudando a encontrar as melhores oportunidades com base em dados, não em achismo.
+        O RPA Bet Scanner é uma central de análise para apostas esportivas de futebol, focada em mercados de exchange (Betfair, Betfair-like). Ele cruza <b>odds do dia</b> com o <b>histórico das equipes</b> para pontuar cada jogo de 0 a 100 em vários mercados (Under 3.5, Lay 0x1, Lay 1x0, Lay zebra, Lay goleada, Over, Ambas marcam), ajudando a encontrar as melhores oportunidades com base em dados, não em achismo.
       </p>
       <p style="line-height:1.6">
         Além da análise, o sistema tem gestão de banca, registro de apostas com green/red automático, relatórios de desempenho, análise de assertividade por nota, estatísticas por campeonato e um vigia no Telegram que avisa automaticamente quando aparece um jogo de nota alta.
@@ -1420,7 +1436,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.34";
+const APP_VERSAO = "v4.35";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
