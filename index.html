@@ -1246,6 +1246,9 @@
     </p>
     <div id="hs-config-alerta"></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        <input type="date" id="hs-data-atualizar" style="width:auto;padding:5px 8px" title="Deixe em branco para atualizar todos os dias pendentes, ou escolha um dia específico">
+      </label>
       <button class="acao" id="btn-atualizar-res">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="hs-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
@@ -1387,6 +1390,7 @@
       Apenas as sugestões enviadas automaticamente pelo vigia do Telegram, separadas das que você pega manualmente. Marque se pegou a aposta e clique em "Atualizar resultados" para apurar green/red.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <input type="date" id="bot-data-atualizar" style="width:auto;padding:5px 8px" title="Deixe em branco para atualizar todos, ou escolha um dia específico">
       <button class="acao" id="btn-bot-atualizar">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="bot-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
@@ -1475,7 +1479,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.44";
+const APP_VERSAO = "v4.45";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3942,17 +3946,18 @@ async function buscarPlacar(a){
   return null;
 }
 
-$('btn-atualizar-res').addEventListener('click', async () => {
-  const b = $('btn-atualizar-res'); b.disabled = true;
+async function atualizarResultados(dataFiltro){
+  const b = $('btn-atualizar-res'); if (b) b.disabled = true;
   aviso($('hs-aviso'), '');
   try{
-    const { data: sugs } = await db.from('analises').select('*')
-      .in('origem',['sugestao','vigia']).or('placar_final.is.null,resultado_auto.is.null').order('criado_em',{ascending:false});
-    if (!sugs?.length){ $('hs-status').textContent = 'Nenhuma sugestão pendente de resultado.'; b.disabled=false; listarHistSug(); return; }
+    let q = db.from('analises').select('*')
+      .in('origem',['sugestao','vigia']).or('placar_final.is.null,resultado_auto.is.null');
+    if (dataFiltro) q = q.eq('data_jogo', dataFiltro);
+    const { data: sugs } = await q.order('criado_em',{ascending:false});
+    if (!sugs?.length){ if($('hs-status')) $('hs-status').textContent = dataFiltro ? `Nenhuma sugestão pendente em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}.` : 'Nenhuma sugestão pendente de resultado.'; if(b) b.disabled=false; listarHistSug(); return; }
     let resolvidos = 0;
     for (let i=0; i<sugs.length; i++){
-      $('hs-status').textContent = `⏳ Buscando ${i+1}/${sugs.length}…`;
-      // se já tem placar mas faltou green/red, recalcula
+      if ($('hs-status')) $('hs-status').textContent = `⏳ Buscando ${i+1}/${sugs.length}…`;
       if (sugs[i].placar_final && !sugs[i].resultado_auto){
         const [gm, gv] = sugs[i].placar_final.split('x').map(Number);
         if (!isNaN(gm) && !isNaN(gv)){
@@ -3969,10 +3974,15 @@ $('btn-atualizar-res').addEventListener('click', async () => {
         resolvidos++;
       }
     }
-    $('hs-status').textContent = `✅ ${resolvidos} resultado(s) atualizados de ${sugs.length} pendentes.`;
+    if ($('hs-status')) $('hs-status').textContent = `✅ ${resolvidos} resultado(s) atualizados de ${sugs.length} pendentes${dataFiltro?` em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}`:''}.`;
     listarHistSug();
   } catch(e){ aviso($('hs-aviso'), 'Falha: ' + e.message, 'erro'); }
-  finally{ b.disabled = false; }
+  finally{ if(b) b.disabled = false; }
+}
+window.atualizarResultados = atualizarResultados;
+$('btn-atualizar-res').addEventListener('click', () => {
+  const d = $('hs-data-atualizar') ? $('hs-data-atualizar').value : '';
+  atualizarResultados(d || null);
 });
 
 async function listarHistSug(pref, origemFixa, soPegasFixo){
@@ -6174,8 +6184,11 @@ async function atualizarResultadosBot(){
   const b = $('btn-bot-atualizar'); if (b) b.disabled = true;
   if ($('bot-status')) $('bot-status').textContent = '⏳ Buscando placares...';
   try{
-    const { data: sugs } = await db.from('analises').select('*')
-      .eq('origem','vigia').or('placar_final.is.null,resultado_auto.is.null').order('criado_em',{ascending:false});
+    const dataFiltro = $('bot-data-atualizar') ? $('bot-data-atualizar').value : '';
+    let q = db.from('analises').select('*')
+      .eq('origem','vigia').or('placar_final.is.null,resultado_auto.is.null');
+    if (dataFiltro) q = q.eq('data_jogo', dataFiltro);
+    const { data: sugs } = await q.order('criado_em',{ascending:false});
     if (!sugs?.length){ if($('bot-status')) $('bot-status').textContent = 'Nenhuma sugestão do bot pendente.'; if(b) b.disabled=false; listarBotSug(); return; }
     let apurados = 0;
     for (const a of sugs){
