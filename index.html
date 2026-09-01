@@ -1475,7 +1475,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.41";
+const APP_VERSAO = "v4.42";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2025,16 +2025,22 @@ async function fichaJogo(idx){
     // encontra o placar mais provável da grade 0-3 para destacar
     let maxP = 0;
     for (let h=0;h<=3;h++) for (let a=0;a<=3;a++){ const p = probPlacar(h,a); if (p>maxP) maxP=p; }
-    // lista dos placares mais prováveis (topo, fácil de ler)
+    // lista de placares seguindo a lógica do LAY GOLEADA:
+    // mostra todos os placares que NÃO são goleada (nenhum time marcou 4+ e venceu)
+    const ehGoleada = (h,a) => (h>=4 && h>a) || (a>=4 && a>h);
     const todosPlacares = [];
-    for (let h=0;h<=5;h++) for (let a=0;a<=5;a++) todosPlacares.push({ h, a, p: probPlacar(h,a) });
+    for (let h=0;h<=6;h++) for (let a=0;a<=6;a++){
+      if (ehGoleada(h,a)) continue; // para na goleada — não entra na lista
+      todosPlacares.push({ h, a, p: probPlacar(h,a) });
+    }
     todosPlacares.sort((x,y)=>y.p-x.p);
-    const top6 = todosPlacares.slice(0,6);
+    const listaMostrar = todosPlacares.slice(0, 12); // os 12 placares "não-goleada" mais prováveis
+    const somaNaoGoleada = todosPlacares.reduce((s,x)=>s+x.p,0);
     const listaClara = `<h3>Placares mais prováveis</h3>
-      <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Do mais provável para o menos. ${nm} (mandante) x ${nv} (visitante).</p>
-      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-        ${top6.map((x,i)=>{
-          const larg = Math.round(x.p/top6[0].p*100);
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Do mais provável para o menos, <b>até o limite da goleada</b> (placares de 4+ gols e vitória ficam de fora — é a zona do Lay Goleada). ${nm} (mandante) x ${nv} (visitante).</p>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        ${listaMostrar.map((x,i)=>{
+          const larg = Math.round(x.p/listaMostrar[0].p*100);
           return `<div style="display:flex;align-items:center;gap:10px">
             <span style="min-width:52px;font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:800;color:${i===0?'var(--amber)':'var(--chalk)'}">${x.h}x${x.a}</span>
             <div style="flex:1;background:var(--pitch);border-radius:5px;height:22px;overflow:hidden;position:relative">
@@ -2044,7 +2050,8 @@ async function fichaJogo(idx){
             ${i===0?'<span style="font-size:10px;background:var(--amber);color:var(--pitch);padding:1px 6px;border-radius:4px;font-weight:700">+ provável</span>':''}
           </div>`;
         }).join('')}
-      </div>`;
+      </div>
+      <p style="font-size:12px;color:var(--chalk-dim);margin-bottom:16px">🚫 <b>Zona de goleada</b> (4+ gols e vitória): ${nm} <b style="color:${corProb(golMand)}">${pct(golMand)}%</b> · ${nv} <b style="color:${corProb(golVis)}">${pct(golVis)}%</b> — quanto menor, melhor para o Lay Goleada. Placares sem goleada somam <b style="color:var(--green)">${pct(somaNaoGoleada)}%</b>.</p>`;
     const matriz = listaClara + `<h3>Grade completa (para LAY de placar)</h3>
       <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Cruze a linha (gols do <b>${nm}</b>) com a coluna (gols do <b>${nv}</b>) para ver a chance daquele placar exato. <span style="color:var(--green)">Verde = improvável</span> (bom para fazer LAY daquele placar), <span style="color:var(--chalk)">branco = provável</span>.</p>
       <div class="tabela-scroll"><table class="comp" style="text-align:center">
@@ -2065,13 +2072,19 @@ async function fichaJogo(idx){
           }
           return linhas;
         })()}
-        <tr style="border-top:2px solid rgba(237,234,224,.2)">
-          <td class="rotulo">🥅 Goleada ${nm} (4+ gols)</td>
-          <td class="valor" colspan="2" style="color:${corProb(golMand)};text-align:center"><b>${pct(golMand)}%</b></td>
-          <td class="rotulo">🥅 Goleada ${nv} (4+ gols)</td>
-          <td class="valor" style="color:${corProb(golVis)};text-align:center"><b>${pct(golVis)}%</b></td>
-        </tr>
-      </table></div>`;
+      </table></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+        <div style="flex:1;min-width:180px;background:var(--pitch);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:12px;color:var(--chalk-dim)">🥅 Goleada do ${nm}</div>
+          <div style="font-family:'Saira Condensed',sans-serif;font-size:26px;font-weight:800;color:${corProb(golMand)}">${pct(golMand)}%</div>
+          <div style="font-size:10.5px;color:var(--chalk-dim)">marcar 4+ e vencer</div>
+        </div>
+        <div style="flex:1;min-width:180px;background:var(--pitch);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:12px;color:var(--chalk-dim)">🥅 Goleada do ${nv}</div>
+          <div style="font-family:'Saira Condensed',sans-serif;font-size:26px;font-weight:800;color:${corProb(golVis)}">${pct(golVis)}%</div>
+          <div style="font-size:10.5px;color:var(--chalk-dim)">marcar 4+ e vencer</div>
+        </div>
+      </div>`;
 
     const modelo = `<h3>Resultado provável (modelo)</h3>
       <div class="placar-box">
@@ -2531,6 +2544,7 @@ $('btn-fdorg').addEventListener('click', async () => {
   finally{ b.disabled = false; }
 });
 
+let _histJogos = null, _histTime = '';
 $('btn-historico').addEventListener('click', async () => {
   const time = $('h-time').value.trim();
   if (!time) return;
@@ -2541,22 +2555,85 @@ $('btn-historico').addEventListener('click', async () => {
     if (r.aviso) aviso($('h-aviso'), r.aviso, 'erro');
     else if (!r.jogos?.length) aviso($('h-aviso'), `Sem histórico retornado para "${time}".`, 'erro');
     if (!r.jogos?.length){ botao.disabled=false; return; }
-    const e = estatisticas(r.jogos);
-    $('h-resumo').innerHTML = `<div class="placar-box">
-      <div class="stat"><b>${e.pctMarcou}%</b><span>jogos em que marcou</span></div>
-      <div class="stat"><b>${e.pctSofreu}%</b><span>jogos em que sofreu</span></div>
-      <div class="stat"><b>${e.mediaPro}</b><span>gols pró / jogo</span></div>
-      <div class="stat"><b>${e.mediaContra}</b><span>gols contra / jogo</span></div>
-      <div class="stat"><b>${e.pctOver}%</b><span>over 2.5</span></div>
-      <div class="stat"><b>${e.pctBtts}%</b><span>ambas marcam</span></div>
-    </div>`;
-    $('h-tabela').innerHTML =
-      '<tr><th>Data</th><th>Competição</th><th>Mandante</th><th>Placar</th><th>Visitante</th></tr>' +
-      r.jogos.map(j => `<tr><td>${j.data}</td><td>${j.liga}</td>
-        <td>${j.mandante}</td><td><b>${j.gols_mandante} x ${j.gols_visitante}</b></td><td>${j.visitante}</td></tr>`).join('');
+    _histJogos = r.jogos; _histTime = r.time || time;
+    renderHistorico('todos');
   } catch(e){ aviso($('h-aviso'), 'Falha na busca: ' + e.message, 'erro'); }
   finally{ botao.disabled = false; }
 });
+
+// renderiza o histórico filtrando por mando (todos / casa / fora)
+function renderHistorico(filtro){
+  if (!_histJogos) return;
+  const norm = s => (s||'').toLowerCase();
+  const ehMandante = g => norm(g.mandante) === norm(_histTime) || (g.mandante_id && String(g.mandante_id)===String(_histJogos.time_id));
+  let jogos = _histJogos;
+  if (filtro === 'casa') jogos = _histJogos.filter(g => ehMandante(g));
+  else if (filtro === 'fora') jogos = _histJogos.filter(g => !ehMandante(g));
+
+  // subabas
+  const subaba = (id, label) => `<button class="mini" onclick="renderHistorico('${id}')" style="${filtro===id?'border-color:var(--amber);color:var(--amber);font-weight:700':''}">${label}</button>`;
+  const abas = `<div style="display:flex;gap:8px;margin-bottom:12px">
+    ${subaba('todos','Todos os jogos')} ${subaba('casa','🏠 Em casa')} ${subaba('fora','✈️ Fora')}
+  </div>`;
+
+  if (!jogos.length){ $('h-resumo').innerHTML = abas + '<p class="msg-vazia">Nenhum jogo nesse recorte.</p>'; $('h-tabela').innerHTML=''; return; }
+
+  // estatísticas na perspectiva do time
+  let fez=0, sof=0, v=0, e2=0, d=0, marcou=0, sofreu=0, over25=0, btts=0, htFez=0, htSof=0, nHt=0;
+  const seq = [];
+  jogos.forEach(g => {
+    const mand = ehMandante(g);
+    const pro = mand ? g.gols_mandante : g.gols_visitante;
+    const con = mand ? g.gols_visitante : g.gols_mandante;
+    if (pro==null||con==null) return;
+    fez+=pro; sof+=con;
+    if (pro>con) v++; else if (pro<con) d++; else e2++;
+    if (pro>0) marcou++;
+    if (con>0) sofreu++;
+    if (pro+con>=3) over25++;
+    if (pro>0&&con>0) btts++;
+    const htM = mand ? g.ht_mandante : g.ht_visitante;
+    const htA = mand ? g.ht_visitante : g.ht_mandante;
+    if (htM!=null&&htA!=null){ htFez+=htM; htSof+=htA; nHt++; }
+    seq.push(pro>con?'v':pro<con?'d':'e');
+  });
+  const n = jogos.length;
+  const pc = x => Math.round(x/n*100);
+  const aprov = Math.round(((v*3+e2)/(n*3))*100);
+
+  $('h-resumo').innerHTML = abas + `
+    <div style="background:var(--card);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <b style="font-size:15px">${_histTime} <span style="font-size:12px;color:var(--chalk-dim)">· ${filtro==='casa'?'em casa':filtro==='fora'?'fora':'todos os jogos'} (${n})</span></b>
+        <div style="display:flex;gap:4px">${seq.map(c=>`<span style="width:22px;height:22px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${c==='v'?'var(--pitch)':'#fff'};background:${c==='v'?'var(--green)':c==='d'?'var(--red)':'var(--chalk-dim)'}">${c.toUpperCase()}</span>`).join('')}</div>
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+        <div style="text-align:center"><div style="font-family:'Saira Condensed',sans-serif;font-size:28px;font-weight:800;color:${aprov>=60?'var(--green)':aprov>=40?'var(--amber)':'var(--red)'}">${aprov}%</div><div style="font-size:10.5px;color:var(--chalk-dim)">aproveitamento</div></div>
+        <div style="font-size:13px;line-height:1.8">
+          <span style="color:var(--green)">${v}V</span> ${e2}E <span style="color:var(--red)">${d}D</span> em ${n} jogos<br>
+          ⚽ FT: marca <b style="color:var(--amber)">${(fez/n).toFixed(1)}</b> · sofre <b>${(sof/n).toFixed(1)}</b>
+          ${nHt?`<br>⏱️ HT: marca <b style="color:var(--amber)">${(htFez/nHt).toFixed(1)}</b> · sofre <b>${(htSof/nHt).toFixed(1)}</b>`:''}
+        </div>
+      </div>
+    </div>
+    <div class="placar-box">
+      <div class="stat"><b>${pc(marcou)}%</b><span>marcou</span></div>
+      <div class="stat"><b>${pc(sofreu)}%</b><span>sofreu</span></div>
+      <div class="stat"><b>${pc(over25)}%</b><span>over 2.5</span></div>
+      <div class="stat"><b>${pc(btts)}%</b><span>ambas marcam</span></div>
+      <div class="stat"><b>${pc(n-marcou)}%</b><span>não marcou</span></div>
+    </div>`;
+
+  $('h-tabela').innerHTML =
+    '<tr><th>Data</th><th>Local</th><th>Mandante</th><th>Placar</th><th>Visitante</th><th>HT</th></tr>' +
+    jogos.map(j => {
+      const mand = ehMandante(j);
+      return `<tr><td>${j.data||''}</td><td>${mand?'🏠':'✈️'}</td>
+        <td>${j.mandante}</td><td><b>${j.gols_mandante} x ${j.gols_visitante}</b></td><td>${j.visitante}</td>
+        <td style="color:var(--chalk-dim);font-size:11px">${j.ht_mandante!=null?`${j.ht_mandante}x${j.ht_visitante}`:'—'}</td></tr>`;
+    }).join('');
+}
+window.renderHistorico = renderHistorico;
 
 // ==========================================================
 // ABA 4 — ANÁLISES + CONFERÊNCIA AUTOMÁTICA
