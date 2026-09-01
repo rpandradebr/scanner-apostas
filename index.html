@@ -1475,7 +1475,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.40";
+const APP_VERSAO = "v4.41";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2025,11 +2025,31 @@ async function fichaJogo(idx){
     // encontra o placar mais provável da grade 0-3 para destacar
     let maxP = 0;
     for (let h=0;h<=3;h++) for (let a=0;a<=3;a++){ const p = probPlacar(h,a); if (p>maxP) maxP=p; }
-    const matriz = `<h3>Matriz de placares (probabilidade)</h3>
-      <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Linhas = gols do ${nm} (mandante) · Colunas = gols do ${nv} (visitante). Verde = placar improvável (bom para LAY daquele placar). Modelo Poisson sobre os últimos 10 jogos.</p>
+    // lista dos placares mais prováveis (topo, fácil de ler)
+    const todosPlacares = [];
+    for (let h=0;h<=5;h++) for (let a=0;a<=5;a++) todosPlacares.push({ h, a, p: probPlacar(h,a) });
+    todosPlacares.sort((x,y)=>y.p-x.p);
+    const top6 = todosPlacares.slice(0,6);
+    const listaClara = `<h3>Placares mais prováveis</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Do mais provável para o menos. ${nm} (mandante) x ${nv} (visitante).</p>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        ${top6.map((x,i)=>{
+          const larg = Math.round(x.p/top6[0].p*100);
+          return `<div style="display:flex;align-items:center;gap:10px">
+            <span style="min-width:52px;font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:800;color:${i===0?'var(--amber)':'var(--chalk)'}">${x.h}x${x.a}</span>
+            <div style="flex:1;background:var(--pitch);border-radius:5px;height:22px;overflow:hidden;position:relative">
+              <div style="width:${larg}%;height:100%;background:${i===0?'var(--amber)':'var(--card-2)'};border-radius:5px"></div>
+              <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700">${pct(x.p)}%</span>
+            </div>
+            ${i===0?'<span style="font-size:10px;background:var(--amber);color:var(--pitch);padding:1px 6px;border-radius:4px;font-weight:700">+ provável</span>':''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    const matriz = listaClara + `<h3>Grade completa (para LAY de placar)</h3>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin:-4px 0 8px">Cruze a linha (gols do <b>${nm}</b>) com a coluna (gols do <b>${nv}</b>) para ver a chance daquele placar exato. <span style="color:var(--green)">Verde = improvável</span> (bom para fazer LAY daquele placar), <span style="color:var(--chalk)">branco = provável</span>.</p>
       <div class="tabela-scroll"><table class="comp" style="text-align:center">
         <tr>
-          <th style="text-align:center">${nm} ↓ / ${nv} →</th>
+          <th style="text-align:center;font-size:11px">${nm} ↓ / ${nv} →</th>
           <th style="text-align:center">0</th><th style="text-align:center">1</th><th style="text-align:center">2</th><th style="text-align:center">3</th>
         </tr>
         ${(() => {
@@ -3596,6 +3616,7 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
       </div>`;
     }).join('');
     let somaFez=0, somaSof=0, zeros=0, semMarcar=0, ambas=0, over25=0, n=0;
+    let htFez=0, htSof=0, nHt=0;
     jogos.slice(0,10).forEach(g => {
       const souMandante = ehMandante(g);
       const meus = souMandante ? g.gols_mandante : g.gols_visitante;
@@ -3606,14 +3627,20 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
       if (meus===0) semMarcar++;
       if (meus>0&&adv>0) ambas++;
       if (meus+adv>=3) over25++;
+      // gols do 1º tempo (HT)
+      const htM = souMandante ? g.ht_mandante : g.ht_visitante;
+      const htA = souMandante ? g.ht_visitante : g.ht_mandante;
+      if (htM!=null && htA!=null){ htFez+=htM; htSof+=htA; nHt++; }
     });
     const mediaFez = n?(somaFez/n).toFixed(1):'-', mediaSof = n?(somaSof/n).toFixed(1):'-';
+    const mediaHtFez = nHt?(htFez/nHt).toFixed(1):'-', mediaHtSof = nHt?(htSof/nHt).toFixed(1):'-';
     const pct = (x)=> n?Math.round(x/n*100):0;
     return `<div style="flex:1;min-width:240px">
       <b style="font-size:14px">${nomeTime}</b>
       <div style="margin:4px 0">${linhas}</div>
       <div style="font-size:11px;color:var(--chalk-dim);margin-top:6px;line-height:1.6">
-        Marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b> por jogo<br>
+        <b style="color:var(--chalk)">FT (jogo todo):</b> marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b><br>
+        <b style="color:var(--chalk)">HT (1º tempo):</b> marca <b style="color:var(--amber)">${mediaHtFez}</b> · sofre <b>${mediaHtSof}</b><br>
         Over 2.5: <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas: <b style="color:var(--amber)">${pct(ambas)}%</b> · Over 0.5: <b style="color:var(--green)">${pct(n-zeros)}%</b><br>
         ${zeros} jogo(s) 0x0 · ${semMarcar}x não marcou
       </div>
@@ -3622,17 +3649,22 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
 
   function listaH2H(jogos){
     if (!jogos || !jogos.length) return '<p style="font-size:12px;color:var(--chalk-dim)">Sem confrontos diretos recentes na base.</p>';
-    let over25=0, ambas=0, zeros=0, n=0;
+    let over25=0, ambas=0, zeros=0, n=0, htGols=0, nHt=0, ftGols=0;
     const linhas = jogos.map(g => {
       const total = (g.gols_mandante??0)+(g.gols_visitante??0);
-      if (g.gols_mandante!=null){ n++; if(total>=3)over25++; if(g.gols_mandante>0&&g.gols_visitante>0)ambas++; if(total===0)zeros++; }
+      if (g.gols_mandante!=null){ n++; ftGols+=total; if(total>=3)over25++; if(g.gols_mandante>0&&g.gols_visitante>0)ambas++; if(total===0)zeros++; }
+      const temHt = g.ht_mandante!=null && g.ht_visitante!=null;
+      if (temHt){ htGols += g.ht_mandante+g.ht_visitante; nHt++; }
+      const htTxt = temHt ? `<span style="font-size:10px;color:var(--chalk-dim)">HT ${g.ht_mandante}x${g.ht_visitante}</span>` : '';
       return `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-bottom:1px solid rgba(237,234,224,.06)">
         <span style="font-size:11px;color:var(--chalk-dim);min-width:70px">${g.data||''}</span>
         <span style="flex:1;font-size:12.5px">${g.mandante} <b style="color:var(--amber);font-family:'IBM Plex Mono',monospace">${g.gols_mandante??'-'}x${g.gols_visitante??'-'}</b> ${g.visitante}</span>
+        ${htTxt}
       </div>`;
     }).join('');
     const pct=(x)=>n?Math.round(x/n*100):0;
-    return `${linhas}<p style="font-size:11px;color:var(--chalk-dim);margin-top:6px">Nos ${n} confronto(s): Over 2.5 <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas <b style="color:var(--amber)">${pct(ambas)}%</b> · ${zeros} sem gols</p>`;
+    const mediaFt = n?(ftGols/n).toFixed(1):'-', mediaHt = nHt?(htGols/nHt).toFixed(1):'-';
+    return `${linhas}<p style="font-size:11px;color:var(--chalk-dim);margin-top:6px;line-height:1.6">Nos ${n} confronto(s): média de <b style="color:var(--amber)">${mediaFt}</b> gols no FT · <b style="color:var(--amber)">${mediaHt}</b> no HT (1º tempo)<br>Over 2.5 <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas <b style="color:var(--amber)">${pct(ambas)}%</b> · ${zeros} sem gols</p>`;
   }
 
   try{
@@ -7563,24 +7595,32 @@ async function abrirTimeModal(nomeTime, ligaId, timeId){
             ${barrasMinuto(s.golsContraMinuto,'var(--red)')}
           </div>
           <h3 style="margin:16px 0 8px;font-size:15px">🏟️ Desempenho casa vs fora</h3>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <div style="flex:1;min-width:200px;background:var(--pitch);border-radius:8px;padding:12px">
-              <b style="color:var(--amber)">🏠 Em casa</b>
-              <div style="font-size:13px;margin-top:6px;line-height:1.7">
-                ${co(s.casa?.j)} jogos · ${co(s.casa?.v)}V ${co(s.casa?.e)}E ${co(s.casa?.d)}D<br>
-                Gols: ${co(s.casa?.gp)} pró / ${co(s.casa?.gc)} contra<br>
-                Média: ${co(s.mediaGolsProCasa)} feitos / ${co(s.mediaGolsContraCasa)} sofridos
-              </div>
+          ${(() => {
+            const aprov = (d) => { if(!d||!d.j) return 0; return Math.round(((d.v*3+d.e)/(d.j*3))*100); };
+            const apCasa = aprov(s.casa), apFora = aprov(s.fora);
+            const barra = (label, emoji, d, ap, mFez, mSof) => `
+              <div style="flex:1;min-width:220px;background:var(--pitch);border-radius:8px;padding:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                  <b style="color:var(--amber);font-size:14px">${emoji} ${label}</b>
+                  <span style="font-family:'Saira Condensed',sans-serif;font-size:22px;font-weight:800;color:${ap>=60?'var(--green)':ap>=40?'var(--amber)':'var(--red)'}">${ap}%</span>
+                </div>
+                <div style="font-size:11px;color:var(--chalk-dim);margin-bottom:6px">aproveitamento</div>
+                <div style="display:flex;gap:4px;margin-bottom:10px">
+                  <div style="flex:${co(d?.v)||0.1};background:var(--green);height:8px;border-radius:3px" title="${co(d?.v)}V"></div>
+                  <div style="flex:${co(d?.e)||0.1};background:var(--chalk-dim);height:8px;border-radius:3px" title="${co(d?.e)}E"></div>
+                  <div style="flex:${co(d?.d)||0.1};background:var(--red);height:8px;border-radius:3px" title="${co(d?.d)}D"></div>
+                </div>
+                <div style="font-size:12.5px;line-height:1.7">
+                  ${co(d?.j)} jogos · <span style="color:var(--green)">${co(d?.v)}V</span> ${co(d?.e)}E <span style="color:var(--red)">${co(d?.d)}D</span><br>
+                  ⚽ Marca <b style="color:var(--amber)">${co(mFez)}</b> · sofre <b>${co(mSof)}</b> por jogo
+                </div>
+              </div>`;
+            return `<div style="display:flex;gap:10px;flex-wrap:wrap">
+              ${barra('Em casa','🏠', s.casa, apCasa, s.mediaGolsProCasa, s.mediaGolsContraCasa)}
+              ${barra('Fora','✈️', s.fora, apFora, s.mediaGolsProFora, s.mediaGolsContraFora)}
             </div>
-            <div style="flex:1;min-width:200px;background:var(--pitch);border-radius:8px;padding:12px">
-              <b style="color:var(--amber)">✈️ Fora</b>
-              <div style="font-size:13px;margin-top:6px;line-height:1.7">
-                ${co(s.fora?.j)} jogos · ${co(s.fora?.v)}V ${co(s.fora?.e)}E ${co(s.fora?.d)}D<br>
-                Gols: ${co(s.fora?.gp)} pró / ${co(s.fora?.gc)} contra<br>
-                Média: ${co(s.mediaGolsProFora)} feitos / ${co(s.mediaGolsContraFora)} sofridos
-              </div>
-            </div>
-          </div>
+            <p style="font-size:11.5px;color:var(--chalk-dim);margin-top:8px">${apCasa - apFora >= 20 ? '💪 Bem mais forte em casa — leve isso em conta se joga como mandante.' : apFora - apCasa >= 20 ? '✈️ Curiosamente rende mais fora de casa.' : '⚖️ Rende parecido dentro e fora de casa.'}</p>`;
+          })()}
           <h3 style="margin:16px 0 8px;font-size:15px">📋 Resumo da temporada</h3>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             ${bloco('Jogos', s.jogos, null)}
