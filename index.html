@@ -1479,7 +1479,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.45";
+const APP_VERSAO = "v4.46";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5034,7 +5034,7 @@ async function abrirAnaliseCompleta(idx){
     const rec = { m: rm.jogos?.length ? estatisticas(rm.jogos) : null, v: rv.jogos?.length ? estatisticas(rv.jogos) : null };
     if (!temp.m && !rec.m){ aviso($('ac-aviso'), 'Sem dados suficientes para este confronto (times sem histórico no banco/API).', 'erro'); $('ac-status').textContent=''; return; }
 
-    acDados = { j, temp, rec, nm: j.mandante, nv: j.visitante };
+    acDados = { j, temp, rec, nm: j.mandante, nv: j.visitante, jogosM: rm.jogos||[], jogosV: rv.jogos||[] };
     $('ac-status').textContent = `${j.mandante} x ${j.visitante} · ${j.liga||''}`;
     // sub-abas
     const subs = [
@@ -5061,6 +5061,16 @@ function barra(pct, cor){ // mini barra de porcentagem
 }
 function linhaComp(rotulo, valM, valV){
   return `<tr><td class="valor">${valM}</td><td class="rotulo" style="text-align:center">${rotulo}</td><td class="valor">${valV}</td></tr>`;
+}
+// forma colorida: V verde, D vermelho, E cinza (a partir de string tipo "WWDLW")
+function formaColorida(str){
+  if (!str) return '<span style="color:var(--chalk-dim)">—</span>';
+  return str.slice(-8).split('').map(c => {
+    const up = c.toUpperCase();
+    const cor = up==='W'?'var(--green)':up==='L'?'var(--red)':'var(--chalk-dim)';
+    const letra = up==='W'?'V':up==='L'?'D':'E';
+    return `<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;font-size:11px;font-weight:800;margin-right:2px;color:${up==='D'||up==='L'?'#fff':'var(--pitch)'};background:${cor}">${letra}</span>`;
+  }).join('');
 }
 
 function trocaAcSub(id){
@@ -5092,7 +5102,7 @@ function trocaAcSub(id){
       ${linhaComp('Média gols sofridos', `<b style="color:var(--amber)">${tm.mediaGolsContra??'—'}</b>`, `<b style="color:var(--amber)">${tv.mediaGolsContra??'—'}</b>`)}
       ${linhaComp('Jogos sem sofrer gol', tm.cleanSheet??'—', tv.cleanSheet??'—')}
       ${linhaComp('Jogos sem marcar', tm.faltaMarcar??'—', tv.faltaMarcar??'—')}
-      ${linhaComp('Forma (recente)', `<span style="font-family:'IBM Plex Mono',monospace">${tm.formaRecente?.slice(-6)??'—'}</span>`, `<span style="font-family:'IBM Plex Mono',monospace">${tv.formaRecente?.slice(-6)??'—'}</span>`)}
+      ${linhaComp('Forma (recente)', formaColorida(tm.formaRecente), formaColorida(tv.formaRecente))}
       </table>
       ${rec.m ? `<h3 style="margin-top:18px">Momento — últimos 10 jogos</h3>
       <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center"></th><th style="text-align:center">${nv}</th></tr>
@@ -5141,7 +5151,39 @@ function trocaAcSub(id){
       ${linhaComp('Jogos com 3+ gols (over 2.5)', (rm.pctOver||0)+'%', (rv.pctOver||0)+'%')}
       ${linhaComp('Jogos com até 2 gols (under 2.5)', (rm.pctUnder25||0)+'%', (rv.pctUnder25||0)+'%')}
       ${linhaComp('Jogos com ambas marcando', (rm.pctBtts||0)+'%', (rv.pctBtts||0)+'%')}
-      </table>` : ''}`;
+      </table>` : ''}
+      ${(() => {
+        // gols no HT vs FT (últimos 10 jogos, dados que já temos)
+        const calcHtFt = (jogos, nome, id) => {
+          const norm = s => (s||'').toLowerCase();
+          const ehM = g => (id && String(g.mandante_id)===String(id)) || norm(g.mandante)===norm(nome);
+          let htFez=0,htSof=0,ftFez=0,ftSof=0,nHt=0,nFt=0,golsHt=0,golsFt=0;
+          jogos.slice(0,10).forEach(g => {
+            const m = ehM(g);
+            const fFez = m?g.gols_mandante:g.gols_visitante, fSof = m?g.gols_visitante:g.gols_mandante;
+            if (fFez!=null&&fSof!=null){ ftFez+=fFez; ftSof+=fSof; nFt++; golsFt+=fFez+fSof; }
+            const hM = m?g.ht_mandante:g.ht_visitante, hA = m?g.ht_visitante:g.ht_mandante;
+            if (hM!=null&&hA!=null){ htFez+=hM; htSof+=hA; nHt++; golsHt+=hM+hA; }
+          });
+          return {
+            htFez: nHt?(htFez/nHt).toFixed(1):'—', htSof: nHt?(htSof/nHt).toFixed(1):'—',
+            ftFez: nFt?(ftFez/nFt).toFixed(1):'—', ftSof: nFt?(ftSof/nFt).toFixed(1):'—',
+            golsHt: nHt?(golsHt/nHt).toFixed(1):'—', golsFt: nFt?(golsFt/nFt).toFixed(1):'—',
+          };
+        };
+        const hm = calcHtFt(acDados.jogosM, nm, acDados.j.mandante_id);
+        const hv = calcHtFt(acDados.jogosV, nv, acDados.j.visitante_id);
+        return `<h3 style="margin-top:18px">⏱️ Gols no 1º tempo (HT) vs jogo todo (FT)</h3>
+        <p style="font-size:12.5px;color:var(--chalk-dim);margin-bottom:10px">Médias dos últimos 10 jogos. Útil pra decidir entradas de gol no 1º tempo ou no jogo todo.</p>
+        <table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center">Linha</th><th style="text-align:center">${nv}</th></tr>
+        ${linhaComp('Total de gols no HT', `<b style="color:var(--amber)">${hm.golsHt}</b>`, `<b style="color:var(--amber)">${hv.golsHt}</b>`)}
+        ${linhaComp('Total de gols no FT', `<b style="color:var(--amber)">${hm.golsFt}</b>`, `<b style="color:var(--amber)">${hv.golsFt}</b>`)}
+        ${linhaComp('Marca no HT', hm.htFez, hv.htFez)}
+        ${linhaComp('Sofre no HT', hm.htSof, hv.htSof)}
+        ${linhaComp('Marca no FT', hm.ftFez, hv.ftFez)}
+        ${linhaComp('Sofre no FT', hm.ftSof, hv.ftSof)}
+        </table>`;
+      })()}`;
   }
 
   else if (id==='tempo'){
@@ -5174,13 +5216,18 @@ function trocaAcSub(id){
     const somaCartoes = (obj) => { if (!obj) return null; return Object.values(obj).reduce((s,v)=>s+(v?.total||0),0); };
     const amM = somaCartoes(tm.cartoesAmarelos), amV = somaCartoes(tv.cartoesAmarelos);
     const veM = somaCartoes(tm.cartoesVermelhos), veV = somaCartoes(tv.cartoesVermelhos);
+    // cartões e faltas dos últimos 5 jogos (calculado dos jogos recentes que já temos + busca sob demanda)
     html = `<h3>Cartões na temporada</h3>
       <table class="comp"><tr><th style="text-align:center">${nm}</th><th></th><th style="text-align:center">${nv}</th></tr>
       ${linhaComp('Amarelos (total)', amM??'—', amV??'—')}
       ${linhaComp('Vermelhos (total)', veM??'—', veV??'—')}
       ${linhaComp('Média amarelos/jogo', amM&&tm.jogos?(amM/tm.jogos).toFixed(2):'—', amV&&tv.jogos?(amV/tv.jogos).toFixed(2):'—')}
       </table>
-      <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Para a média do árbitro (que pesa tanto quanto os times no cartão), use o botão ⚖️ na ficha do jogo.</p>`;
+      <h3 style="margin-top:18px">🟨 Cartões nos últimos 5 jogos</h3>
+      <div id="ac-cartoes5"><button class="acao" onclick="carregarCartoes5()">🟨 Buscar cartões recebidos (últimos 5)</button></div>
+      <h3 style="margin-top:18px">⚠️ Faltas</h3>
+      <div id="ac-faltas"><button class="acao" onclick="carregarFaltas()">⚠️ Calcular faltas das equipes</button></div>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Para a média do árbitro (que pesa tanto quanto os times no cartão), use o botão ⚖️ na ficha do jogo.</p>`;
   }
 
   else if (id==='desarmes'){
@@ -5246,6 +5293,57 @@ async function carregarDesarmes(){
   } catch(e){ alvo.innerHTML = `<div class="aviso erro">Falha: ${e.message}</div>`; }
 }
 window.carregarDesarmes = carregarDesarmes;
+
+// cartões recebidos nos últimos 5 jogos (usa a rota stats_time_jogos com Yellow Cards)
+async function carregarCartoes5(){
+  if (!acDados) return;
+  const { j, nm, nv } = acDados;
+  const alvo = $('ac-cartoes5');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Buscando cartões dos últimos 5 jogos…</p>';
+  try{
+    const [rm, rv] = await Promise.all([
+      j.mandante_id ? chamarEdge({ acao:'stats_time_jogos', time_id:j.mandante_id, mercado:'Yellow Cards', n:5 }) : Promise.resolve({jogos:[]}),
+      j.visitante_id ? chamarEdge({ acao:'stats_time_jogos', time_id:j.visitante_id, mercado:'Yellow Cards', n:5 }) : Promise.resolve({jogos:[]}),
+    ]);
+    const tabela = (nome, jogos) => {
+      if (!jogos?.length) return `<div style="flex:1;min-width:220px"><b>${nome}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem dados.</p></div>`;
+      let soma=0, nn=0;
+      const linhas = jogos.map(g => {
+        if (typeof g.fez==='number'){ soma+=g.fez; nn++; }
+        return `<div style="display:flex;gap:8px;padding:3px 6px;font-size:12px;border-bottom:1px solid rgba(237,234,224,.05)">
+          <span style="flex:1">${g.casa?'🏠':'✈️'} ${g.adversario}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;color:var(--amber);font-weight:700">${g.fez??'–'} 🟨</span>
+        </div>`;
+      }).join('');
+      const media = nn?(soma/nn).toFixed(1):'—';
+      return `<div style="flex:1;min-width:220px"><b>${nome}</b>${linhas}
+        <p style="font-size:12px;color:var(--chalk-dim);margin-top:4px">Média: <b style="color:var(--amber)">${media}</b> cartões/jogo</p></div>`;
+    };
+    alvo.innerHTML = `<div style="display:flex;gap:16px;flex-wrap:wrap">${tabela(nm, rm.jogos)}${tabela(nv, rv.jogos)}</div>`;
+  }catch(e){ alvo.innerHTML = `<p style="font-size:12px;color:var(--red)">Erro: ${e.message}</p>`; }
+}
+window.carregarCartoes5 = carregarCartoes5;
+
+// faltas médias das equipes (últimos 5 jogos via stats_time_jogos com Fouls)
+async function carregarFaltas(){
+  if (!acDados) return;
+  const { j, nm, nv } = acDados;
+  const alvo = $('ac-faltas');
+  alvo.innerHTML = '<p class="msg-vazia">⏳ Calculando faltas das equipes…</p>';
+  try{
+    const [rm, rv] = await Promise.all([
+      j.mandante_id ? chamarEdge({ acao:'stats_time_jogos', time_id:j.mandante_id, mercado:'Fouls', n:5 }) : Promise.resolve({jogos:[]}),
+      j.visitante_id ? chamarEdge({ acao:'stats_time_jogos', time_id:j.visitante_id, mercado:'Fouls', n:5 }) : Promise.resolve({jogos:[]}),
+    ]);
+    const media = (jogos) => { let s=0,nn=0; (jogos||[]).forEach(g=>{ if(typeof g.fez==='number'){s+=g.fez;nn++;} }); return nn?(s/nn).toFixed(1):'—'; };
+    const cede = (jogos) => { let s=0,nn=0; (jogos||[]).forEach(g=>{ if(typeof g.cedeu==='number'){s+=g.cedeu;nn++;} }); return nn?(s/nn).toFixed(1):'—'; };
+    alvo.innerHTML = `<table class="comp"><tr><th style="text-align:center">${nm}</th><th style="text-align:center">Faltas (últimos 5)</th><th style="text-align:center">${nv}</th></tr>
+      ${linhaComp('Comete por jogo', `<b style="color:var(--amber)">${media(rm.jogos)}</b>`, `<b style="color:var(--amber)">${media(rv.jogos)}</b>`)}
+      ${linhaComp('Sofre por jogo', cede(rm.jogos), cede(rv.jogos))}
+      </table>`;
+  }catch(e){ alvo.innerHTML = `<p style="font-size:12px;color:var(--red)">Erro: ${e.message}</p>`; }
+}
+window.carregarFaltas = carregarFaltas;
 
 
 // ==========================================================
