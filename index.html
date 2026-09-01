@@ -1475,7 +1475,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.42";
+const APP_VERSAO = "v4.44";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2002,7 +2002,7 @@ async function fichaJogo(idx){
     const tend = chips.length ? `<h3>Tendências</h3><div class="chips">${chips.join('')}</div>` : '';
 
     // ---- Placares prováveis (Poisson) ----
-    const clamp2 = (x,a,b) => Math.min(Math.max(x,a),b);
+    const clamp2 = (x,a,b) => { const v = Number(x); if (!isFinite(v)) return (a+b)/2; return Math.min(Math.max(v,a),b); };
     const lC = clamp2(((+em.mediaPro)+(+ev.mediaContra))/2*1.12, .2, 4.2);
     const lF = clamp2(((+ev.mediaPro)+(+em.mediaContra))/2*0.92, .15, 4.0);
     let p1=0,pX=0,p2=0, pls=[];
@@ -2795,7 +2795,7 @@ $('ro-liga').addEventListener('change', () => {
 });
 
 // Poisson
-const FAT = [1,1,2,6,24,120,720];
+const FAT = [1,1,2,6,24,120,720,5040,40320,362880,3628800];
 const pois = (k,l) => Math.exp(-l) * Math.pow(l,k) / FAT[k];
 // estima a odd justa de Over 0.5 e Lay 0x0 a partir das médias de gols das equipes
 // Over 0.5 e Lay 0x0 são o mesmo evento: ganham se sair pelo menos 1 gol (não for 0x0)
@@ -2812,7 +2812,7 @@ function oddsJustasZero(em, ev){
   return { prob00: Math.round(p00*100), probOver05: Math.round(pAoMenos1*100), oddOver05: oddOver05.toFixed(2), oddLay00: oddLay00.toFixed(2) };
 }
 window.oddsJustasZero = oddsJustasZero;
-const pct = x => Math.round(x*100);
+const pct = x => { const v = Math.round(Number(x)*100); return isFinite(v) ? v : 0; };
 
 // ---- Ponte para a análise completa (13 pontos) no Claude ----
 function montarPrompt(mandante, visitante, liga){
@@ -3662,10 +3662,47 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
   alvo.innerHTML = `<p style="color:var(--chalk-dim);padding:20px;text-align:center">⏳ Buscando jogos de ${mandante} e ${visitante}...</p>`;
 
   function listaJogos(nomeTime, idTime, jogos){
-    if (!jogos || !jogos.length) return `<div style="flex:1;min-width:240px"><b style="font-size:13px">${nomeTime}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem jogos recentes.</p></div>`;
+    if (!jogos || !jogos.length) return `<div style="flex:1;min-width:240px"><b style="font-size:14px">${nomeTime}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem jogos recentes.</p></div>`;
     const norm = s => (s||'').toLowerCase();
     const ehMandante = (g) => (idTime && String(g.mandante_id)===String(idTime)) || norm(g.mandante) === norm(nomeTime);
-    const linhas = jogos.slice(0,10).map(g => {
+    const j10 = jogos.slice(0,10);
+
+    // ---- forma: geral, casa, fora ----
+    function calcForma(lista){
+      let v=0,e=0,d=0; const seq=[];
+      lista.forEach(g => {
+        const mand = ehMandante(g);
+        const meus = mand ? g.gols_mandante : g.gols_visitante;
+        const adv = mand ? g.gols_visitante : g.gols_mandante;
+        if (meus==null||adv==null) return;
+        if (meus>adv){v++;seq.push('v');} else if (meus<adv){d++;seq.push('d');} else {e++;seq.push('e');}
+      });
+      const n = v+e+d;
+      const aprov = n?Math.round(((v*3+e)/(n*3))*100):0;
+      return { v,e,d,n,aprov,seq };
+    }
+    const dots = seq => seq.map(c=>`<span style="width:22px;height:22px;border-radius:5px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;color:${c==='v'?'var(--pitch)':c==='d'?'#fff':'var(--pitch)'};background:${c==='v'?'var(--green)':c==='d'?'var(--red)':'var(--chalk-dim)'}">${c.toUpperCase()}</span>`).join('');
+    const linhaForma = (label, f) => {
+      if (!f.n) return '';
+      const cor = f.aprov>=60?'var(--green)':f.aprov>=40?'var(--amber)':'var(--red)';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(237,234,224,.06)">
+        <span style="min-width:64px;font-size:12px;color:var(--chalk-dim)">${label}</span>
+        <div style="display:flex;gap:2px;flex:1;flex-wrap:wrap">${dots(f.seq)}</div>
+        <span style="font-size:11px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace;white-space:nowrap">${f.v}V ${f.e}E ${f.d}D</span>
+        <span style="font-family:'Saira Condensed',sans-serif;font-weight:800;font-size:16px;color:${cor};min-width:40px;text-align:right">${f.aprov}%</span>
+      </div>`;
+    };
+    const fGeral = calcForma(j10);
+    const fCasa = calcForma(j10.filter(g=>ehMandante(g)));
+    const fFora = calcForma(j10.filter(g=>!ehMandante(g)));
+    const blocoForma = `<div style="margin:8px 0 10px">
+      ${linhaForma('📊 Geral', fGeral)}
+      ${linhaForma('🏠 Casa', fCasa)}
+      ${linhaForma('✈️ Fora', fFora)}
+    </div>`;
+
+    // ---- lista dos 10 jogos com placar e data ----
+    const linhas = j10.map(g => {
       const souMandante = ehMandante(g);
       const meusGols = souMandante ? g.gols_mandante : g.gols_visitante;
       const golsAdv = souMandante ? g.gols_visitante : g.gols_mandante;
@@ -3683,18 +3720,19 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
         if (total <= 2) tag = '<span style="font-size:9px;color:var(--green)">▼</span>';
         else if (total >= 4) tag = '<span style="font-size:9px;color:var(--red)">▲</span>';
       }
-      const zerou = meusGols === 0 ? '<span style="font-size:9px;color:var(--red)">s/ marcar</span>' : '';
       const dataFmt = g.data ? g.data.slice(8,10)+'/'+g.data.slice(5,7) : '';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid rgba(237,234,224,.06)">
+      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;border-bottom:1px solid rgba(237,234,224,.05)">
         <span style="font-size:10px;color:var(--chalk-dim);min-width:38px;font-family:'IBM Plex Mono',monospace">${dataFmt}</span>
+        <span style="min-width:18px">${souMandante?'🏠':'✈️'}</span>
         <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${cor};min-width:34px">${meusGols ?? '-'}x${golsAdv ?? '-'}</span>
-        <span style="flex:1;font-size:12px">${souMandante?'🏠':'✈️'} ${adv}</span>
-        ${tag} ${zerou}
+        <span style="flex:1;font-size:12px">${adv}</span>
+        ${tag}
       </div>`;
     }).join('');
-    let somaFez=0, somaSof=0, zeros=0, semMarcar=0, ambas=0, over25=0, n=0;
-    let htFez=0, htSof=0, nHt=0;
-    jogos.slice(0,10).forEach(g => {
+
+    // ---- indicadores (FT/HT + mercados) ----
+    let somaFez=0, somaSof=0, zeros=0, semMarcar=0, ambas=0, over25=0, n=0, htFez=0, htSof=0, nHt=0;
+    j10.forEach(g => {
       const souMandante = ehMandante(g);
       const meus = souMandante ? g.gols_mandante : g.gols_visitante;
       const adv = souMandante ? g.gols_visitante : g.gols_mandante;
@@ -3704,7 +3742,6 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
       if (meus===0) semMarcar++;
       if (meus>0&&adv>0) ambas++;
       if (meus+adv>=3) over25++;
-      // gols do 1º tempo (HT)
       const htM = souMandante ? g.ht_mandante : g.ht_visitante;
       const htA = souMandante ? g.ht_visitante : g.ht_mandante;
       if (htM!=null && htA!=null){ htFez+=htM; htSof+=htA; nHt++; }
@@ -3712,14 +3749,14 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
     const mediaFez = n?(somaFez/n).toFixed(1):'-', mediaSof = n?(somaSof/n).toFixed(1):'-';
     const mediaHtFez = nHt?(htFez/nHt).toFixed(1):'-', mediaHtSof = nHt?(htSof/nHt).toFixed(1):'-';
     const pct = (x)=> n?Math.round(x/n*100):0;
-    return `<div style="flex:1;min-width:240px">
-      <b style="font-size:14px">${nomeTime}</b>
-      <div style="margin:4px 0">${linhas}</div>
-      <div style="font-size:11px;color:var(--chalk-dim);margin-top:6px;line-height:1.6">
-        <b style="color:var(--chalk)">FT (jogo todo):</b> marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b><br>
-        <b style="color:var(--chalk)">HT (1º tempo):</b> marca <b style="color:var(--amber)">${mediaHtFez}</b> · sofre <b>${mediaHtSof}</b><br>
-        Over 2.5: <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas: <b style="color:var(--amber)">${pct(ambas)}%</b> · Over 0.5: <b style="color:var(--green)">${pct(n-zeros)}%</b><br>
-        ${zeros} jogo(s) 0x0 · ${semMarcar}x não marcou
+    return `<div style="flex:1;min-width:260px">
+      <b style="font-size:15px">${nomeTime}</b>
+      ${blocoForma}
+      <div style="font-size:11px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 2px">Últimos ${n} jogos</div>
+      <div>${linhas}</div>
+      <div style="font-size:11px;color:var(--chalk-dim);margin-top:8px;line-height:1.6;background:var(--pitch);border-radius:6px;padding:8px">
+        <b style="color:var(--chalk)">FT:</b> marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b> &nbsp;|&nbsp; <b style="color:var(--chalk)">HT:</b> marca <b style="color:var(--amber)">${mediaHtFez}</b> · sofre <b>${mediaHtSof}</b><br>
+        Over 2.5: <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas: <b style="color:var(--amber)">${pct(ambas)}%</b> · Over 0.5: <b style="color:var(--green)">${pct(n-zeros)}%</b> · ${zeros}x 0x0
       </div>
     </div>`;
   }
