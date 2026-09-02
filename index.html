@@ -1480,7 +1480,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.49";
+const APP_VERSAO = "v4.50";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3360,12 +3360,13 @@ $('su-data').value = hojeISO();
 $('btn-sugestoes').addEventListener('click', gerarSugestoes);
 
 
-async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, botao, horaJogo, dataJogo){
+async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, botao, horaJogo, dataJogo, fixtureId){
   const reg = {
     data_jogo: dataJogo || $('su-data').value || $('td-data').value || null,
     hora_jogo: horaJogo || null,
     campeonato: liga || '',
     mandante, visitante,
+    fixture_id: fixtureId || null,
     zebra: 'nenhuma', lay_1x0:'FORA', lay_0x1:'FORA', over_under:'FORA', lay_zebra:'FORA',
     confianca: nota, observacoes: '[Sugestão automática] ' + motivo,
     analise_completa: null, origem: 'sugestao', mercado_sugerido: mercado,
@@ -3393,7 +3394,12 @@ async function salvarSugestao(mandante, visitante, liga, mercado, nota, motivo, 
     }
   }catch(_){ /* se a checagem falhar, segue e tenta salvar */ }
 
-  const { error } = await db.from('analises').insert(reg);
+  let { error } = await db.from('analises').insert(reg);
+  if (error && String(error.message||'').includes('fixture_id')){
+    // coluna ainda não criada no banco — salva sem ela
+    delete reg.fixture_id;
+    ({ error } = await db.from('analises').insert(reg));
+  }
   if (error){ if (botao) botao.textContent = '❌ erro'; return; }
   if (botao){ botao.textContent = '✅ salvo'; botao.disabled = true; }
   if (typeof listarAnalises === 'function') listarAnalises();
@@ -3489,7 +3495,7 @@ function desenharRankingsSug(){
           <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${mostrarV}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-size:12px;color:var(--chalk-dim)">${detalhe}</td>
-          <td style="white-space:nowrap"><button class="mini" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.mandante_id||''}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.visitante_id||''}','${mktSist}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}')">💾</button></td>
+          <td style="white-space:nowrap"><button class="mini" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.mandante_id||''}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.visitante_id||''}','${mktSist}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}', ${x.c.j.fixture_id||'null'})">💾</button></td>
         </tr>`;
       }).join('')}
       </table></div></div>`;
@@ -3643,7 +3649,7 @@ async function gerarSugestoes(){
             <button class="mini" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})">🔎 Ficha</button>
             <button class="mini" onclick="toggleJogosAnteriores('sug-ja-${s.j.fixture_id}','${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.mandante_id||''}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante_id||''}','${s.mercado}')" style="border-color:var(--amber);color:var(--amber)">📋 Jogos anteriores</button>
             <button class="mini" onclick="copiarPrompt('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${(s.j.liga||'').replace(/'/g,String.fromCharCode(92,39))}', this)">🧠 Prompt</button>
-            <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((s.j.pais?s.j.pais+' — ':'')+(s.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this, '${s.j.hora||''}', '${s.j.data_jogo||$('su-data').value||''}')">💾 Salvar no histórico</button>
+            <button class="mini" onclick="salvarSugestao('${s.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${s.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((s.j.pais?s.j.pais+' — ':'')+(s.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${s.mercado}',${s.nota.toFixed(1)},'${s.motivo.replace(/'/g,String.fromCharCode(92,39)).replace(/&quot;/g,'')}', this, '${s.j.hora||''}', '${s.j.data_jogo||$('su-data').value||''}', ${s.j.fixture_id||'null'})">💾 Salvar no histórico</button>
           </div>
         </div>`).join('') + '</div>' +
         '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:12px">Nota = convergência entre odds e histórico. Antes de operar: 🧠 análise completa (desfalques, técnico novo, crise mudam tudo) e conferir a odd na exchange.</p>';
@@ -3951,20 +3957,38 @@ async function buscarPlacar(a){
 async function buscarPlacarBanco(a){
   const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   const tokens = s => norm(s).split(/\s+/).filter(p => p.length >= 4);
-  const casa = (nomeBanco, nomeSug) => { const tb = norm(nomeBanco), ts = tokens(nomeSug); return ts.some(t => tb.includes(t)) || ts.length===0; };
-  const extrair = (row) => {
+  const extrair = (row, alinhaPeloNome) => {
     let gm = row.gols_mandante, gv = row.gols_visitante;
     if (gm == null || gv == null){ const p = (row.placar||'').split('x').map(Number); gm = p[0]; gv = p[1]; }
     if (gm == null || gv == null || isNaN(gm) || isNaN(gv)) return null;
-    return casa(row.mandante, a.mandante) ? {gm, gv} : {gm: gv, gv: gm};
+    if (!alinhaPeloNome) return {gm, gv}; // veio por fixture_id: mandante do banco = mandante da aposta
+    const ts = tokens(a.mandante);
+    const mandBate = ts.some(t => norm(row.mandante).includes(t)) || ts.length===0;
+    return mandBate ? {gm, gv} : {gm: gv, gv: gm};
   };
+  // 1) PRIORIDADE: busca pelo fixture_id (identificador único — infalível)
+  if (a.fixture_id){
+    try{
+      const { data } = await db.from('jogos_dia').select('*').eq('fixture_id', a.fixture_id).in('status',['FT','AET','PEN']).limit(1);
+      if (data?.length) return extrair(data[0], false);
+    }catch(_){}
+    return null; // tem fixture_id mas o jogo não terminou/não está no banco — não arrisca por nome
+  }
+  // 2) fallback por nome (só para apostas antigas sem fixture_id) — exige OS DOIS times + mesma data
   const tA = tokens(a.mandante)[0] || a.mandante;
   const tB = tokens(a.visitante)[0] || a.visitante;
+  if (!a.data_jogo) return null; // sem data não dá pra ter segurança
   try{
-    let query = db.from('jogos_dia').select('*').in('status',['FT','AET','PEN']);
-    if (a.data_jogo) query = query.eq('data_jogo', a.data_jogo);
-    const { data } = await query.or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`).limit(1);
-    if (data?.length){ return extrair(data[0]); }
+    const { data } = await db.from('jogos_dia').select('*').eq('data_jogo', a.data_jogo).in('status',['FT','AET','PEN'])
+      .or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`).limit(1);
+    if (data?.length){
+      // confirma que AMBOS os times batem (evita casar times de países diferentes)
+      const r = data[0];
+      const nm = norm(r.mandante), nv = norm(r.visitante);
+      const okA = tokens(a.mandante).some(t=>nm.includes(t)||nv.includes(t));
+      const okB = tokens(a.visitante).some(t=>nm.includes(t)||nv.includes(t));
+      if (okA && okB) return extrair(r, true);
+    }
   } catch(_){}
   return null;
 }
@@ -5074,7 +5098,7 @@ $('btn-topdia').addEventListener('click', async () => {
                 <button class="mini" onclick="event.stopPropagation();fichaJogo(${idx})">🔎 Ficha</button>
                 <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.j.mandante_id||''}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.j.visitante_id||''}','${(mktConfere||m.nome||'').replace(/'/g,String.fromCharCode(92,39))}')">📋 Jogos anteriores</button>
                 <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="event.stopPropagation();abrirAnaliseCompleta(${idx})">🔬 Análise completa</button>
-                ${mktConfere ? `<button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.j.pais?x.j.pais+' — ':'')+(x.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktConfere}',${(x.nota/10).toFixed(1)},'TOP do dia ${m.nome}: ${x.nota} pontos', this, '${x.j.hora||''}', '${x.j.data_jogo||$('td-data').value||''}')">💾 Salvar</button>` : ''}
+                ${mktConfere ? `<button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.j.pais?x.j.pais+' — ':'')+(x.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktConfere}',${(x.nota/10).toFixed(1)},'TOP do dia ${m.nome}: ${x.nota} pontos', this, '${x.j.hora||''}', '${x.j.data_jogo||$('td-data').value||''}', ${x.j.fixture_id||'null'})">💾 Salvar</button>` : ''}
               </div>
             </div>
             <div style="text-align:center;min-width:70px;cursor:pointer" onclick="abrirAnaliseCompleta(${idx})">
@@ -7077,7 +7101,7 @@ function salvarApostaN10(i){
   const liga = (x.pais ? x.pais + ' — ' : '') + (x.liga||'');
   if (typeof salvarSugestao === 'function'){
     // salvarSugestao(mand, vis, liga, mercado, nota, motivo, botao, hora, data)
-    salvarSugestao(x.mandante, x.visitante, liga, x.mercado, Number(x.nota), `Funil Só Nota 10 (${x.origem})`, null, x.hora||'', x.data||'');
+    salvarSugestao(x.mandante, x.visitante, liga, x.mercado, Number(x.nota), `Funil Só Nota 10 (${x.origem})`, null, x.hora||'', x.data||'', x.fixture_id||null);
     aviso($('n10-aviso'), `💾 ${x.mandante} x ${x.visitante} salvo no histórico.`, '');
   }
 }
@@ -7534,7 +7558,7 @@ async function gerarMetodo0x0(){
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="mini" onclick="fichaJogo(${idx})">🔎 Ficha</button>
           <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="toggleJogosAnteriores('','${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.mandante_id||''}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante_id||''}','OVER 0.5')">📋 Jogos anteriores</button>
-          <button class="mini" onclick="salvarSugestao('${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((a.j.pais?a.j.pais+' — ':'')+(a.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','OVER 0.5',7,'Método 0x0: ${(a.mZero?a.j.mandante:a.j.visitante)} vem de ${qtdExigida}x 0x0', this, '${a.j.hora||''}', '${a.j.data_jogo||data||''}')">💾 Salvar</button>
+          <button class="mini" onclick="salvarSugestao('${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((a.j.pais?a.j.pais+' — ':'')+(a.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','OVER 0.5',7,'Método 0x0: ${(a.mZero?a.j.mandante:a.j.visitante)} vem de ${qtdExigida}x 0x0', this, '${a.j.hora||''}', '${a.j.data_jogo||data||''}', ${a.j.fixture_id||'null'})">💾 Salvar</button>
         </div>
       </div>`;
     }).join('');
