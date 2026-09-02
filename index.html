@@ -1480,7 +1480,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.48";
+const APP_VERSAO = "v4.49";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4297,7 +4297,7 @@ if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async
       try{ await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 }); }catch(_){}
     }
 
-    let resolvidos = 0, naoAchou = 0;
+    let resolvidos = 0, naoAchou = 0; const falhas = [];
     for (let i=0;i<pegas.length;i++){
       if (st) st.textContent = `⏳ Conferindo ${i+1}/${pegas.length}…`;
       const pl = await buscarPlacarBanco(pegas[i]);
@@ -4305,9 +4305,26 @@ if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async
         const res = confereMercado(pegas[i].mercado_sugerido, pl.gm, pl.gv);
         await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', pegas[i].id);
         resolvidos++;
-      } else naoAchou++;
+      } else { naoAchou++; falhas.push(pegas[i]); }
     }
-    if (st) st.textContent = `✅ ${resolvidos} atualizada(s)` + (naoAchou?` · ${naoAchou} sem placar encontrado (jogo pode não ter terminado ou liga sem cobertura).`:'.');
+    if (st) st.textContent = `✅ ${resolvidos} atualizada(s)` + (naoAchou?` · ${naoAchou} sem placar.`:'.');
+    // diagnóstico: mostra quais não achou e o motivo
+    if (falhas.length && $('ap-aviso')){
+      let diag = '<b>Jogos sem placar encontrado:</b><br>';
+      for (const f of falhas){
+        // checa se o jogo existe no banco daquele dia (por status)
+        let motivo = '';
+        try{
+          const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+          const tA = (norm(f.mandante).split(/\s+/).filter(p=>p.length>=4)[0])||norm(f.mandante);
+          const { data: existe } = await db.from('jogos_dia').select('mandante,visitante,status,placar').eq('data_jogo', f.data_jogo).ilike('mandante', `%${tA}%`).limit(3);
+          if (!existe?.length) motivo = 'jogo não está na grade desse dia no banco';
+          else { const j0 = existe[0]; motivo = `no banco está como "${j0.mandante} x ${j0.visitante}" status ${j0.status}${j0.placar?' placar '+j0.placar:''}`; }
+        }catch(_){ motivo = 'erro ao checar'; }
+        diag += `• ${f.mandante} x ${f.visitante} (${f.data_jogo}) — ${motivo}<br>`;
+      }
+      $('ap-aviso').innerHTML = `<div class="aviso" style="text-align:left">${diag}</div>`;
+    } else if ($('ap-aviso')) $('ap-aviso').innerHTML = '';
     listarApostasPeguei();
   } catch(e){ if(st) st.textContent = '❌ Erro: '+e.message; }
   finally{ if(b) b.disabled=false; }
