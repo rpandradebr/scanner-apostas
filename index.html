@@ -1352,6 +1352,7 @@
       Só as apostas que você marcou como <b>peguei</b> (de qualquer aba). Tela enxuta pra acompanhar o que está em jogo e enviar direto pra <b>Gestão de banca</b> com o botão 💰 Integrar.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <input type="date" id="ap-data-atualizar" style="width:auto;padding:5px 8px" title="Deixe em branco para atualizar todos, ou escolha um dia">
       <button class="acao" id="btn-ap-atualizar">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="ap-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
@@ -1479,7 +1480,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.47";
+const APP_VERSAO = "v4.48";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4279,10 +4280,37 @@ document.addEventListener('change', e => {
   if (['ap-ordem','ap-filtro-mercado','ap-filtro-situacao'].includes(e.target?.id)) listarApostasPeguei();
 });
 if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async () => {
-  const d = $('hs-data-atualizar') ? $('hs-data-atualizar').value : '';
+  const d = $('ap-data-atualizar') ? $('ap-data-atualizar').value : '';
   const st = $('ap-status'); if (st) st.textContent = '⏳ Atualizando...';
-  await atualizarResultados(d || null);
-  listarApostasPeguei(); if (st) st.textContent = '✅ Atualizado.';
+  const b = $('btn-ap-atualizar'); if (b) b.disabled = true;
+  try{
+    // pega TODAS as apostas marcadas como peguei (aposta_feita), com filtro de dia opcional
+    let q = db.from('analises').select('*').eq('aposta_feita', true);
+    if (d) q = q.eq('data_jogo', d);
+    const { data: pegas } = await q.order('data_jogo',{ascending:false});
+    if (!pegas?.length){ if(st) st.textContent = 'Nenhuma aposta marcada como "peguei"' + (d?' nesse dia.':'.'); if(b) b.disabled=false; return; }
+
+    // recarrega a grade dos dias envolvidos uma vez cada (pra ter os placares na API)
+    const dias = [...new Set(pegas.map(p => p.data_jogo).filter(Boolean))];
+    for (let i=0;i<dias.length;i++){
+      if (st) st.textContent = `⏳ Buscando placares do dia ${i+1}/${dias.length} na API…`;
+      try{ await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 }); }catch(_){}
+    }
+
+    let resolvidos = 0, naoAchou = 0;
+    for (let i=0;i<pegas.length;i++){
+      if (st) st.textContent = `⏳ Conferindo ${i+1}/${pegas.length}…`;
+      const pl = await buscarPlacarBanco(pegas[i]);
+      if (pl){
+        const res = confereMercado(pegas[i].mercado_sugerido, pl.gm, pl.gv);
+        await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', pegas[i].id);
+        resolvidos++;
+      } else naoAchou++;
+    }
+    if (st) st.textContent = `✅ ${resolvidos} atualizada(s)` + (naoAchou?` · ${naoAchou} sem placar encontrado (jogo pode não ter terminado ou liga sem cobertura).`:'.');
+    listarApostasPeguei();
+  } catch(e){ if(st) st.textContent = '❌ Erro: '+e.message; }
+  finally{ if(b) b.disabled=false; }
 });
 // botão atualizar resultados da aba Meus jogos (reusa a atualização do histórico)
 if ($('btn-mj-atualizar')) $('btn-mj-atualizar').addEventListener('click', async () => {
