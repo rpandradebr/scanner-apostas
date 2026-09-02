@@ -419,6 +419,17 @@
       <button class="mini" id="btn-n10-limpar" style="border-color:var(--red);color:var(--red)">🗑️ Limpar</button>
       <span id="n10-contador" style="font-size:12.5px;color:var(--chalk-dim);margin-left:auto"></span>
     </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;align-items:center;background:var(--pitch);padding:8px 12px;border-radius:8px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        📅 Ver jogos do dia:
+        <input type="date" id="n10-filtro-data" style="width:auto;padding:4px 8px">
+        <button class="mini" onclick="$('n10-filtro-data').value='';renderNota10()">limpar</button>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        🔄 Conferir resultados do dia:
+        <input type="date" id="n10-data-atualizar" style="width:auto;padding:4px 8px" title="Deixe em branco para conferir todos os já ocorridos">
+      </label>
+    </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;align-items:center;background:var(--pitch);padding:10px 12px;border-radius:8px">
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Situação:
@@ -991,6 +1002,8 @@
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
       <button class="acao" id="btn-gerar-notas">📊 Analisar assertividade</button>
+      <button class="acao" id="btn-notas-atualizar" style="background:var(--card-2)">🔄 Atualizar resultados</button>
+      <span id="notas-status" style="align-self:center;font-size:12px;color:var(--chalk-dim)"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
         Agrupar por:
         <select id="notas-modo" style="width:auto;padding:4px 8px">
@@ -1420,6 +1433,11 @@
           <option value="ocorridos">Só os que já ocorreram</option>
         </select>
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Dia do jogo:
+        <input type="date" id="bot-filtro-data" style="width:auto;padding:4px 8px">
+        <button class="mini" onclick="$('bot-filtro-data').value='';listarBotSug()">limpar</button>
+      </label>
     </div>
     <div id="bot-resumo" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px"></div>
     <div id="bot-aviso"></div>
@@ -1480,7 +1498,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.52";
+const APP_VERSAO = "v4.53";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3953,6 +3971,57 @@ async function buscarPlacar(a){
   return null;
 }
 
+// FUNÇÃO REUTILIZÁVEL: atualiza resultados de uma lista de apostas usando os jogos
+// frescos que a recarga da grade retorna (modelo que funciona, igual Apostas que peguei).
+// Retorna { resolvidos, falhas: [{p, jg}] }. statusEl é o elemento de status para feedback.
+async function atualizarPlacaresLista(pegas, statusEl){
+  const set = t => { if (statusEl) statusEl.textContent = t; };
+  const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const tokens = s => norm(s).split(/\s+/).filter(p => p.length >= 4);
+  const encerrado = s => ['FT','AET','PEN'].includes(s);
+  const pegaGols = (jg) => {
+    let gm = jg.gols_mandante, gv = jg.gols_visitante;
+    if (gm==null || gv==null){ const p=(jg.placar||'').split('x').map(Number); gm=p[0]; gv=p[1]; }
+    return (gm==null||gv==null||isNaN(gm)||isNaN(gv)) ? null : {gm, gv};
+  };
+  let resolvidos = 0; const falhas = [];
+  const dias = [...new Set(pegas.map(p => p.data_jogo).filter(Boolean))];
+  const jogosPorDia = {};
+  for (let i=0;i<dias.length;i++){
+    set(`⏳ Buscando resultados do dia ${i+1}/${dias.length} na API…`);
+    try{ const rg = await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 }); jogosPorDia[dias[i]] = rg.jogos || []; }
+    catch(_){ jogosPorDia[dias[i]] = []; }
+  }
+  for (const p of pegas){
+    const doDia = jogosPorDia[p.data_jogo] || [];
+    let jg = null;
+    if (p.fixture_id) jg = doDia.find(x => String(x.fixture_id)===String(p.fixture_id));
+    if (!jg){
+      const tA = tokens(p.mandante), tB = tokens(p.visitante);
+      jg = doDia.find(x => {
+        const nm = norm(x.mandante), nv = norm(x.visitante);
+        const aBate = tA.some(t=>nm.includes(t)) || tB.some(t=>nm.includes(t));
+        const bBate = tA.some(t=>nv.includes(t)) || tB.some(t=>nv.includes(t));
+        return aBate && bBate;
+      });
+    }
+    if (jg && encerrado(jg.status)){
+      const g = pegaGols(jg);
+      if (g){
+        const nmJg = norm(jg.mandante);
+        const mandBate = tokens(p.mandante).some(t=>nmJg.includes(t)) || tokens(p.mandante).length===0;
+        const gm = mandBate ? g.gm : g.gv, gv = mandBate ? g.gv : g.gm;
+        const res = confereMercado(p.mercado_sugerido, gm, gv);
+        await db.from('analises').update({ placar_final: `${gm}x${gv}`, resultado_auto: res }).eq('id', p.id);
+        resolvidos++; continue;
+      }
+    }
+    falhas.push({ p, jg });
+  }
+  return { resolvidos, falhas };
+}
+window.atualizarPlacaresLista = atualizarPlacaresLista;
+
 // marca green/red manualmente (para jogos sem cobertura de resultado na API)
 async function marcarManual(id, mand, vis){
   const placar = prompt(`Placar final de ${mand} x ${vis}? (ex: 2x1)`);
@@ -4012,58 +4081,17 @@ window.buscarPlacarBanco = buscarPlacarBanco;
 
 async function atualizarResultados(dataFiltro){
   const b = $('btn-atualizar-res'); if (b) b.disabled = true;
-  aviso($('hs-aviso'), '');
   const setStatus = (t) => { if($('hs-status')) $('hs-status').textContent = t; };
+  aviso($('hs-aviso'), '');
   try{
-    let q = db.from('analises').select('*')
-      .in('origem',['sugestao','vigia']).or('placar_final.is.null,resultado_auto.is.null');
+    let q = db.from('analises').select('*').in('origem',['sugestao','vigia']);
     if (dataFiltro) q = q.eq('data_jogo', dataFiltro);
-    const { data: sugs } = await q.order('criado_em',{ascending:false});
-    if (!sugs?.length){ setStatus(dataFiltro ? `Nenhuma sugestão pendente em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}.` : 'Nenhuma sugestão pendente de resultado.'); if(b) b.disabled=false; listarHistSug(); return; }
-
-    // 1) primeiro resolve o que já tem placar no banco (rápido, sem API)
-    let resolvidos = 0, semPlacar = [];
-    for (let i=0; i<sugs.length; i++){
-      setStatus(`⏳ Conferindo ${i+1}/${sugs.length}…`);
-      if (sugs[i].placar_final && !sugs[i].resultado_auto){
-        const [gm, gv] = sugs[i].placar_final.split('x').map(Number);
-        if (!isNaN(gm) && !isNaN(gv)){
-          const res = confereMercado(sugs[i].mercado_sugerido, gm, gv);
-          if (res){ await db.from('analises').update({ resultado_auto: res }).eq('id', sugs[i].id); resolvidos++; continue; }
-        }
-      }
-      const pl = await buscarPlacarBanco(sugs[i]);
-      if (pl){
-        const res = confereMercado(sugs[i].mercado_sugerido, pl.gm, pl.gv);
-        await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', sugs[i].id);
-        resolvidos++;
-      } else {
-        semPlacar.push(sugs[i]);
-      }
-    }
-
-    // 2) para os que não achou no banco, recarrega a grade de cada dia UMA vez (não por jogo)
-    if (semPlacar.length){
-      const dias = [...new Set(semPlacar.map(s => s.data_jogo).filter(Boolean))];
-      for (let d=0; d<dias.length; d++){
-        setStatus(`⏳ Atualizando placares do dia ${d+1}/${dias.length} na API…`);
-        try{ await chamarEdge({ acao:'grade', data: dias[d], forcar: 1 }); }catch(_){}
-      }
-      // agora tenta de novo no banco já atualizado
-      for (let i=0; i<semPlacar.length; i++){
-        setStatus(`⏳ Reconferindo ${i+1}/${semPlacar.length}…`);
-        const pl = await buscarPlacarBanco(semPlacar[i]);
-        if (pl){
-          const res = confereMercado(semPlacar[i].mercado_sugerido, pl.gm, pl.gv);
-          await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', semPlacar[i].id);
-          resolvidos++;
-        }
-      }
-    }
-
-    setStatus(`✅ ${resolvidos} resultado(s) atualizados de ${sugs.length} pendentes${dataFiltro?` em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}`:''}.`);
+    const { data: sugs } = await q.order('data_jogo',{ascending:false});
+    if (!sugs?.length){ setStatus(dataFiltro ? `Nenhuma sugestão em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}.` : 'Nenhuma sugestão salva.'); if(b) b.disabled=false; listarHistSug(); return; }
+    const { resolvidos, falhas } = await atualizarPlacaresLista(sugs, $('hs-status'));
+    setStatus(`✅ ${resolvidos} atualizada(s) de ${sugs.length}` + (falhas.length?` · ${falhas.length} sem placar (jogo não finalizado ou liga sem cobertura).`:'.'));
     listarHistSug();
-  } catch(e){ aviso($('hs-aviso'), 'Falha: ' + e.message, 'erro'); setStatus('❌ Erro ao atualizar — veja o aviso acima.'); }
+  } catch(e){ aviso($('hs-aviso'), 'Falha: ' + e.message, 'erro'); setStatus('❌ Erro — veja o aviso.'); }
   finally{ if(b) b.disabled = false; }
 }
 window.atualizarResultados = atualizarResultados;
@@ -6140,6 +6168,18 @@ function toggleDetalheNota(idx){
 }
 window.toggleDetalheNota = toggleDetalheNota;
 if ($('btn-gerar-notas')) $('btn-gerar-notas').addEventListener('click', gerarAnaliseNotas);
+if ($('btn-notas-atualizar')) $('btn-notas-atualizar').addEventListener('click', async () => {
+  const b = $('btn-notas-atualizar'); if (b) b.disabled = true;
+  const st = $('notas-status');
+  try{
+    const { data: sugs } = await db.from('analises').select('*').eq('origem','sugestao').order('data_jogo',{ascending:false}).limit(2000);
+    if (!sugs?.length){ if(st) st.textContent = 'Nenhuma sugestão salva.'; if(b) b.disabled=false; return; }
+    const { resolvidos, falhas } = await atualizarPlacaresLista(sugs, st);
+    if (st) st.textContent = `✅ ${resolvidos} atualizada(s)` + (falhas.length?` · ${falhas.length} sem placar.`:'.');
+    gerarAnaliseNotas();
+  }catch(e){ if(st) st.textContent = '❌ Erro: '+e.message; }
+  finally{ if(b) b.disabled=false; }
+});
 document.addEventListener('change', e => { if (e.target?.id === 'notas-mercado' || e.target?.id === 'notas-so-pegas' || e.target?.id === 'notas-modo') gerarAnaliseNotas(); });
 // carrega ao abrir a aba
 document.querySelectorAll('nav button').forEach(b => {
@@ -6441,35 +6481,12 @@ async function atualizarResultadosBot(){
   if ($('bot-status')) $('bot-status').textContent = '⏳ Buscando placares...';
   try{
     const dataFiltro = $('bot-data-atualizar') ? $('bot-data-atualizar').value : '';
-    let q = db.from('analises').select('*')
-      .eq('origem','vigia').or('placar_final.is.null,resultado_auto.is.null');
+    let q = db.from('analises').select('*').eq('origem','vigia');
     if (dataFiltro) q = q.eq('data_jogo', dataFiltro);
-    const { data: sugs } = await q.order('criado_em',{ascending:false});
-    if (!sugs?.length){ if($('bot-status')) $('bot-status').textContent = 'Nenhuma sugestão do bot pendente.'; if(b) b.disabled=false; listarBotSug(); return; }
-    let apurados = 0;
-    for (const a of sugs){
-      // se já tem placar salvo mas faltou green/red, recalcula sem buscar de novo
-      if (a.placar_final && !a.resultado_auto){
-        const [gm, gv] = a.placar_final.split('x').map(Number);
-        if (!isNaN(gm) && !isNaN(gv)){
-          const res = confereMercado(a.mercado_sugerido, gm, gv);
-          if (res){ await db.from('analises').update({ resultado_auto: res }).eq('id', a.id); apurados++; continue; }
-        }
-      }
-      const pl = await buscarPlacar(a);
-      if (pl){
-        const res = confereMercado(a.mercado_sugerido, pl.gm, pl.gv);
-        await db.from('analises').update({
-          placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res
-        }).eq('id', a.id);
-        apurados++;
-      }
-    }
-    const naoAchados = sugs.length - apurados;
-    if ($('bot-status')){
-      if (apurados === 0) $('bot-status').textContent = `Nenhum placar encontrado ainda (${sugs.length} pendente(s)). Os jogos podem não ter terminado, ou o placar ainda não está no banco. Tente de novo mais tarde.`;
-      else $('bot-status').textContent = `✅ ${apurados} apurado(s)${naoAchados>0?`, ${naoAchados} ainda sem placar (jogos não terminados ou fora do banco)`:''}.`;
-    }
+    const { data: sugs } = await q.order('data_jogo',{ascending:false});
+    if (!sugs?.length){ if($('bot-status')) $('bot-status').textContent = 'Nenhuma sugestão do bot' + (dataFiltro?' nesse dia.':'.'); if(b) b.disabled=false; listarBotSug(); return; }
+    const { resolvidos, falhas } = await atualizarPlacaresLista(sugs, $('bot-status'));
+    if ($('bot-status')) $('bot-status').textContent = `✅ ${resolvidos} apurado(s) de ${sugs.length}` + (falhas.length?` · ${falhas.length} sem placar (não terminou ou liga sem cobertura).`:'.');
     listarBotSug();
   }catch(e){ if($('bot-status')) $('bot-status').textContent = 'Erro: '+e.message; }
   finally{ if(b) b.disabled=false; }
@@ -6503,6 +6520,8 @@ async function listarBotSug(){
 
   let lista = todas;
   if (fMerc) lista = lista.filter(a => a.mercado_sugerido === fMerc);
+  const fData = $('bot-filtro-data') ? $('bot-filtro-data').value : '';
+  if (fData) lista = lista.filter(a => a.data_jogo === fData);
   const fNota = $('bot-filtro-nota') ? Number($('bot-filtro-nota').value) : 0;
   if (fNota === 10) lista = lista.filter(a => Number(a.confianca) >= 10);
   else if (fNota > 0) lista = lista.filter(a => Number(a.confianca) >= fNota);
@@ -6563,7 +6582,7 @@ window.marcarApostaFeitaBot = marcarApostaFeitaBot;
 
 if ($('btn-bot-atualizar')) $('btn-bot-atualizar').addEventListener('click', atualizarResultadosBot);
 document.addEventListener('change', e => {
-  if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao','bot-filtro-nota'].includes(e.target?.id)) listarBotSug();
+  if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao','bot-filtro-nota','bot-filtro-data'].includes(e.target?.id)) listarBotSug();
 });
 
 
@@ -7024,6 +7043,8 @@ function renderNota10(){
   const fAte = $('n10-hora-ate') ? $('n10-hora-ate').value : '';
   if (fFonte) lista = lista.filter(x => x.origem === fFonte);
   if (fMerc) lista = lista.filter(x => x.mercado === fMerc);
+  const fDataN10 = $('n10-filtro-data') ? $('n10-filtro-data').value : '';
+  if (fDataN10) lista = lista.filter(x => x.data === fDataN10);
   if (fNota === 10) lista = lista.filter(x => Number(x.nota) >= 10);
   else if (fNota > 0) lista = lista.filter(x => Number(x.nota) >= fNota);
   if (fDe) lista = lista.filter(x => (x.hora||'') >= fDe);
@@ -7110,28 +7131,49 @@ function situacaoN10(x){
 }
 window.situacaoN10 = situacaoN10;
 
-// confere green/red dos jogos já ocorridos (busca placar no banco)
+// confere green/red dos jogos já ocorridos (usa a grade fresca da API — modelo que funciona)
 async function conferirResultadosN10(){
   const btn = $('btn-n10-conferir'); btn.disabled = true; btn.textContent = '⏳ Conferindo...';
   try{
     const lista = getNota10();
-    const ocorridos = lista.filter(x => situacaoN10(x) === 'ocorridos' && !x.resultado);
-    if (!ocorridos.length){ aviso($('n10-aviso'), 'Nenhum jogo já ocorrido pendente de conferência.', ''); btn.disabled=false; btn.textContent='✅ Conferir resultados (green/red)'; return; }
+    const dataFiltro = $('n10-data-atualizar') ? $('n10-data-atualizar').value : '';
+    let ocorridos = lista.filter(x => !x.resultado && x.data);
+    if (dataFiltro) ocorridos = ocorridos.filter(x => x.data === dataFiltro);
+    else ocorridos = ocorridos.filter(x => situacaoN10(x) === 'ocorridos');
+    if (!ocorridos.length){ aviso($('n10-aviso'), 'Nenhum jogo pendente de conferência' + (dataFiltro?' nesse dia.':'.'), ''); btn.disabled=false; btn.textContent='✅ Conferir resultados (green/red)'; return; }
+
+    // recarrega a grade dos dias envolvidos (frescos, com resultado)
+    const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const tokens = s => norm(s).split(/\s+/).filter(p => p.length >= 4);
+    const encerrado = s => ['FT','AET','PEN'].includes(s);
+    const dias = [...new Set(ocorridos.map(x => x.data).filter(Boolean))];
+    const jogosPorDia = {};
+    for (let i=0;i<dias.length;i++){
+      $('n10-aviso').innerHTML = `<div class="aviso">⏳ Buscando resultados do dia ${i+1}/${dias.length}...</div>`;
+      try{ const rg = await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 }); jogosPorDia[dias[i]] = rg.jogos || []; }catch(_){ jogosPorDia[dias[i]] = []; }
+    }
     let conf = 0;
-    for (let i=0;i<ocorridos.length;i++){
-      const x = ocorridos[i];
-      $('n10-aviso').innerHTML = `<div class="aviso">⏳ Conferindo ${i+1}/${ocorridos.length}...</div>`;
-      try{
-        const placar = await buscarPlacar({ mandante:x.mandante, visitante:x.visitante, data_jogo:x.data });
-        if (placar){
-          const gr = confereMercado(x.mercado, placar.gm, placar.gv);
-          if (gr){ x.resultado = gr; x.placar = `${placar.gm}x${placar.gv}`; conf++; }
+    for (const x of ocorridos){
+      const doDia = jogosPorDia[x.data] || [];
+      const tA = tokens(x.mandante), tB = tokens(x.visitante);
+      const jg = doDia.find(g => {
+        const nm = norm(g.mandante), nv = norm(g.visitante);
+        return (tA.some(t=>nm.includes(t))||tB.some(t=>nm.includes(t))) && (tA.some(t=>nv.includes(t))||tB.some(t=>nv.includes(t)));
+      });
+      if (jg && encerrado(jg.status)){
+        let gm = jg.gols_mandante, gv = jg.gols_visitante;
+        if (gm==null||gv==null){ const p=(jg.placar||'').split('x').map(Number); gm=p[0]; gv=p[1]; }
+        if (gm!=null && gv!=null && !isNaN(gm) && !isNaN(gv)){
+          const mandBate = tokens(x.mandante).some(t=>norm(jg.mandante).includes(t)) || tokens(x.mandante).length===0;
+          const g1 = mandBate?gm:gv, g2 = mandBate?gv:gm;
+          const gr = confereMercado(x.mercado, g1, g2);
+          if (gr){ x.resultado = gr; x.placar = `${g1}x${g2}`; conf++; }
         }
-      }catch(_){}
+      }
     }
     setNota10(lista);
     $('n10-aviso').innerHTML='';
-    aviso($('n10-aviso'), `✅ ${conf} jogo(s) conferido(s).`, '');
+    aviso($('n10-aviso'), `✅ ${conf} jogo(s) conferido(s) de ${ocorridos.length}.`, '');
     renderNota10();
   }catch(e){ aviso($('n10-aviso'), 'Erro: '+e.message, 'erro'); }
   finally{ btn.disabled=false; btn.textContent='✅ Conferir resultados (green/red)'; }
@@ -7194,7 +7236,7 @@ window.puxarNota10Bot = puxarNota10Bot;
 if ($('btn-n10-atualizar')) $('btn-n10-atualizar').addEventListener('click', renderNota10);
 if ($('btn-n10-limpar-filtros')) $('btn-n10-limpar-filtros').addEventListener('click', limparFiltrosN10);
 if ($('btn-n10-conferir')) $('btn-n10-conferir').addEventListener('click', conferirResultadosN10);
-['n10-fonte','n10-mercado','n10-nota-min','n10-hora-de','n10-hora-ate','n10-situacao'].forEach(id => {
+['n10-fonte','n10-mercado','n10-nota-min','n10-hora-de','n10-hora-ate','n10-situacao','n10-filtro-data'].forEach(id => {
   const el = $(id);
   if (el) el.addEventListener('change', renderNota10);
 });
