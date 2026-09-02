@@ -1479,7 +1479,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.46";
+const APP_VERSAO = "v4.47";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3946,18 +3946,44 @@ async function buscarPlacar(a){
   return null;
 }
 
+// versão que busca placar SÓ no banco (sem recarregar grade via API — isso é feito em lote)
+async function buscarPlacarBanco(a){
+  const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const tokens = s => norm(s).split(/\s+/).filter(p => p.length >= 4);
+  const casa = (nomeBanco, nomeSug) => { const tb = norm(nomeBanco), ts = tokens(nomeSug); return ts.some(t => tb.includes(t)) || ts.length===0; };
+  const extrair = (row) => {
+    let gm = row.gols_mandante, gv = row.gols_visitante;
+    if (gm == null || gv == null){ const p = (row.placar||'').split('x').map(Number); gm = p[0]; gv = p[1]; }
+    if (gm == null || gv == null || isNaN(gm) || isNaN(gv)) return null;
+    return casa(row.mandante, a.mandante) ? {gm, gv} : {gm: gv, gv: gm};
+  };
+  const tA = tokens(a.mandante)[0] || a.mandante;
+  const tB = tokens(a.visitante)[0] || a.visitante;
+  try{
+    let query = db.from('jogos_dia').select('*').in('status',['FT','AET','PEN']);
+    if (a.data_jogo) query = query.eq('data_jogo', a.data_jogo);
+    const { data } = await query.or(`and(mandante.ilike.%${tA}%,visitante.ilike.%${tB}%),and(mandante.ilike.%${tB}%,visitante.ilike.%${tA}%)`).limit(1);
+    if (data?.length){ return extrair(data[0]); }
+  } catch(_){}
+  return null;
+}
+window.buscarPlacarBanco = buscarPlacarBanco;
+
 async function atualizarResultados(dataFiltro){
   const b = $('btn-atualizar-res'); if (b) b.disabled = true;
   aviso($('hs-aviso'), '');
+  const setStatus = (t) => { if($('hs-status')) $('hs-status').textContent = t; };
   try{
     let q = db.from('analises').select('*')
       .in('origem',['sugestao','vigia']).or('placar_final.is.null,resultado_auto.is.null');
     if (dataFiltro) q = q.eq('data_jogo', dataFiltro);
     const { data: sugs } = await q.order('criado_em',{ascending:false});
-    if (!sugs?.length){ if($('hs-status')) $('hs-status').textContent = dataFiltro ? `Nenhuma sugestão pendente em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}.` : 'Nenhuma sugestão pendente de resultado.'; if(b) b.disabled=false; listarHistSug(); return; }
-    let resolvidos = 0;
+    if (!sugs?.length){ setStatus(dataFiltro ? `Nenhuma sugestão pendente em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}.` : 'Nenhuma sugestão pendente de resultado.'); if(b) b.disabled=false; listarHistSug(); return; }
+
+    // 1) primeiro resolve o que já tem placar no banco (rápido, sem API)
+    let resolvidos = 0, semPlacar = [];
     for (let i=0; i<sugs.length; i++){
-      if ($('hs-status')) $('hs-status').textContent = `⏳ Buscando ${i+1}/${sugs.length}…`;
+      setStatus(`⏳ Conferindo ${i+1}/${sugs.length}…`);
       if (sugs[i].placar_final && !sugs[i].resultado_auto){
         const [gm, gv] = sugs[i].placar_final.split('x').map(Number);
         if (!isNaN(gm) && !isNaN(gv)){
@@ -3965,18 +3991,38 @@ async function atualizarResultados(dataFiltro){
           if (res){ await db.from('analises').update({ resultado_auto: res }).eq('id', sugs[i].id); resolvidos++; continue; }
         }
       }
-      const pl = await buscarPlacar(sugs[i]);
+      const pl = await buscarPlacarBanco(sugs[i]);
       if (pl){
         const res = confereMercado(sugs[i].mercado_sugerido, pl.gm, pl.gv);
-        await db.from('analises').update({
-          placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res
-        }).eq('id', sugs[i].id);
+        await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', sugs[i].id);
         resolvidos++;
+      } else {
+        semPlacar.push(sugs[i]);
       }
     }
-    if ($('hs-status')) $('hs-status').textContent = `✅ ${resolvidos} resultado(s) atualizados de ${sugs.length} pendentes${dataFiltro?` em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}`:''}.`;
+
+    // 2) para os que não achou no banco, recarrega a grade de cada dia UMA vez (não por jogo)
+    if (semPlacar.length){
+      const dias = [...new Set(semPlacar.map(s => s.data_jogo).filter(Boolean))];
+      for (let d=0; d<dias.length; d++){
+        setStatus(`⏳ Atualizando placares do dia ${d+1}/${dias.length} na API…`);
+        try{ await chamarEdge({ acao:'grade', data: dias[d], forcar: 1 }); }catch(_){}
+      }
+      // agora tenta de novo no banco já atualizado
+      for (let i=0; i<semPlacar.length; i++){
+        setStatus(`⏳ Reconferindo ${i+1}/${semPlacar.length}…`);
+        const pl = await buscarPlacarBanco(semPlacar[i]);
+        if (pl){
+          const res = confereMercado(semPlacar[i].mercado_sugerido, pl.gm, pl.gv);
+          await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', semPlacar[i].id);
+          resolvidos++;
+        }
+      }
+    }
+
+    setStatus(`✅ ${resolvidos} resultado(s) atualizados de ${sugs.length} pendentes${dataFiltro?` em ${dataFiltro.slice(8,10)}/${dataFiltro.slice(5,7)}`:''}.`);
     listarHistSug();
-  } catch(e){ aviso($('hs-aviso'), 'Falha: ' + e.message, 'erro'); }
+  } catch(e){ aviso($('hs-aviso'), 'Falha: ' + e.message, 'erro'); setStatus('❌ Erro ao atualizar — veja o aviso acima.'); }
   finally{ if(b) b.disabled = false; }
 }
 window.atualizarResultados = atualizarResultados;
@@ -4233,18 +4279,17 @@ document.addEventListener('change', e => {
   if (['ap-ordem','ap-filtro-mercado','ap-filtro-situacao'].includes(e.target?.id)) listarApostasPeguei();
 });
 if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async () => {
-  const btnHist = $('btn-atualizar-res');
+  const d = $('hs-data-atualizar') ? $('hs-data-atualizar').value : '';
   const st = $('ap-status'); if (st) st.textContent = '⏳ Atualizando...';
-  if (btnHist){ btnHist.click(); }
-  setTimeout(() => { listarApostasPeguei(); if (st) st.textContent = '✅ Atualizado.'; }, 4000);
+  await atualizarResultados(d || null);
+  listarApostasPeguei(); if (st) st.textContent = '✅ Atualizado.';
 });
 // botão atualizar resultados da aba Meus jogos (reusa a atualização do histórico)
 if ($('btn-mj-atualizar')) $('btn-mj-atualizar').addEventListener('click', async () => {
-  const btnHist = $('btn-atualizar-res');
+  const d = $('hs-data-atualizar') ? $('hs-data-atualizar').value : '';
   const st = $('mj-status'); if (st) st.textContent = '⏳ Atualizando...';
-  if (btnHist){ btnHist.click(); }
-  // aguarda um instante e re-renderiza meus jogos com os resultados novos
-  setTimeout(() => { listarMeusJogos(); if (st) st.textContent = '✅ Atualizado.'; }, 4000);
+  await atualizarResultados(d || null);
+  listarMeusJogos(); if (st) st.textContent = '✅ Atualizado.';
 });
 
 
