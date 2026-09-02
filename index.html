@@ -1320,6 +1320,7 @@
       Só os jogos que <b>você salvou</b> com o botão 💾 (nas Sugestões, Top do dia ou Só Nota 10). Aqui não entram as sugestões do bot — é o seu funil pessoal, concentrado num lugar só. Mesmos filtros e green/red automático do histórico.
     </p>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <input type="date" id="mj-data-atualizar" style="width:auto;padding:5px 8px" title="Deixe em branco para atualizar todos, ou escolha um dia">
       <button class="acao" id="btn-mj-atualizar">🔄 Atualizar resultados</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="mj-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
@@ -1498,7 +1499,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.53";
+const APP_VERSAO = "v4.54";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4427,10 +4428,21 @@ if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async
 });
 // botão atualizar resultados da aba Meus jogos (reusa a atualização do histórico)
 if ($('btn-mj-atualizar')) $('btn-mj-atualizar').addEventListener('click', async () => {
-  const d = $('hs-data-atualizar') ? $('hs-data-atualizar').value : '';
+  const d = $('mj-data-atualizar') ? $('mj-data-atualizar').value : '';
   const st = $('mj-status'); if (st) st.textContent = '⏳ Atualizando...';
-  await atualizarResultados(d || null);
-  listarMeusJogos(); if (st) st.textContent = '✅ Atualizado.';
+  const b = $('btn-mj-atualizar'); if (b) b.disabled = true;
+  try{
+    // Meus jogos = manuais (sugestao) + do bot que peguei
+    let q = db.from('analises').select('*').in('origem',['sugestao','vigia']);
+    if (d) q = q.eq('data_jogo', d);
+    const { data: todas } = await q.order('data_jogo',{ascending:false});
+    const jogos = (todas||[]).filter(a => a.origem!=='vigia' || a.aposta_feita);
+    if (!jogos.length){ if(st) st.textContent = 'Nenhum jogo' + (d?' nesse dia.':'.'); if(b) b.disabled=false; return; }
+    const { resolvidos, falhas } = await atualizarPlacaresLista(jogos, st);
+    if (st) st.textContent = `✅ ${resolvidos} atualizada(s) de ${jogos.length}` + (falhas.length?` · ${falhas.length} sem placar.`:'.');
+    listarMeusJogos();
+  }catch(e){ if(st) st.textContent = '❌ Erro: '+e.message; }
+  finally{ if(b) b.disabled=false; }
 });
 
 
