@@ -1480,7 +1480,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.50";
+const APP_VERSAO = "v4.52";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3953,6 +3953,22 @@ async function buscarPlacar(a){
   return null;
 }
 
+// marca green/red manualmente (para jogos sem cobertura de resultado na API)
+async function marcarManual(id, mand, vis){
+  const placar = prompt(`Placar final de ${mand} x ${vis}? (ex: 2x1)`);
+  if (!placar) return;
+  const [gm, gv] = placar.split(/[xX]/).map(s=>parseInt(s.trim()));
+  if (isNaN(gm) || isNaN(gv)){ alert('Placar inválido. Use o formato 2x1.'); return; }
+  try{
+    const { data: a } = await db.from('analises').select('mercado_sugerido').eq('id', id).single();
+    const res = a ? confereMercado(a.mercado_sugerido, gm, gv) : null;
+    await db.from('analises').update({ placar_final: `${gm}x${gv}`, resultado_auto: res }).eq('id', id);
+    if (typeof listarApostasPeguei==='function') listarApostasPeguei();
+    if (typeof listarHistSug==='function') listarHistSug();
+  }catch(e){ alert('Erro: '+e.message); }
+}
+window.marcarManual = marcarManual;
+
 // versão que busca placar SÓ no banco (sem recarregar grade via API — isso é feito em lote)
 async function buscarPlacarBanco(a){
   const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
@@ -4308,45 +4324,73 @@ if ($('btn-ap-atualizar')) $('btn-ap-atualizar').addEventListener('click', async
   const st = $('ap-status'); if (st) st.textContent = '⏳ Atualizando...';
   const b = $('btn-ap-atualizar'); if (b) b.disabled = true;
   try{
-    // pega TODAS as apostas marcadas como peguei (aposta_feita), com filtro de dia opcional
     let q = db.from('analises').select('*').eq('aposta_feita', true);
     if (d) q = q.eq('data_jogo', d);
     const { data: pegas } = await q.order('data_jogo',{ascending:false});
     if (!pegas?.length){ if(st) st.textContent = 'Nenhuma aposta marcada como "peguei"' + (d?' nesse dia.':'.'); if(b) b.disabled=false; return; }
 
-    // recarrega a grade dos dias envolvidos uma vez cada (pra ter os placares na API)
+    const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const tokens = s => norm(s).split(/\s+/).filter(p => p.length >= 4);
+    let resolvidos = 0; const falhas = [];
+
+    // recarrega a grade de cada dia FORÇANDO e usa os jogos frescos que a própria chamada retorna
     const dias = [...new Set(pegas.map(p => p.data_jogo).filter(Boolean))];
+    const jogosPorDia = {};
     for (let i=0;i<dias.length;i++){
-      if (st) st.textContent = `⏳ Buscando placares do dia ${i+1}/${dias.length} na API…`;
-      try{ await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 }); }catch(_){}
+      if (st) st.textContent = `⏳ Buscando resultados do dia ${i+1}/${dias.length} na API…`;
+      try{
+        const rg = await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 });
+        jogosPorDia[dias[i]] = rg.jogos || [];
+      }catch(_){ jogosPorDia[dias[i]] = []; }
     }
 
-    let resolvidos = 0, naoAchou = 0; const falhas = [];
-    for (let i=0;i<pegas.length;i++){
-      if (st) st.textContent = `⏳ Conferindo ${i+1}/${pegas.length}…`;
-      const pl = await buscarPlacarBanco(pegas[i]);
-      if (pl){
-        const res = confereMercado(pegas[i].mercado_sugerido, pl.gm, pl.gv);
-        await db.from('analises').update({ placar_final: `${pl.gm}x${pl.gv}`, resultado_auto: res }).eq('id', pegas[i].id);
-        resolvidos++;
-      } else { naoAchou++; falhas.push(pegas[i]); }
-    }
-    if (st) st.textContent = `✅ ${resolvidos} atualizada(s)` + (naoAchou?` · ${naoAchou} sem placar.`:'.');
-    // diagnóstico: mostra quais não achou e o motivo
-    if (falhas.length && $('ap-aviso')){
-      let diag = '<b>Jogos sem placar encontrado:</b><br>';
-      for (const f of falhas){
-        // checa se o jogo existe no banco daquele dia (por status)
-        let motivo = '';
-        try{
-          const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-          const tA = (norm(f.mandante).split(/\s+/).filter(p=>p.length>=4)[0])||norm(f.mandante);
-          const { data: existe } = await db.from('jogos_dia').select('mandante,visitante,status,placar').eq('data_jogo', f.data_jogo).ilike('mandante', `%${tA}%`).limit(3);
-          if (!existe?.length) motivo = 'jogo não está na grade desse dia no banco';
-          else { const j0 = existe[0]; motivo = `no banco está como "${j0.mandante} x ${j0.visitante}" status ${j0.status}${j0.placar?' placar '+j0.placar:''}`; }
-        }catch(_){ motivo = 'erro ao checar'; }
-        diag += `• ${f.mandante} x ${f.visitante} (${f.data_jogo}) — ${motivo}<br>`;
+    const encerrado = s => ['FT','AET','PEN'].includes(s);
+    const pegaGols = (jg) => {
+      let gm = jg.gols_mandante, gv = jg.gols_visitante;
+      if (gm==null || gv==null){ const p=(jg.placar||'').split('x').map(Number); gm=p[0]; gv=p[1]; }
+      return (gm==null||gv==null||isNaN(gm)||isNaN(gv)) ? null : {gm, gv};
+    };
+
+    for (const p of pegas){
+      const doDia = jogosPorDia[p.data_jogo] || [];
+      let jg = null;
+      // 1) por fixture_id (preciso)
+      if (p.fixture_id) jg = doDia.find(x => String(x.fixture_id)===String(p.fixture_id));
+      // 2) por nome — exige que OS DOIS times batam (evita casar errado)
+      if (!jg){
+        const tA = tokens(p.mandante), tB = tokens(p.visitante);
+        jg = doDia.find(x => {
+          const nm = norm(x.mandante), nv = norm(x.visitante);
+          const aBate = tA.some(t=>nm.includes(t)) || tB.some(t=>nm.includes(t));
+          const bBate = tA.some(t=>nv.includes(t)) || tB.some(t=>nv.includes(t));
+          return aBate && bBate;
+        });
       }
+      if (jg && encerrado(jg.status)){
+        const g = pegaGols(jg);
+        if (g){
+          // alinha ao mandante da aposta
+          const nmJg = norm(jg.mandante);
+          const mandBate = tokens(p.mandante).some(t=>nmJg.includes(t)) || tokens(p.mandante).length===0;
+          const gm = mandBate ? g.gm : g.gv, gv = mandBate ? g.gv : g.gm;
+          const res = confereMercado(p.mercado_sugerido, gm, gv);
+          await db.from('analises').update({ placar_final: `${gm}x${gv}`, resultado_auto: res }).eq('id', p.id);
+          resolvidos++;
+          continue;
+        }
+      }
+      falhas.push({ p, jg });
+    }
+
+    if (st) st.textContent = `✅ ${resolvidos} atualizada(s)` + (falhas.length?` · ${falhas.length} sem placar.`:'.');
+    if (falhas.length && $('ap-aviso')){
+      let diag = '<b>Sem placar encontrado:</b><br>';
+      for (const f of falhas){
+        const motivo = !f.jg ? 'jogo não veio na grade desse dia (liga pode não ter cobertura de resultado na API)'
+          : `na grade está como "${f.jg.mandante} x ${f.jg.visitante}" status ${f.jg.status}`;
+        diag += `• ${f.p.mandante} x ${f.p.visitante} (${f.p.data_jogo}) — ${motivo}<br>`;
+      }
+      diag += '<br>Para esses, use o botão ✏️ na lista para marcar green/red manualmente.';
       $('ap-aviso').innerHTML = `<div class="aviso" style="text-align:left">${diag}</div>`;
     } else if ($('ap-aviso')) $('ap-aviso').innerHTML = '';
     listarApostasPeguei();
