@@ -1499,7 +1499,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.54";
+const APP_VERSAO = "v4.55";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3762,16 +3762,19 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
 
     // ---- indicadores (FT/HT + mercados) ----
     let somaFez=0, somaSof=0, zeros=0, semMarcar=0, ambas=0, over25=0, n=0, htFez=0, htSof=0, nHt=0;
+    const overCount = {0.5:0, 1.5:0, 2.5:0, 3.5:0, 4.5:0};
     j10.forEach(g => {
       const souMandante = ehMandante(g);
       const meus = souMandante ? g.gols_mandante : g.gols_visitante;
       const adv = souMandante ? g.gols_visitante : g.gols_mandante;
       if (meus==null||adv==null) return;
       somaFez+=meus; somaSof+=adv; n++;
-      if (meus+adv===0) zeros++;
+      const tot = meus+adv;
+      if (tot===0) zeros++;
       if (meus===0) semMarcar++;
       if (meus>0&&adv>0) ambas++;
-      if (meus+adv>=3) over25++;
+      if (tot>=3) over25++;
+      [0.5,1.5,2.5,3.5,4.5].forEach(l => { if (tot > l) overCount[l]++; });
       const htM = souMandante ? g.ht_mandante : g.ht_visitante;
       const htA = souMandante ? g.ht_visitante : g.ht_mandante;
       if (htM!=null && htA!=null){ htFez+=htM; htSof+=htA; nHt++; }
@@ -3786,17 +3789,33 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
       <div>${linhas}</div>
       <div style="font-size:11px;color:var(--chalk-dim);margin-top:8px;line-height:1.6;background:var(--pitch);border-radius:6px;padding:8px">
         <b style="color:var(--chalk)">FT:</b> marca <b style="color:var(--amber)">${mediaFez}</b> · sofre <b>${mediaSof}</b> &nbsp;|&nbsp; <b style="color:var(--chalk)">HT:</b> marca <b style="color:var(--amber)">${mediaHtFez}</b> · sofre <b>${mediaHtSof}</b><br>
-        Over 2.5: <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas: <b style="color:var(--amber)">${pct(ambas)}%</b> · Over 0.5: <b style="color:var(--green)">${pct(n-zeros)}%</b> · ${zeros}x 0x0
+        Ambas: <b style="color:var(--amber)">${pct(ambas)}%</b> · ${zeros}x 0x0 · ${semMarcar}x não marcou
       </div>
+      <div style="font-size:11px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 3px">Gols nos últimos ${n} jogos</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <tr style="border-bottom:1px solid var(--linha)">
+          <th style="text-align:left;padding:3px 4px;color:var(--chalk-dim);font-weight:400">Linha</th>
+          ${[0.5,1.5,2.5,3.5,4.5].map(l=>`<th style="text-align:center;padding:3px 2px">${l}</th>`).join('')}
+        </tr>
+        <tr>
+          <td style="padding:3px 4px;color:var(--green)">Over</td>
+          ${[0.5,1.5,2.5,3.5,4.5].map(l=>{const p=pct(overCount[l]);return `<td style="text-align:center;padding:3px 2px;font-family:'IBM Plex Mono',monospace;color:${p>=70?'var(--green)':p>=40?'var(--amber)':'var(--chalk-dim)'}">${p}%</td>`;}).join('')}
+        </tr>
+        <tr>
+          <td style="padding:3px 4px;color:var(--red)">Under</td>
+          ${[0.5,1.5,2.5,3.5,4.5].map(l=>{const p=n?Math.round((n-overCount[l])/n*100):0;return `<td style="text-align:center;padding:3px 2px;font-family:'IBM Plex Mono',monospace;color:${p>=70?'var(--green)':p>=40?'var(--amber)':'var(--chalk-dim)'}">${p}%</td>`;}).join('')}
+        </tr>
+      </table>
     </div>`;
   }
 
   function listaH2H(jogos){
     if (!jogos || !jogos.length) return '<p style="font-size:12px;color:var(--chalk-dim)">Sem confrontos diretos recentes na base.</p>';
     let over25=0, ambas=0, zeros=0, n=0, htGols=0, nHt=0, ftGols=0;
+    const overCount = {0.5:0,1.5:0,2.5:0,3.5:0,4.5:0};
     const linhas = jogos.map(g => {
       const total = (g.gols_mandante??0)+(g.gols_visitante??0);
-      if (g.gols_mandante!=null){ n++; ftGols+=total; if(total>=3)over25++; if(g.gols_mandante>0&&g.gols_visitante>0)ambas++; if(total===0)zeros++; }
+      if (g.gols_mandante!=null){ n++; ftGols+=total; if(total>=3)over25++; if(g.gols_mandante>0&&g.gols_visitante>0)ambas++; if(total===0)zeros++; [0.5,1.5,2.5,3.5,4.5].forEach(l=>{if(total>l)overCount[l]++;}); }
       const temHt = g.ht_mandante!=null && g.ht_visitante!=null;
       if (temHt){ htGols += g.ht_mandante+g.ht_visitante; nHt++; }
       const htTxt = temHt ? `<span style="font-size:10px;color:var(--chalk-dim)">HT ${g.ht_mandante}x${g.ht_visitante}</span>` : '';
@@ -3808,7 +3827,13 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
     }).join('');
     const pct=(x)=>n?Math.round(x/n*100):0;
     const mediaFt = n?(ftGols/n).toFixed(1):'-', mediaHt = nHt?(htGols/nHt).toFixed(1):'-';
-    return `${linhas}<p style="font-size:11px;color:var(--chalk-dim);margin-top:6px;line-height:1.6">Nos ${n} confronto(s): média de <b style="color:var(--amber)">${mediaFt}</b> gols no FT · <b style="color:var(--amber)">${mediaHt}</b> no HT (1º tempo)<br>Over 2.5 <b style="color:var(--amber)">${pct(over25)}%</b> · Ambas <b style="color:var(--amber)">${pct(ambas)}%</b> · ${zeros} sem gols</p>`;
+    const tabelaOU = `<div style="font-size:11px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 3px">Gols nos ${n} confrontos</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <tr style="border-bottom:1px solid var(--linha)"><th style="text-align:left;padding:3px 4px;color:var(--chalk-dim);font-weight:400">Linha</th>${[0.5,1.5,2.5,3.5,4.5].map(l=>`<th style="text-align:center;padding:3px 2px">${l}</th>`).join('')}</tr>
+        <tr><td style="padding:3px 4px;color:var(--green)">Over</td>${[0.5,1.5,2.5,3.5,4.5].map(l=>{const p=pct(overCount[l]);return `<td style="text-align:center;padding:3px 2px;font-family:'IBM Plex Mono',monospace;color:${p>=70?'var(--green)':p>=40?'var(--amber)':'var(--chalk-dim)'}">${p}%</td>`;}).join('')}</tr>
+        <tr><td style="padding:3px 4px;color:var(--red)">Under</td>${[0.5,1.5,2.5,3.5,4.5].map(l=>{const p=n?Math.round((n-overCount[l])/n*100):0;return `<td style="text-align:center;padding:3px 2px;font-family:'IBM Plex Mono',monospace;color:${p>=70?'var(--green)':p>=40?'var(--amber)':'var(--chalk-dim)'}">${p}%</td>`;}).join('')}</tr>
+      </table>`;
+    return `${linhas}<p style="font-size:11px;color:var(--chalk-dim);margin-top:6px;line-height:1.6">Nos ${n} confronto(s): média de <b style="color:var(--amber)">${mediaFt}</b> gols no FT · <b style="color:var(--amber)">${mediaHt}</b> no HT (1º tempo)<br>Ambas <b style="color:var(--amber)">${pct(ambas)}%</b> · ${zeros} sem gols</p>${tabelaOU}`;
   }
 
   try{
