@@ -1516,7 +1516,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.57";
+const APP_VERSAO = "v4.58";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4169,10 +4169,11 @@ async function listarHistSug(pref, origemFixa, soPegasFixo){
     }
   }
 
-  // painel de taxa por mercado (só sugestões resolvidas)
+  // painel de taxa por mercado — SÓ das apostas que você pegou de verdade
   const mercados = {};
   data.forEach(a => {
     if (!a.resultado_auto) return;
+    if (!(a.aposta_feita === true || a.aposta_feita === 1 || a.aposta_feita === 'true')) return; // só as pegas
     const m = a.mercado_sugerido || '?';
     mercados[m] = mercados[m] || {g:0,r:0};
     if (a.resultado_auto==='GREEN') mercados[m].g++; else mercados[m].r++;
@@ -4180,7 +4181,7 @@ async function listarHistSug(pref, origemFixa, soPegasFixo){
   // taxa só das apostas que você realmente pegou
   let pegasG=0, pegasR=0;
   data.forEach(a => {
-    if (a.aposta_feita && a.resultado_auto){
+    if ((a.aposta_feita === true || a.aposta_feita === 1 || a.aposta_feita === 'true') && a.resultado_auto){
       if (a.resultado_auto==='GREEN') pegasG++; else pegasR++;
     }
   });
@@ -4188,12 +4189,12 @@ async function listarHistSug(pref, origemFixa, soPegasFixo){
   const painelPegas = totalPegas
     ? `<div class="aviso" style="margin-bottom:10px"><b>💰 Suas apostas de verdade (marcadas como "peguei"):</b> ${totalPegas} apostas · ${pegasG} green / ${pegasR} red · <b style="color:${pegasG/totalPegas>=0.5?'var(--green)':'var(--red)'}">${Math.round(pegasG/totalPegas*100)}% de acerto</b></div>`
     : '';
-  $(pref+'-painel').innerHTML = painelPegas + '<p style="font-size:13px;color:var(--chalk-dim);margin-bottom:4px">Taxa geral por mercado (todas as sugestões salvas):</p><div class="placar-box">' +
+  $(pref+'-painel').innerHTML = painelPegas + '<p style="font-size:13px;color:var(--chalk-dim);margin-bottom:4px">Taxa por mercado (só das suas apostas marcadas como "peguei"):</p><div class="placar-box">' +
     Object.entries(mercados).map(([m,v]) => {
       const t = v.g+v.r;
       return `<div class="stat"><b>${t?Math.round(v.g/t*100):0}%</b><span>${m} · ${v.g}G/${v.r}R</span></div>`;
     }).join('') +
-    (Object.keys(mercados).length ? '' : '<p class="msg-vazia">Nenhum resultado apurado ainda — clique em Atualizar resultados.</p>') +
+    (Object.keys(mercados).length ? '' : '<p class="msg-vazia">Nenhuma aposta marcada como "peguei" com resultado ainda. Marque o "peguei" e clique em Atualizar resultados.</p>') +
     '</div>';
 
   const pill = r => r==='GREEN' ? '<span class="pill g">GREEN</span>' : r==='RED' ? '<span class="pill r">RED</span>' : '<span class="pill n">aguardando</span>';
