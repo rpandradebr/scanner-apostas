@@ -1516,7 +1516,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.56";
+const APP_VERSAO = "v4.57";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4227,7 +4227,7 @@ async function listarHistSug(pref, origemFixa, soPegasFixo){
     // Meus jogos: mostra os manuais (todos) + os do bot que você marcou como "peguei"
     dataFiltrada = dataFiltrada.filter(a => a.origem !== 'vigia' || a.aposta_feita);
   }
-  if (($(pref+'-filtro-pegas') && $(pref+'-filtro-pegas').checked) || soPegasFixo) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita);
+  if (($(pref+'-filtro-pegas') && $(pref+'-filtro-pegas').checked) || soPegasFixo) dataFiltrada = dataFiltrada.filter(a => a.aposta_feita === true || a.aposta_feita === 1 || a.aposta_feita === 'true');
   // filtro de situação (a ocorrer / ocorridos) pela data+hora do jogo
   const filtroSit = $(pref+'-filtro-situacao') ? $(pref+'-filtro-situacao').value : 'todos';
   if (filtroSit !== 'todos'){
@@ -4385,7 +4385,16 @@ document.addEventListener('change', e => {
 });
 
 // ---- APOSTAS QUE PEGUEI: só as marcadas como peguei, de qualquer origem ----
-function listarApostasPeguei(){ listarHistSug('ap', 'sugestao', true); }
+function listarApostasPeguei(){
+  listarHistSug('ap', 'sugestao', true);
+  // diagnóstico: mostra quantas estão marcadas como peguei no banco total
+  db.from('analises').select('id,aposta_feita').then(({data})=>{
+    if (!data) return;
+    const marcadas = data.filter(a => a.aposta_feita === true || a.aposta_feita === 1 || a.aposta_feita === 'true').length;
+    const el = $('ap-status');
+    if (el && !el.textContent.includes('⏳') && !el.textContent.includes('✅')) el.textContent = `${marcadas} aposta(s) marcada(s) como "peguei" no total.`;
+  });
+}
 window.listarApostasPeguei = listarApostasPeguei;
 document.addEventListener('change', e => {
   if (['ap-ordem','ap-filtro-mercado','ap-filtro-situacao'].includes(e.target?.id)) listarApostasPeguei();
