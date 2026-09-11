@@ -1690,7 +1690,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.79";
+const APP_VERSAO = "v4.80";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4759,7 +4759,7 @@ function desenharRankingsSug(){
         const mostrarV = ehLay ? (x.v/10).toFixed(1) : x.v + '%';
         return `<tr class="clicavel">
           <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td onclick="fichaJogo(${idx})" style="font-size:12px">${x.c.j.pais?x.c.j.pais+' — ':''}${x.c.j.liga||''}</td>
-          <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
+          <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b>${seloAoVivo(x.c.j.fixture_id)}</td>
           <td onclick="fichaJogo(${idx})" style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${mostrarV}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-size:12px;color:var(--chalk-dim)">${detalhe}</td>
           <td style="white-space:nowrap"><button class="mini" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.mandante_id||''}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.visitante_id||''}','${mktSist}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}', ${x.c.j.fixture_id||'null'})">💾</button> <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}', ${x.c.j.fixture_id||'null'}, true)">✅</button></td>
@@ -4801,12 +4801,38 @@ function trocaRanking(id){
 }
 window.trocaRanking = trocaRanking;
 
+// mapa de jogos ao vivo (fixture_id -> {minuto, gm, gv, status}) para mostrar placar nas sugestões
+let _aoVivoMapa = {};
+async function atualizarMapaAoVivo(){
+  try{
+    const r = await chamarEdge({ acao:'ao_vivo' });
+    const mapa = {};
+    (r.jogos||[]).forEach(j => {
+      if (j.fixture_id) mapa[j.fixture_id] = { minuto: j.minuto, gm: j.gols_mandante??0, gv: j.gols_visitante??0, status: j.status };
+    });
+    _aoVivoMapa = mapa;
+    return mapa;
+  }catch(_){ return _aoVivoMapa; }
+}
+window.atualizarMapaAoVivo = atualizarMapaAoVivo;
+// gera o selo de placar ao vivo para um fixture (vazio se não estiver ao vivo)
+function seloAoVivo(fixtureId){
+  const v = fixtureId ? _aoVivoMapa[fixtureId] : null;
+  if (!v) return '';
+  const encerrado = ['FT','AET','PEN'].includes(v.status);
+  const cor = encerrado ? 'var(--chalk-dim)' : 'var(--red)';
+  const min = encerrado ? 'FIM' : (v.status==='HT' ? 'INT' : (v.minuto!=null?v.minuto+"'":'AO VIVO'));
+  return `<span style="display:inline-flex;align-items:center;gap:4px;background:${cor};color:#fff;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:6px">${encerrado?'':'🔴'} ${v.gm}x${v.gv} ${min}</span>`;
+}
+window.seloAoVivo = seloAoVivo;
+
 async function gerarSugestoes(){
   const b = $('btn-sugestoes'); b.disabled = true;
   const data = $('su-data').value;
   const dataAte = $('su-data-ate') ? $('su-data-ate').value : '';
   const corte = Number($('su-corte').value);
   aviso($('su-aviso'), ''); $('su-lista').innerHTML=''; $('su-rankings').innerHTML=''; analisadosSug = [];
+  await atualizarMapaAoVivo(); // pega os placares ao vivo para mostrar nos cards
   try{
     const situSug = $('su-situacao') ? $('su-situacao').value : 'ocorrer';
     const querVivoSug = (situSug === 'aovivo' || situSug === 'vivo_ocorrer');
@@ -4891,7 +4917,7 @@ async function gerarSugestoes(){
       aviso($('su-aviso'), `✅ ${sugestoes.length} sugestão(ões) acima da nota ${corte}.`);
       $('su-lista').innerHTML = '<div class="semaforo">' + sugestoes.slice(0,10).map(s => `
         <div class="mercado verde">
-          <div class="nome">${s.j.mandante} x ${s.j.visitante}</div>
+          <div class="nome">${s.j.mandante} x ${s.j.visitante}${seloAoVivo(s.j.fixture_id)}</div>
           <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
           <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
           ${(() => {
