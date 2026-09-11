@@ -1690,7 +1690,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.82";
+const APP_VERSAO = "v4.83";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4743,7 +4743,7 @@ function desenharRankingsSug(){
     corpo += `<div class="rk-corpo" id="rkc-${m.id}" style="display:${i===0?'block':'none'}">
       <p style="font-size:12.5px;color:var(--chalk-dim);margin:6px 0">${m.dica} · média dos últimos 10 jogos de cada equipe.</p>
       <div class="tabela-scroll"><table>
-      <tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>${ehLay?'Nota':m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th><th>Salvar</th></tr>
+      <tr><th>Hora</th><th>Ao vivo</th><th>Liga</th><th>Confronto</th><th>${ehLay?'Nota':m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th><th>Salvar</th></tr>
       ${lista.map(x => {
         const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
         const mktSist = {btts:'BTTS', o05:'OVER 0.5', o15:'OVER 1.5', o25:'OVER 2.5', o35:'OVER 3.5', u35:'UNDER 3.5', u45:'UNDER 4.5', u25:'UNDER 2.5', lay01:'LAY 0x1', lay10:'LAY 1x0', lay20:'LAY 2x0', lay02:'LAY 0x2', laygm:'LAY GOLEADA MANDANTE', laygv:'LAY GOLEADA VISITANTE', layz:'LAY ZEBRA'}[m.id];
@@ -4758,8 +4758,8 @@ function desenharRankingsSug(){
           : `${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%`;
         const mostrarV = ehLay ? (x.v/10).toFixed(1) : x.v + '%';
         return `<tr class="clicavel">
-          <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td onclick="fichaJogo(${idx})" style="font-size:12px">${x.c.j.pais?x.c.j.pais+' — ':''}${x.c.j.liga||''}</td>
-          <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b>${seloAoVivo(x.c.j.fixture_id)}</td>
+          <td onclick="fichaJogo(${idx})">${x.c.j.hora||''}</td><td style="text-align:center">${celulaAoVivo(x.c.j.fixture_id)}</td><td onclick="fichaJogo(${idx})" style="font-size:12px">${x.c.j.pais?x.c.j.pais+' — ':''}${x.c.j.liga||''}</td>
+          <td onclick="fichaJogo(${idx})"><b>${x.c.nm}</b> x <b>${x.c.nv}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-family:'IBM Plex Mono',monospace;color:var(--amber)"><b>${mostrarV}</b></td>
           <td onclick="fichaJogo(${idx})" style="font-size:12px;color:var(--chalk-dim)">${detalhe}</td>
           <td style="white-space:nowrap"><button class="mini" onclick="event.stopPropagation();toggleJogosAnteriores('','${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.mandante_id||''}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${x.c.j.visitante_id||''}','${mktSist}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}', ${x.c.j.fixture_id||'null'})">💾</button> <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="event.stopPropagation();salvarSugestao('${x.c.nm.replace(/'/g,String.fromCharCode(92,39))}','${x.c.nv.replace(/'/g,String.fromCharCode(92,39))}','${((x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${mktSist}',${ehLay?x.v/10:x.v/10},'Ranking ${mktSist}: ${ehLay?(x.v/10).toFixed(1)+' nota':x.v+'%'}', this, '${x.c.j.hora||''}', '${x.c.j.data_jogo||$('su-data').value||''}', ${x.c.j.fixture_id||'null'}, true)">✅</button></td>
@@ -4824,11 +4824,21 @@ function seloAoVivo(fixtureId){
     return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--pitch);border:1px solid var(--linha);color:var(--chalk-dim);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px">ENCERRADO ${v.gm}x${v.gv}</span>`;
   }
   const min = v.status==='HT' ? 'INT' : (v.minuto!=null ? v.minuto+"'" : '');
-  return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(76,196,112,.15);border:1px solid var(--green);color:var(--green);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px">
-    <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.5s infinite"></span>
+  return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,197,61,.15);border:1px solid var(--amber);color:var(--amber);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--amber);display:inline-block;animation:pulse 1.5s infinite"></span>
     AO VIVO ${v.gm}x${v.gv}${min?' · '+min:''}</span>`;
 }
 window.seloAoVivo = seloAoVivo;
+// versão compacta para célula de tabela (sem margin)
+function celulaAoVivo(fixtureId){
+  const v = fixtureId ? _aoVivoMapa[fixtureId] : null;
+  if (!v) return '<span style="color:var(--chalk-dim);font-size:11px">—</span>';
+  const encerrado = ['FT','AET','PEN'].includes(v.status);
+  if (encerrado) return `<span style="color:var(--chalk-dim);font-size:11px;font-family:'IBM Plex Mono',monospace">fim ${v.gm}x${v.gv}</span>`;
+  const min = v.status==='HT' ? 'INT' : (v.minuto!=null ? v.minuto+"'" : '');
+  return `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--amber);font-size:11.5px;font-weight:700;font-family:'IBM Plex Mono',monospace"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber);display:inline-block;animation:pulse 1.5s infinite"></span>${v.gm}x${v.gv}${min?' '+min:''}</span>`;
+}
+window.celulaAoVivo = celulaAoVivo;
 
 async function gerarSugestoes(){
   const b = $('btn-sugestoes'); b.disabled = true;
