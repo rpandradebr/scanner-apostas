@@ -1690,7 +1690,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.81";
+const APP_VERSAO = "v4.82";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6306,6 +6306,7 @@ $('btn-topdia').addEventListener('click', async () => {
   const data = $('td-data').value;
   const mercado = $('td-mercado').value;
   aviso($('td-aviso'), ''); $('td-lista').innerHTML='';
+  await atualizarMapaAoVivo(); // placares ao vivo para os cards
 
   if (mercado === 'desarmes'){
     try{
@@ -6508,7 +6509,7 @@ $('btn-topdia').addEventListener('click', async () => {
           const idx = gradeJogos.indexOf(x.j) >= 0 ? gradeJogos.indexOf(x.j) : (gradeJogos.push(x.j)-1);
           return `<div class="mercado" style="border-left-color:${cor(x.nota)};display:flex;justify-content:space-between;align-items:center;gap:12px">
             <div style="flex:1">
-              <div class="nome" style="font-size:17px;cursor:pointer" onclick="fichaJogo(${idx})">${i+1}. ${x.nm} x ${x.nv}</div>
+              <div class="nome" style="font-size:17px;cursor:pointer" onclick="fichaJogo(${idx})">${i+1}. ${x.nm} x ${x.nv}${seloAoVivo(x.j.fixture_id)}</div>
               <div class="porque">${x.j.hora||''} · ${x.j.pais} — ${x.j.liga}</div>
               ${(() => {
                 const o = oddsMap[x.j.fixture_id];
