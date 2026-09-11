@@ -1690,7 +1690,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.80";
+const APP_VERSAO = "v4.81";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4820,9 +4820,13 @@ function seloAoVivo(fixtureId){
   const v = fixtureId ? _aoVivoMapa[fixtureId] : null;
   if (!v) return '';
   const encerrado = ['FT','AET','PEN'].includes(v.status);
-  const cor = encerrado ? 'var(--chalk-dim)' : 'var(--red)';
-  const min = encerrado ? 'FIM' : (v.status==='HT' ? 'INT' : (v.minuto!=null?v.minuto+"'":'AO VIVO'));
-  return `<span style="display:inline-flex;align-items:center;gap:4px;background:${cor};color:#fff;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:6px">${encerrado?'':'🔴'} ${v.gm}x${v.gv} ${min}</span>`;
+  if (encerrado){
+    return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--pitch);border:1px solid var(--linha);color:var(--chalk-dim);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px">ENCERRADO ${v.gm}x${v.gv}</span>`;
+  }
+  const min = v.status==='HT' ? 'INT' : (v.minuto!=null ? v.minuto+"'" : '');
+  return `<span style="display:inline-flex;align-items:center;gap:5px;background:rgba(76,196,112,.15);border:1px solid var(--green);color:var(--green);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;margin-left:8px">
+    <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 1.5s infinite"></span>
+    AO VIVO ${v.gm}x${v.gv}${min?' · '+min:''}</span>`;
 }
 window.seloAoVivo = seloAoVivo;
 
