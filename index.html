@@ -1694,7 +1694,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.84";
+const APP_VERSAO = "v4.85";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3543,6 +3543,9 @@ async function estatisticasComCache(time, id, jogosSaoPassados){
     if ((r.jogos?.length??0) < 4) return null;
     const st = estatisticas(r.jogos);
     st._nome = r.time || time;
+    // separa desempenho em casa e fora (para o fator mando de campo nas sugestões)
+    st._casa = estatisticas(r.jogos, 'casa');
+    st._fora = estatisticas(r.jogos, 'fora');
     // salva no cache pra acelerar próximas vezes (se falhar, não tem problema)
     if (chave){ try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){} }
     return { ...st }; // retorna cópia para não compartilhar referência entre times
@@ -3552,7 +3555,11 @@ window.estatisticasComCache = estatisticasComCache;
 
 function estatisticas(jogos, comoMandante){
   // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
-  const encerrados = jogos.filter(j => j.gols_mandante !== null && j.gols_mandante !== undefined);
+  // comoMandante: 'casa' = só jogos em casa; 'fora' = só fora; undefined = todos
+  let base = jogos.filter(j => j.gols_mandante !== null && j.gols_mandante !== undefined);
+  if (comoMandante === 'casa') base = base.filter(j => j.time_era_mandante);
+  else if (comoMandante === 'fora') base = base.filter(j => !j.time_era_mandante);
+  const encerrados = base;
   let marcou=0, sofreu=0, golsPro=0, golsContra=0, over25=0, btts=0, vit=0, over05=0, over15=0, over35=0, under35=0, under45=0, goleadaPro=0, goleadaContra=0;
   encerrados.forEach(j => {
     const pro = j.time_era_mandante ? j.gols_mandante : j.gols_visitante;
@@ -5175,7 +5182,23 @@ async function toggleJogosAnteriores(boxId, mandante, mid, visitante, vid, merca
 window.toggleJogosAnteriores = toggleJogosAnteriores;
 
 function pontuarJogo(c, todos){
-  const { o, em, ev } = c;
+  // FATOR MANDO DE CAMPO: mistura o desempenho geral com o específico
+  // (mandante em casa / visitante fora). Peso 60% no específico quando há amostra.
+  const mandoAjustado = (geral, especifico, peso) => {
+    if (!especifico || !especifico.n || especifico.n < 3) return geral; // amostra pequena: usa geral
+    const out = { ...geral };
+    ['pctMarcou','pctSofreu','pctOver','pctBtts','pctVit','pctOver05','pctOver15','pctOver35','pctUnder35','pctUnder45','pctUnder25','pctGoleadaPro','pctGoleadaContra'].forEach(k => {
+      if (geral[k]!=null && especifico[k]!=null) out[k] = Math.round(geral[k]*(1-peso) + especifico[k]*peso);
+    });
+    ['mediaPro','mediaContra'].forEach(k => {
+      if (geral[k]!=null && especifico[k]!=null) out[k] = (parseFloat(geral[k])*(1-peso) + parseFloat(especifico[k])*peso).toFixed(2);
+    });
+    return out;
+  };
+  const emReal = c.em, evReal = c.ev;
+  const em = mandoAjustado(c.em, c.em?._casa, 0.6); // mandante: pesa o desempenho em casa
+  const ev = mandoAjustado(c.ev, c.ev?._fora, 0.6); // visitante: pesa o desempenho fora
+  const o = c.o;
   const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
   const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
   const favNome = favEhMandante ? c.nm : c.nv;
