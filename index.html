@@ -1694,7 +1694,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.85";
+const APP_VERSAO = "v4.86";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -4949,6 +4949,17 @@ async function gerarSugestoes(){
           <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
           <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
           ${(() => {
+            const emC = s.em?._casa, evF = s.ev?._fora;
+            if (!emC?.n && !evF?.n) return '';
+            const parte = (nome, st, tipo) => {
+              if (!st || !st.n) return `<b>${nome}</b> ${tipo}: sem amostra`;
+              return `<b>${nome}</b> ${tipo} (${st.n}j): ${st.pctVit}% vit · marca ${st.mediaPro} · sofre ${st.mediaContra}`;
+            };
+            return `<div style="font-size:11.5px;color:var(--chalk-dim);margin-top:4px;background:var(--pitch);border-radius:6px;padding:6px 8px">
+              🏟️ ${parte(s.nm||s.j.mandante, emC, '🏠 em casa')}<br>
+              ✈️ ${parte(s.nv||s.j.visitante, evF, 'fora')}</div>`;
+          })()}
+          ${(() => {
             const o = oddsMap[s.j.fixture_id];
             if (!o?.odd_home) return '';
             const favEhCasa = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
@@ -5249,6 +5260,24 @@ function pontuarJogo(c, todos){
   }
 
   if (!notas.length) return todos ? [] : null;
+
+  // AJUSTE FINO por forma recente (momento) e confirmação das odds
+  // forma: usa pctVit do específico (mando) como proxy do momento
+  const formaMand = (c.em?._casa?.pctVit ?? c.em?.pctVit ?? 50);
+  const formaVis = (c.ev?._fora?.pctVit ?? c.ev?.pctVit ?? 50);
+  notas.forEach(nt => {
+    let ajuste = 0;
+    // over/ambas: reforça se o mercado (odd) confirma forte
+    if (/OVER|AMBAS/.test(nt.mercado) && o.odd_over25 && o.odd_over25 <= 1.70) ajuste += 0.3;
+    if (/UNDER/.test(nt.mercado) && o.odd_under25 && o.odd_under25 <= 1.70) ajuste += 0.3;
+    // lay favorito / lay zebra: reforça se há favorito muito claro e em boa forma
+    if (/LAY ZEBRA|LAY 0X1|LAY 1X0/.test(nt.mercado.toUpperCase())){
+      const favForte = Math.max(formaMand, formaVis) >= 65;
+      if (favForte) ajuste += 0.2;
+    }
+    nt.nota = Math.min(10, +(nt.nota + ajuste).toFixed(1));
+  });
+
   notas.sort((a,b2) => b2.nota - a.nota);
   return todos ? notas : notas[0];
 }
