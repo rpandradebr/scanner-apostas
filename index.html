@@ -1694,7 +1694,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.86";
+const APP_VERSAO = "v4.87";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2573,6 +2573,124 @@ async function fichaJogo(idx){
   } catch(e){ alvo.innerHTML = `<div class="aviso erro">Falha na ficha: ${e.message}</div>`; }
 }
 window.fichaJogo = fichaJogo;
+// ===================== RESUMO DE MERCADOS (#1 marca primeiro + #2 resumo + #4 amostra) =====================
+async function gerarResumoMercados(idx){
+  const j = gradeJogos[idx];
+  if (!j) return;
+  const alvo = $('jogo-resumo-mercados');
+  alvo.innerHTML = '<div class="aviso" style="margin:12px 0">⏳ Analisando os últimos jogos das duas equipes (marca primeiro, mercados, casa/fora)...</div>';
+  try{
+    // busca histórico completo (barato) + marca primeiro (caro, jogo a jogo)
+    const [rm, rv, mpM, mpV] = await Promise.all([
+      historicoCompleto(j.mandante, j.mandante_id),
+      historicoCompleto(j.visitante, j.visitante_id),
+      j.mandante_id ? chamarEdge({ acao:'marca_primeiro', time_id: j.mandante_id, n: 20 }) : Promise.resolve(null),
+      j.visitante_id ? chamarEdge({ acao:'marca_primeiro', time_id: j.visitante_id, n: 20 }) : Promise.resolve(null),
+    ]);
+    const nm = rm.time || j.mandante, nv = rv.time || j.visitante;
+
+    // calcula mercados de um conjunto de jogos na perspectiva do time
+    function analisa(jogos, nome, id, filtro){
+      const norm = s => (s||'').toLowerCase();
+      const ehM = g => (id && String(g.mandante_id)===String(id)) || norm(g.mandante)===norm(nome);
+      let base = (jogos||[]).filter(g => g.gols_mandante!=null);
+      if (filtro==='casa') base = base.filter(g => ehM(g));
+      else if (filtro==='fora') base = base.filter(g => !ehM(g));
+      base = base.slice(0,20);
+      const n = base.length;
+      if (!n) return null;
+      let marcou=0,sofreu=0,btts=0,over05=0,over15=0,over25=0,over35=0,under25=0,under35=0,cs=0,fez=0,sof=0;
+      base.forEach(g => {
+        const m = ehM(g);
+        const pro = m?g.gols_mandante:g.gols_visitante, con = m?g.gols_visitante:g.gols_mandante;
+        const tot = pro+con;
+        fez+=pro; sof+=con;
+        if(pro>0)marcou++; if(con>0)sofreu++; if(pro>0&&con>0)btts++;
+        if(tot>=1)over05++; if(tot>=2)over15++; if(tot>=3)over25++; if(tot>=4)over35++;
+        if(tot<=2)under25++; if(tot<=3)under35++;
+        if(con===0)cs++;
+      });
+      const p = x => Math.round(x/n*100);
+      return { n, mediaFez:(fez/n).toFixed(2), mediaSof:(sof/n).toFixed(2),
+        pctMarcou:p(marcou), pctSofreu:p(sofreu), pctBtts:p(btts),
+        pctOver05:p(over05), pctOver15:p(over15), pctOver25:p(over25), pctOver35:p(over35),
+        pctUnder25:p(under25), pctUnder35:p(under35), pctCleanSheet:p(cs) };
+    }
+
+    // monta a tabela de mercados de um time (geral, casa, fora)
+    function blocoTime(nome, jogos, id, ehMandante){
+      const ger = analisa(jogos, nome, id, 'geral');
+      const cas = analisa(jogos, nome, id, 'casa');
+      const forr = analisa(jogos, nome, id, 'fora');
+      if (!ger) return `<div style="flex:1;min-width:280px"><b>${nome}</b><p style="color:var(--chalk-dim);font-size:12px">Sem dados.</p></div>`;
+      const recorte = ehMandante ? cas : forr; // o recorte que importa para este jogo
+      const rotRecorte = ehMandante ? '🏠 em casa' : '✈️ fora';
+      const linha = (rot, g, r) => `<tr>
+        <td style="padding:3px 6px;font-size:12px">${rot}</td>
+        <td style="padding:3px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;color:var(--chalk-dim)">${g!=null?g+'%':'—'}</td>
+        <td style="padding:3px 6px;text-align:center;font-family:'IBM Plex Mono',monospace;color:var(--amber);font-weight:700">${r!=null?r+'%':'—'}</td></tr>`;
+      return `<div style="flex:1;min-width:280px">
+        <b style="font-size:14px">${nome}</b> <span style="font-size:11px;color:var(--chalk-dim)">${ehMandante?'🏠 mandante':'✈️ visitante'}</span>
+        <table style="width:100%;border-collapse:collapse;margin-top:6px">
+          <tr style="border-bottom:1px solid var(--linha)">
+            <th style="text-align:left;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Mercado</th>
+            <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--chalk-dim)">Geral<br><span style="font-size:9px">${ger.n}j</span></th>
+            <th style="text-align:center;padding:3px 6px;font-size:10.5px;color:var(--amber)">${rotRecorte}<br><span style="font-size:9px">${recorte?recorte.n:0}j</span></th>
+          </tr>
+          ${linha('Marcou gol', ger.pctMarcou, recorte?.pctMarcou)}
+          ${linha('Sofreu gol', ger.pctSofreu, recorte?.pctSofreu)}
+          ${linha('Ambas marcam', ger.pctBtts, recorte?.pctBtts)}
+          ${linha('Over 0.5', ger.pctOver05, recorte?.pctOver05)}
+          ${linha('Over 1.5', ger.pctOver15, recorte?.pctOver15)}
+          ${linha('Over 2.5', ger.pctOver25, recorte?.pctOver25)}
+          ${linha('Over 3.5', ger.pctOver35, recorte?.pctOver35)}
+          ${linha('Under 2.5', ger.pctUnder25, recorte?.pctUnder25)}
+          ${linha('Under 3.5', ger.pctUnder35, recorte?.pctUnder35)}
+          ${linha('Clean sheet (não sofreu)', ger.pctCleanSheet, recorte?.pctCleanSheet)}
+        </table>
+        <div style="font-size:11px;color:var(--chalk-dim);margin-top:4px">Média de gols: marca <b style="color:var(--amber)">${ger.mediaFez}</b> · sofre <b>${ger.mediaSof}</b> (geral)</div>
+      </div>`;
+    }
+
+    // bloco de marca primeiro (#1)
+    function blocoMarcaPrimeiro(nome, mp){
+      if (!mp || mp.erro || !mp.total) return `<div style="flex:1;min-width:220px"><b>${nome}</b><p style="font-size:11px;color:var(--chalk-dim)">Sem dados de marca primeiro.</p></div>`;
+      const barra = (rot, pct, cor) => `<div style="margin:4px 0">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px"><span>${rot}</span><b style="color:${cor}">${pct}%</b></div>
+        <div style="background:var(--pitch);border-radius:4px;height:6px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${cor}"></div></div></div>`;
+      return `<div style="flex:1;min-width:220px;background:var(--pitch);border-radius:8px;padding:12px">
+        <b style="font-size:13px">${nome}</b> <span style="font-size:10px;color:var(--chalk-dim)">(${mp.total} jogos)</span>
+        ${barra('⚽ Marca primeiro', mp.pctMarcouPrimeiro, 'var(--green)')}
+        ${barra('🥅 Sofre primeiro', mp.pctSofreuPrimeiro, 'var(--red)')}
+        ${barra('0x0 / sem gols', mp.pctSemGols, 'var(--chalk-dim)')}
+        <div style="font-size:10.5px;color:var(--chalk-dim);margin-top:6px">🏠 casa: marca 1º em ${mp.pctMarcouPrimeiroCasa}% · ✈️ fora: ${mp.pctMarcouPrimeiroFora}%</div>
+      </div>`;
+    }
+
+    const amostraM = (rm.jogos||[]).length, amostraV = (rv.jogos||[]).length;
+    alvo.innerHTML = `<div style="background:var(--card);border-radius:12px;padding:16px;margin:12px 0">
+      <h3 style="margin:0 0 4px">📊 Resumo de mercados — ${nm} x ${nv}</h3>
+      <p style="font-size:11.5px;color:var(--chalk-dim);margin:0 0 12px">📋 Amostra analisada: <b>${amostraM}</b> jogos de ${nm}, <b>${amostraV}</b> jogos de ${nv}. A coluna destacada é o recorte que importa (mandante em casa / visitante fora).</p>
+
+      <h4 style="margin:8px 0;font-size:13px">🎯 Quem marca primeiro</h4>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        ${blocoMarcaPrimeiro(nm, mpM)}
+        ${blocoMarcaPrimeiro(nv, mpV)}
+      </div>
+
+      <h4 style="margin:8px 0;font-size:13px">📈 Mercados (geral vs recorte de mando)</h4>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${blocoTime(nm, rm.jogos, j.mandante_id, true)}
+        ${blocoTime(nv, rv.jogos, j.visitante_id, false)}
+      </div>
+    </div>`;
+    alvo.scrollIntoView({ behavior:'smooth', block:'start' });
+  }catch(e){
+    alvo.innerHTML = `<div class="aviso erro" style="margin:12px 0">Erro ao gerar resumo: ${e.message}</div>`;
+  }
+}
+window.gerarResumoMercados = gerarResumoMercados;
+
 
 // ==========================================================
 // TELA DO JOGO (v4.67) — ficha do confronto em abas
@@ -2683,8 +2801,10 @@ function renderTelaJogo(){
       ${btnP('matchodds','Análise MatchOdds')}
       ${btnP('modelo','Placares e Modelo')}
       <button class="jg-btn-principal" onclick="abrirAnaliseCompleta(${d.idx})">🔬 Análise Completa</button>
+      <button class="jg-btn-principal" style="border-color:var(--amber);color:var(--amber)" onclick="gerarResumoMercados(${d.idx})">📊 Resumo de mercados</button>
       <button class="jg-btn-principal" onclick="$('sc-mandante').value=jogoDados.j.mandante;$('sc-mandante').dataset.tid=jogoDados.j.mandante_id??'';$('sc-visitante').value=jogoDados.j.visitante;$('sc-visitante').dataset.tid=jogoDados.j.visitante_id??'';irParaAba('scanner')">🎯 Scanner</button>
     </div>
+    <div id="jogo-resumo-mercados"></div>
     ${jogoUI.principal==='matchodds' ? `<div class="jg-subabas">
       ${btnS('ia','Análise I.A.')}${btnS('estat','Estatísticas')}${btnS('desempenho','Desempenho')}${btnS('gols','Gols')}${btnS('cartoes','Cartões')}${btnS('race','Race 10')}${btnS('h2h','Confronto Direto')}${btnS('jogadores','Jogadores')}${btnS('liga','Jogos da Liga')}${btnS('tabela','Tabela')}
     </div>` : ''}
