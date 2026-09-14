@@ -1694,7 +1694,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.87";
+const APP_VERSAO = "v4.88";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2599,7 +2599,7 @@ async function gerarResumoMercados(idx){
       base = base.slice(0,20);
       const n = base.length;
       if (!n) return null;
-      let marcou=0,sofreu=0,btts=0,over05=0,over15=0,over25=0,over35=0,under25=0,under35=0,cs=0,fez=0,sof=0;
+      let marcou=0,sofreu=0,btts=0,over05=0,over15=0,over25=0,over35=0,under25=0,under35=0,cs=0,fez=0,sof=0,goleadaPro=0,goleadaContra=0;
       base.forEach(g => {
         const m = ehM(g);
         const pro = m?g.gols_mandante:g.gols_visitante, con = m?g.gols_visitante:g.gols_mandante;
@@ -2609,12 +2609,15 @@ async function gerarResumoMercados(idx){
         if(tot>=1)over05++; if(tot>=2)over15++; if(tot>=3)over25++; if(tot>=4)over35++;
         if(tot<=2)under25++; if(tot<=3)under35++;
         if(con===0)cs++;
+        if(pro>=4 && pro>con)goleadaPro++;      // aplicou goleada (marcou 4+ e venceu)
+        if(con>=4 && con>pro)goleadaContra++;   // sofreu goleada (levou 4+ e perdeu)
       });
       const p = x => Math.round(x/n*100);
       return { n, mediaFez:(fez/n).toFixed(2), mediaSof:(sof/n).toFixed(2),
         pctMarcou:p(marcou), pctSofreu:p(sofreu), pctBtts:p(btts),
         pctOver05:p(over05), pctOver15:p(over15), pctOver25:p(over25), pctOver35:p(over35),
-        pctUnder25:p(under25), pctUnder35:p(under35), pctCleanSheet:p(cs) };
+        pctUnder25:p(under25), pctUnder35:p(under35), pctCleanSheet:p(cs),
+        pctGoleadaPro:p(goleadaPro), pctGoleadaContra:p(goleadaContra) };
     }
 
     // monta a tabela de mercados de um time (geral, casa, fora)
@@ -2647,6 +2650,8 @@ async function gerarResumoMercados(idx){
           ${linha('Under 2.5', ger.pctUnder25, recorte?.pctUnder25)}
           ${linha('Under 3.5', ger.pctUnder35, recorte?.pctUnder35)}
           ${linha('Clean sheet (não sofreu)', ger.pctCleanSheet, recorte?.pctCleanSheet)}
+          ${linha('🥅 Aplicou goleada (4+ e venceu)', ger.pctGoleadaPro, recorte?.pctGoleadaPro)}
+          ${linha('💥 Sofreu goleada (levou 4+)', ger.pctGoleadaContra, recorte?.pctGoleadaContra)}
         </table>
         <div style="font-size:11px;color:var(--chalk-dim);margin-top:4px">Média de gols: marca <b style="color:var(--amber)">${ger.mediaFez}</b> · sofre <b>${ger.mediaSof}</b> (geral)</div>
       </div>`;
