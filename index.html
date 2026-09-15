@@ -745,6 +745,9 @@
     <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
       <input type="checkbox" id="su-meuscamp" style="width:auto"> Só meus campeonatos escolhidos (⚙️ configure na aba Grade do dia)
     </label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);cursor:pointer;margin-bottom:6px">
+      <input type="checkbox" id="su-so-temporada" style="width:auto"> Analisar só jogos da temporada atual (evita jogos antigos que distorcem)
+    </label>
     <div id="su-aviso"></div>
     <div id="su-lista"></div>
     <div id="su-rankings" style="margin-top:18px"></div>
@@ -1694,7 +1697,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.88";
+const APP_VERSAO = "v4.89";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3649,7 +3652,8 @@ function paramsHistorico(inputEl){
 // Busca estatísticas de gols de um time COM cache em banco (acelera TOP e Sugestões)
 // jogosOcorridos=true dura mais (o passado não muda); a ocorrer dura 6h
 async function estatisticasComCache(time, id, jogosSaoPassados){
-  const chave = id ? ('id'+String(id)) : ('nm'+(time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+  const soAtualCache = ($('su-so-temporada') && $('su-so-temporada').checked) ? '_ta' : '';
+  const chave = (id ? ('id'+String(id)) : ('nm'+(time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''))) + soAtualCache;
   // 1) tenta o cache do banco (acelerador — se falhar, segue pra API normalmente)
   if (chave){
     try{
@@ -3666,17 +3670,42 @@ async function estatisticasComCache(time, id, jogosSaoPassados){
   try{
     const r = await historicoCompleto(time, id);
     if ((r.jogos?.length??0) < 4) return null;
-    const st = estatisticas(r.jogos);
+    // filtro de temporada (checkbox nas Sugestões)
+    const soAtual = $('su-so-temporada') ? $('su-so-temporada').checked : false;
+    const ft = aplicaFiltroTemporada(r.jogos, soAtual);
+    const jogosUsar = ft.jogos;
+    const st = estatisticas(jogosUsar);
     st._nome = r.time || time;
+    st._temporada = ft.info; // {nAtual, nAntigos}
     // separa desempenho em casa e fora (para o fator mando de campo nas sugestões)
-    st._casa = estatisticas(r.jogos, 'casa');
-    st._fora = estatisticas(r.jogos, 'fora');
+    st._casa = estatisticas(jogosUsar, 'casa');
+    st._fora = estatisticas(jogosUsar, 'fora');
     // salva no cache pra acelerar próximas vezes (se falhar, não tem problema)
     if (chave){ try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){} }
     return { ...st }; // retorna cópia para não compartilhar referência entre times
   }catch(_){ return null; }
 }
 window.estatisticasComCache = estatisticasComCache;
+
+// separa jogos da temporada atual vs anterior. Considera "atual" os jogos dos últimos 8 meses.
+// (cobre tanto ligas de ano civil — Brasil — quanto europeias que cruzam o ano)
+function classificaTemporada(jogos){
+  const limite = new Date(Date.now() - 245*86400000); // ~8 meses atrás
+  const atual = [], antigos = [];
+  (jogos||[]).forEach(g => {
+    const d = new Date((g.data||'') + 'T12:00:00');
+    if (!isNaN(d) && d >= limite) atual.push(g); else antigos.push(g);
+  });
+  return { atual, antigos };
+}
+// aplica o filtro conforme o checkbox; retorna {jogos, infoTemporada}
+function aplicaFiltroTemporada(jogos, soAtual){
+  const { atual, antigos } = classificaTemporada(jogos);
+  const info = { nAtual: atual.length, nAntigos: antigos.length };
+  if (soAtual && atual.length >= 3) return { jogos: atual, info };
+  return { jogos: jogos, info }; // se desligado ou amostra pequena, usa tudo
+}
+window.classificaTemporada = classificaTemporada;
 
 function estatisticas(jogos, comoMandante){
   // jogos: lista da Edge; calcula números do ponto de vista do time pesquisado
@@ -5082,7 +5111,8 @@ async function gerarSugestoes(){
             };
             return `<div style="font-size:11.5px;color:var(--chalk-dim);margin-top:4px;background:var(--pitch);border-radius:6px;padding:6px 8px">
               🏟️ ${parte(s.nm||s.j.mandante, emC, '🏠 em casa')}<br>
-              ✈️ ${parte(s.nv||s.j.visitante, evF, 'fora')}</div>`;
+              ✈️ ${parte(s.nv||s.j.visitante, evF, 'fora')}
+              ${(s.em?._temporada || s.ev?._temporada) ? `<br><span style="font-size:10.5px">📅 ${s.nm}: ${s.em?._temporada?.nAtual||0} jogos temporada atual${s.em?._temporada?.nAntigos?' + '+s.em._temporada.nAntigos+' antigos':''} · ${s.nv}: ${s.ev?._temporada?.nAtual||0} atual${s.ev?._temporada?.nAntigos?' + '+s.ev._temporada.nAntigos+' antigos':''}</span>` : ''}</div>`;
           })()}
           ${(() => {
             const o = oddsMap[s.j.fixture_id];
