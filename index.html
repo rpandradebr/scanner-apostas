@@ -1697,7 +1697,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.89";
+const APP_VERSAO = "v4.90";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3651,38 +3651,48 @@ function paramsHistorico(inputEl){
 
 // Busca estatísticas de gols de um time COM cache em banco (acelera TOP e Sugestões)
 // jogosOcorridos=true dura mais (o passado não muda); a ocorrer dura 6h
+// cache em memória dos jogos crus por time (evita re-buscar ao ligar/desligar filtros)
+window.__jogosCrusCache = window.__jogosCrusCache || {};
 async function estatisticasComCache(time, id, jogosSaoPassados){
-  const soAtualCache = ($('su-so-temporada') && $('su-so-temporada').checked) ? '_ta' : '';
-  const chave = (id ? ('id'+String(id)) : ('nm'+(time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''))) + soAtualCache;
-  // 1) tenta o cache do banco (acelerador — se falhar, segue pra API normalmente)
-  if (chave){
+  const chaveTime = id ? ('id'+String(id)) : ('nm'+(time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''));
+  const soAtual = $('su-so-temporada') ? $('su-so-temporada').checked : false;
+
+  // calcula a estatística a partir de uma lista de jogos crus, aplicando o filtro de temporada
+  const montar = (jogos, nomeReal) => {
+    if ((jogos?.length??0) < 4) return null;
+    const ft = aplicaFiltroTemporada(jogos, soAtual);
+    const st = estatisticas(ft.jogos);
+    st._nome = nomeReal || time;
+    st._temporada = ft.info;
+    st._casa = estatisticas(ft.jogos, 'casa');
+    st._fora = estatisticas(ft.jogos, 'fora');
+    return { ...st };
+  };
+
+  // 1) jogos crus já em memória nesta sessão? refiltra na hora (instantâneo)
+  const mem = window.__jogosCrusCache[chaveTime];
+  if (mem && (Date.now() - mem.t) < 10*60000){
+    return montar(mem.jogos, mem.nome);
+  }
+  // 2) cache no banco dos jogos crus (acelerador entre sessões)
+  if (chaveTime){
     try{
       const validade = jogosSaoPassados ? 24*3600000 : 2*3600000;
-      const { data } = await db.from('cache_stats_gols').select('*').eq('time_chave', chave).limit(1);
-      if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < validade && data[0].stats_json){
-        // clona e força o nome correto (nunca reusa _nome de outro time)
-        const st = { ...data[0].stats_json, _nome: time };
-        return st;
+      const { data } = await db.from('cache_stats_gols').select('*').eq('time_chave', chaveTime).limit(1);
+      if (data?.length && (Date.now()-new Date(data[0].atualizado_em).getTime()) < validade && data[0].stats_json?._jogosCrus){
+        const jc = data[0].stats_json._jogosCrus;
+        window.__jogosCrusCache[chaveTime] = { t: Date.now(), jogos: jc, nome: data[0].stats_json._nomeReal || time };
+        return montar(jc, data[0].stats_json._nomeReal);
       }
     }catch(_){}
   }
-  // 2) busca completa: Edge + jogos_dia + API direta quando o histórico está velho
+  // 3) busca completa (Edge + banco + API) e guarda os JOGOS CRUS
   try{
     const r = await historicoCompleto(time, id);
     if ((r.jogos?.length??0) < 4) return null;
-    // filtro de temporada (checkbox nas Sugestões)
-    const soAtual = $('su-so-temporada') ? $('su-so-temporada').checked : false;
-    const ft = aplicaFiltroTemporada(r.jogos, soAtual);
-    const jogosUsar = ft.jogos;
-    const st = estatisticas(jogosUsar);
-    st._nome = r.time || time;
-    st._temporada = ft.info; // {nAtual, nAntigos}
-    // separa desempenho em casa e fora (para o fator mando de campo nas sugestões)
-    st._casa = estatisticas(jogosUsar, 'casa');
-    st._fora = estatisticas(jogosUsar, 'fora');
-    // salva no cache pra acelerar próximas vezes (se falhar, não tem problema)
-    if (chave){ try{ await db.from('cache_stats_gols').upsert({ time_chave: chave, stats_json: st, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){} }
-    return { ...st }; // retorna cópia para não compartilhar referência entre times
+    window.__jogosCrusCache[chaveTime] = { t: Date.now(), jogos: r.jogos, nome: r.time || time };
+    if (chaveTime){ try{ await db.from('cache_stats_gols').upsert({ time_chave: chaveTime, stats_json: { _jogosCrus: r.jogos, _nomeReal: r.time || time }, atualizado_em: new Date().toISOString() }, { onConflict: 'time_chave' }); }catch(_){} }
+    return montar(r.jogos, r.time);
   }catch(_){ return null; }
 }
 window.estatisticasComCache = estatisticasComCache;
@@ -5368,14 +5378,15 @@ function pontuarJogo(c, todos){
   const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
   const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
   const favNome = favEhMandante ? c.nm : c.nv;
+  const zebraNome = favEhMandante ? c.nv : c.nm;
   const favStats = favEhMandante ? em : ev;
   const overComb = (em.pctOver + ev.pctOver) / 2;
   const bttsComb = (em.pctBtts + ev.pctBtts) / 2;
   const mediaJogo = (parseFloat(em.mediaPro)+parseFloat(em.mediaContra)+parseFloat(ev.mediaPro)+parseFloat(ev.mediaContra))/2;
   const notas = [];
   if (menor <= 1.55 && favStats.pctVit >= 50)
-    notas.push({ mercado:'LAY ZEBRA', nota: Math.min(10, 6 + (1.55-menor)*6 + (favStats.pctVit-50)/20),
-      motivo:`${favNome} @ ${fmtOdd(menor)} com ${favStats.pctVit}% de vitórias nos últimos 10 — o lay no azarão ganha com vitória do favorito ou empate.` });
+    notas.push({ mercado:`LAY ZEBRA (${zebraNome})`, nota: Math.min(10, 6 + (1.55-menor)*6 + (favStats.pctVit-50)/20),
+      motivo:`Lay na zebra ${zebraNome} — o favorito ${favNome} @ ${fmtOdd(menor)} tem ${favStats.pctVit}% de vitórias nos últimos 10. O lay ganha com vitória do favorito ou empate.` });
   if (overComb <= 42 && o.odd_under25 && o.odd_under25 <= 1.85)
     notas.push({ mercado:'UNDER 2.5', nota: Math.min(10, 6 + (42-overComb)/8 + (1.85-o.odd_under25)*2),
       motivo:`Só ${Math.round(overComb)}% de over 2.5 no histórico das duas, e o mercado confirma (under @ ${fmtOdd(o.odd_under25)}).` });
