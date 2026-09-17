@@ -357,7 +357,8 @@
         <button data-aba="apostaspeguei" title="Só as apostas que você marcou como 'peguei'. Tela enxuta com botão de integrar direto à Gestão de banca.">✅ Apostas que peguei</button>
         <button data-aba="botsug" title="Só as sugestões enviadas pelo vigia do Telegram (o bot).">📲 Sugestões do bot</button>
         <button data-aba="notas" title="Assertividade por faixa de nota, com base nos jogos já resolvidos.">🎯 Análise nota 10</button>
-        <button data-aba="sonota10" title="Reúne todos os jogos nota máxima das Sugestões, Top do dia e bot.">🔟 Só Nota 10</button>
+        <button data-aba="sonota10" title="Reúne as maiores notas das Sugestões, Top do dia e bot (você filtra por nota mínima).">⭐ Notas</button>
+        <button data-aba="aposta10" title="Só as apostas de nota máxima (10.0 / 100%), reunidas automaticamente das Sugestões, Top do dia e bot.">🔟 Aposta Nota 10</button>
       </div>
     </div>
 
@@ -489,7 +490,7 @@
 
   <!-- ================= SÓ NOTA 10 ================= -->
   <section id="aba-sonota10">
-    <h2>🔟 Só Nota 10</h2>
+    <h2>⭐ Notas — maiores notas do dia</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
       Seu funil de análise. Reúne <b>as 5 maiores notas de cada mercado</b> (Over 0.5, Under 3.5, Lay 1x0, Lay 0x1, Lay Zebra, etc.) das Sugestões e do Top do dia. Assim cada mercado sempre tem seus melhores jogos, mesmo sem nota 10. Filtre por fonte, mercado, nota e horário.
     </p>
@@ -562,6 +563,36 @@
       Nenhum jogo de nota alta ainda. Gere as <b>Sugestões do dia</b> ou o <b>Top do dia</b> — os jogos que baterem nota 9.5 ou mais aparecem aqui. Ou clique em "Puxar nota 10 do bot" para trazer os alertas de nota alta do bot.
     </div>
   </section>
+
+  <!-- ================= APOSTA NOTA 10 / 100% ================= -->
+  <section id="aba-aposta10">
+    <h2>🔟 Aposta Nota 10 / 100%</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Só as apostas de <b>nota máxima (10.0)</b> — a nata. São reunidas automaticamente quando você gera as Sugestões, o Top do dia e ao carregar o robô. Aqui ficam concentradas para você decidir rápido.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <button class="acao" id="btn-a10-atualizar">🔄 Atualizar lista</button>
+      <button class="mini" id="btn-a10-conferir" style="border-color:var(--green);color:var(--green)">✅ Conferir resultados (green/red)</button>
+      <button class="mini" id="btn-a10-limpar" style="border-color:var(--red);color:var(--red)">🗑️ Limpar</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
+        Mercado:
+        <select id="a10-mercado" style="width:auto;padding:4px 8px"><option value="">Todos</option></select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Situação:
+        <select id="a10-situacao" style="width:auto;padding:4px 8px">
+          <option value="">Todas</option>
+          <option value="ocorrer">Só as que vão ocorrer</option>
+          <option value="ocorridos">Só as que já ocorreram</option>
+        </select>
+      </label>
+      <span id="a10-contador" style="font-size:12.5px;color:var(--chalk-dim)"></span>
+    </div>
+    <div id="a10-aviso"></div>
+    <div id="a10-vazia"></div>
+    <div id="a10-lista"></div>
+  </section>
+
 
   <!-- ================= PUNTER — SUGESTÕES (mercados de estatística) ================= -->
   <section id="aba-punter-sugestoes">
@@ -1697,7 +1728,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.90";
+const APP_VERSAO = "v4.91";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -1915,6 +1946,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'principais' && typeof initPrincipais === 'function'){ initPrincipais(); }
   // renderiza o funil Só Nota 10 ao abrir a aba
   if (b.dataset.aba === 'sonota10' && typeof renderNota10 === 'function'){ renderNota10(); }
+  // renderiza Aposta Nota 10 ao abrir
+  if (b.dataset.aba === 'aposta10' && typeof renderAposta10 === 'function'){ renderAposta10(); }
   // inicializa as abas do Punter ao abrir
   if ((b.dataset.aba === 'punter-sugestoes' || b.dataset.aba === 'punter-topdia') && typeof initPunter === 'function'){ initPunter(); }
   // inicializa o panorama da rodada ao abrir
@@ -5784,7 +5817,7 @@ async function listarHistSug(pref, origemFixa, soPegasFixo, filtroMotivo){
       <td><label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;color:var(--chalk-dim)">
         <input type="checkbox" style="width:auto" ${a.aposta_feita?'checked':''} onchange="marcarApostaFeita(${a.id}, this.checked)"> ${a.aposta_feita?'sim':'não'}
       </label></td>
-      <td><button class="mini" onclick="toggleJogosAnteriores('','${(a.mandante||'').replace(/'/g,String.fromCharCode(92,39))}','','${(a.visitante||'').replace(/'/g,String.fromCharCode(92,39))}','','${a.mercado_sugerido||''}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button> <button class="mini" onclick="excluirSugestao(${a.id}, origemFixa ? 'meus' : 'hist')" title="Excluir esta sugestão" style="border-color:var(--red);color:var(--red)">🗑️</button></td>
+      <td><button class="mini" onclick="toggleJogosAnteriores('','${(a.mandante||'').replace(/'/g,String.fromCharCode(92,39))}','','${(a.visitante||'').replace(/'/g,String.fromCharCode(92,39))}','','${a.mercado_sugerido||''}')" title="Ver jogos anteriores" style="border-color:var(--amber);color:var(--amber)">📋</button> <button class="mini" onclick="integrarBanca(${a.id})" title="Enviar para a Gestão de banca">💰 Integrar</button> <button class="mini" onclick="excluirSugestao(${a.id}, '${origemFixa ? 'meus' : 'hist'}')" title="Excluir esta sugestão" style="border-color:var(--red);color:var(--red)">🗑️</button></td>
     </tr>`).join('');
 }
 async function marcarApostaFeita(id, feita){
@@ -9000,6 +9033,66 @@ async function conferirResultadosN10(){
   finally{ btn.disabled=false; btn.textContent='✅ Conferir resultados (green/red)'; }
 }
 window.conferirResultadosN10 = conferirResultadosN10;
+// ===================== APOSTA NOTA 10 / 100% =====================
+// reúne só os itens de nota máxima (>= 10) do mesmo funil da aba Notas
+function renderAposta10(){
+  const alvo = $('a10-lista');
+  const vazia = $('a10-vazia');
+  if (!alvo) return;
+  let lista = getNota10().filter(x => Number(x.nota) >= 10);
+  // popula mercados
+  const selM = $('a10-mercado');
+  if (selM){
+    const mercados = [...new Set(lista.map(x => x.mercado).filter(Boolean))].sort();
+    const atual = selM.value;
+    selM.innerHTML = '<option value="">Todos</option>' + mercados.map(m => `<option value="${m.replace(/"/g,'&quot;')}">${m}</option>`).join('');
+    selM.value = atual;
+  }
+  // filtros
+  const fMerc = $('a10-mercado') ? $('a10-mercado').value : '';
+  const fSit = $('a10-situacao') ? $('a10-situacao').value : '';
+  if (fMerc) lista = lista.filter(x => x.mercado === fMerc);
+  if (fSit) lista = lista.filter(x => situacaoN10(x) === fSit);
+  // ordena por data/hora
+  lista.sort((a,b) => `${a.data||''} ${a.hora||''}`.localeCompare(`${b.data||''} ${b.hora||''}`));
+
+  if ($('a10-contador')) $('a10-contador').textContent = `${lista.length} aposta(s) nota 10`;
+  if (!lista.length){
+    alvo.innerHTML = '';
+    if (vazia) vazia.innerHTML = '<p class="msg-vazia">Nenhuma aposta nota 10 ainda. Gere as Sugestões, o Top do dia ou carregue o robô para preencher automaticamente.</p>';
+    return;
+  }
+  if (vazia) vazia.innerHTML = '';
+
+  const fonteMap = { sugestoes:'💡 Sugestões', topdia:'🏆 Top do dia', bot:'🤖 Robô', vigia:'🤖 Robô' };
+  alvo.innerHTML = lista.map(x => {
+    let seloGR = '';
+    if (x.resultado === 'GREEN') seloGR = '<span style="background:var(--green);color:var(--pitch);padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;margin-left:6px">GREEN</span>';
+    else if (x.resultado === 'RED') seloGR = '<span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;margin-left:6px">RED</span>';
+    const situ = situacaoN10(x);
+    const situTxt = situ==='ocorridos' ? '<span style="font-size:11px;color:var(--chalk-dim)">já ocorreu</span>' : `<span style="font-size:11px;color:var(--amber)">${x.hora||''}</span>`;
+    return `<div class="mercado" style="border-left-color:var(--amber)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="nome" style="font-size:16px">🔟 ${x.mandante} x ${x.visitante}${seloGR}</div>
+        <div style="font-family:'Saira Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--amber)">10.0</div>
+      </div>
+      <div class="porque">${x.data ? x.data.split('-').reverse().join('/') : ''} ${situTxt} · ${x.pais?x.pais+' — ':''}${x.liga||''} · <b style="color:var(--amber)">${x.mercado}</b> · ${fonteMap[x.origem]||x.origem||''}</div>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="salvarSugestao('${(x.mandante||'').replace(/'/g,String.fromCharCode(92,39))}','${(x.visitante||'').replace(/'/g,String.fromCharCode(92,39))}','${((x.pais?x.pais+' — ':'')+(x.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${x.mercado}',10,'Aposta Nota 10 (${x.origem||''})', this, '${x.hora||''}', '${x.data||''}', ${x.fixture_id||'null'}, true)">✅ Peguei</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.renderAposta10 = renderAposta10;
+if ($('btn-a10-atualizar')) $('btn-a10-atualizar').addEventListener('click', renderAposta10);
+if ($('btn-a10-conferir')) $('btn-a10-conferir').addEventListener('click', async () => { await conferirResultadosN10(); renderAposta10(); });
+if ($('btn-a10-limpar')) $('btn-a10-limpar').addEventListener('click', () => {
+  if (!confirm('Limpar todas as apostas nota 10 da lista?')) return;
+  const restante = getNota10().filter(x => Number(x.nota) < 10);
+  setNota10(restante); renderAposta10();
+});
+['a10-mercado','a10-situacao'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', renderAposta10); });
+
 
 // salva a aposta no histórico (reaproveita salvarSugestao)
 function salvarApostaN10(i){
