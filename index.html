@@ -366,6 +366,15 @@
   .rs-xg-meio{text-align:center;border-left:1px solid rgba(237,234,224,.12);border-right:1px solid rgba(237,234,224,.12);padding:0 14px}
   .rs-xg-meio b{display:block;font-family:'Saira Condensed',sans-serif;font-size:31px;font-weight:800;color:var(--amber);line-height:1}
   .rs-xg-meio span{font-size:10.5px;color:var(--chalk-dim)} .rs-xg-meio em{display:block;font-size:11px;color:var(--green);font-style:normal;margin-top:4px}
+  .rs-duelo{background:var(--card-2);border-radius:10px;padding:11px 13px;margin:10px 0 14px}
+  .rs-duelo-l{display:flex;align-items:center;gap:10px;padding:5px 0}
+  .rs-duelo-l > b{font-family:'IBM Plex Mono',monospace;font-size:13px;min-width:52px;text-align:center;color:var(--chalk-dim)}
+  .rs-duelo-l > b.on{color:var(--amber);font-weight:700}
+  .rs-duelo-mid{flex:1;min-width:0;text-align:center}
+  .rs-duelo-mid span{font-size:11px;color:var(--chalk-dim)}
+  .rs-duelo-bar{height:5px;background:var(--red);border-radius:3px;margin-top:4px;overflow:hidden}
+  .rs-duelo-bar i{display:block;height:100%;background:var(--green);border-radius:3px}
+  .rs-duelo-pe{font-size:10px;color:var(--chalk-dim);margin-top:7px;text-align:center}
   @media(max-width:560px){.rs-mk-times{grid-template-columns:1fr;gap:6px}.rs-mom-rot{min-width:70px;font-size:10px}}
 </style>
 </head>
@@ -1254,6 +1263,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v5.00</b></td><td><b>xG entra na pontuação de todos os mercados</b> das Sugestões do dia e do TOP do dia: volume de chances (xG somado) puxa over/lay de placar seco para cima e under para baixo, desequilíbrio de xG reforça lay zebra e back favorito, e a <b>regressão</b> (time marcando acima ou abaixo do xG) corrige a nota — o motivo aparece escrito no card. O <b>Resumo</b> da ficha ganhou o duelo de <b>chutes a gol, posse de bola e xG</b> entre os dois times.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.99</b></td><td>A aba Mercados ganhou <b>defesas do goleiro, passes totais e passes certos</b>, além de um card próprio de <b>xG (gols esperados)</b> que compara o xG com os gols reais e avisa quem está finalizando acima ou abaixo do esperado. A aba Jogadores passou a mostrar <b>linha sugerida por jogador</b> (desarmes, chutes, chutes a gol, passes). Exige republicar a Edge Function e rodar o SQL das novas colunas.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.98</b></td><td>Nova aba <b>📈 Mercados</b> na ficha do jogo: linhas sugeridas de <b>escanteios, faltas, desarmes, chutes, chutes a gol, impedimentos e cartões</b> (média de cada time, projeção do confronto e tendência over/under), mais o bloco <b>Momentos dos gols</b> cruzando quando cada time marca e quando sofre, com destaque para a janela de 15 minutos mais quente do confronto. Lê as médias já salvas no banco (grátis) e tem botão para buscar na API quando o time ainda não tem dados.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.97</b></td><td>O campo de texto do <b>Configurar ligas principais</b> agora <b>busca de verdade</b>: filtra a lista enquanto você digita, ignorando acento e maiúscula, e procura tanto no nome da liga quanto no país. A lista também deixou de mostrar só as ligas do dia — agora traz todas as competições salvas no banco (60 dias para trás e 15 para frente), então Libertadores, Sul-Americana e copas aparecem mesmo sem jogo hoje. "Marcar/Desmarcar todas" passou a respeitar o filtro.</td></tr>
@@ -1885,7 +1895,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.99";
+const APP_VERSAO = "v5.00";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3110,7 +3120,7 @@ async function carregarMercadosJogo(){
     d.merc = { m: acha(j.mandante_id), v: acha(j.visitante_id) };
   } catch(e){ d.merc = { m:null, v:null, erro:e.message }; }
   d.mercCarregando = false;
-  if (jogoDados === d && jogoUI.sub==='mercados') renderJogoConteudo();
+  if (jogoDados === d && (jogoUI.sub==='mercados' || jogoUI.sub==='resumo')) renderJogoConteudo();
 }
 // popula as estatísticas de um time na API (1 requisição de fixtures + n de estatísticas)
 async function popularStatsTime(qual, botao){
@@ -3450,6 +3460,30 @@ function renderJogoResumo(){
         <div class="rs-kpi"><div class="rs-rot">Matchup</div>${gauge(54, matchLetra==='A'?90:matchLetra==='B'?70:50, matchLetra==='C'?'var(--amber)':'var(--green)', matchLetra)}<div class="rs-sub">${matchLetra==='A'?'muito favorável':matchLetra==='B'?'favorável':'neutro'}</div></div>
       </div>
       ${faixas.map(f=>`<div class="rs-faixa">${f}</div>`).join('')}
+      ${(()=>{
+        if (!d.merc){ if (!d.mercCarregando) carregarMercadosJogo(); return ''; }
+        const A2 = d.merc.m, B2 = d.merc.v;
+        const val = (r,k) => (r && r[k]!=null) ? +r[k] : null;
+        const linhas2 = [
+          { ico:'⚽', rot:'Chutes a gol', a:val(A2,'media_chutes_gol'), b:val(B2,'media_chutes_gol'), casas:2, suf:'' },
+          { ico:'🔵', rot:'Posse de bola', a:val(A2,'media_posse'),     b:val(B2,'media_posse'),     casas:0, suf:'%' },
+          { ico:'📐', rot:'xG por jogo',   a:val(A2,'media_xg'),        b:val(B2,'media_xg'),        casas:2, suf:'' },
+        ].filter(x => x.a!=null || x.b!=null);
+        if (!linhas2.length) return '';
+        return `<div class="rs-duelo">
+          ${linhas2.map(x => {
+            const tot = (x.a||0)+(x.b||0) || 1;
+            const pa = x.a!=null ? Math.round((x.a/tot)*100) : 50;
+            return `<div class="rs-duelo-l">
+              <b class="${(x.a??-1)>=(x.b??-1)?'on':''}">${x.a!=null?x.a.toFixed(x.casas)+x.suf:'—'}</b>
+              <div class="rs-duelo-mid"><span>${x.ico} ${x.rot}</span>
+                <div class="rs-duelo-bar"><i style="width:${pa}%"></i></div></div>
+              <b class="${(x.b??-1)>(x.a??-1)?'on':''}">${x.b!=null?x.b.toFixed(x.casas)+x.suf:'—'}</b>
+            </div>`;
+          }).join('')}
+          <div class="rs-duelo-pe">${nm} · ${nv} — médias por jogo salvas no banco. A barra mostra a fatia de cada um no confronto.</div>
+        </div>`;
+      })()}
       ${chartTime(nm, j.mandante_id, d.rmJogos)}
       ${chartTime(nv, j.visitante_id, d.rvJogos)}
       <div class="rs-recortes">
@@ -4308,6 +4342,69 @@ function paramsHistorico(inputEl){
 // jogosOcorridos=true dura mais (o passado não muda); a ocorrer dura 6h
 // cache em memória dos jogos crus por time (evita re-buscar ao ligar/desligar filtros)
 window.__jogosCrusCache = window.__jogosCrusCache || {};
+// ==========================================================
+// xG NO FUNIL (v5.00) — as médias de stats_times entram em
+// TODAS as pontuações (Sugestões do dia, TOP do dia, Resumo).
+// Leitura do banco, em lote e com cache: não gasta API.
+// ==========================================================
+const _stCache = new Map();
+async function preloadStatsTimes(ids){
+  const faltam = [...new Set((ids||[]).filter(x => x && !_stCache.has(String(x))))];
+  if (!faltam.length) return;
+  try{
+    for (let i=0; i<faltam.length; i+=80){
+      const lote = faltam.slice(i, i+80);
+      const { data } = await db.from('stats_times').select('*').in('time_id', lote);
+      (data||[]).forEach(r => _stCache.set(String(r.time_id), r));
+      lote.forEach(id => { if (!_stCache.has(String(id))) _stCache.set(String(id), null); });
+    }
+  }catch(_){ (faltam||[]).forEach(id => _stCache.set(String(id), null)); }
+}
+function statsTimeDe(id){ return id ? (_stCache.get(String(id)) || null) : null; }
+window.preloadStatsTimes = preloadStatsTimes;
+
+// ajuste de nota pelo xG — devolve o delta e o motivo em texto
+function ajusteXg(mercado, xgM, xgV, em, ev, favEhMandante){
+  const M = (mercado||'').toUpperCase();
+  const lim = (x, teto) => Math.max(-teto, Math.min(teto, x));
+  let delta = 0; const porques = [];
+  const temAmbos = xgM!=null && xgV!=null;
+
+  // 1) VOLUME DE CHANCES — xG somado diz se o jogo cria muito ou pouco
+  if (temAmbos){
+    const tot = xgM + xgV, d = tot - 2.5;
+    let a = 0;
+    if (/OVER|AMBAS|BTTS/.test(M)) a = lim(d*0.7, 0.8);
+    else if (/UNDER/.test(M)) a = lim(-d*0.7, 0.8);
+    else if (/LAY 1X0|LAY 0X1/.test(M)) a = lim(d*0.45, 0.5);   // mais chance = menos placar seco
+    else if (/LAY GOLEADA/.test(M)) a = lim(-d*0.4, 0.5);        // mais chance = mais risco de goleada
+    if (a){ delta += a; if (Math.abs(a) >= 0.15) porques.push(`xG somado ${tot.toFixed(2)}`); }
+
+    // 2) DESEQUILÍBRIO — para mercados de resultado, quem cria mais
+    if (/LAY ZEBRA|BACK|LAY 1X0 MUITO|LAY 0X1 MUITO/.test(M)){
+      const xgFav = favEhMandante ? xgM : xgV, xgZeb = favEhMandante ? xgV : xgM;
+      const b = lim((xgFav - xgZeb) * 0.5, 0.6);
+      if (b){ delta += b; if (Math.abs(b) >= 0.15) porques.push(`xG do favorito ${xgFav.toFixed(2)} x ${xgZeb.toFixed(2)}`); }
+    }
+  }
+
+  // 3) REGRESSÃO — quem marca muito acima do xG tende a cair, quem marca abaixo tende a voltar
+  const difDe = (e, xg) => (xg!=null && e && isFinite(parseFloat(e.mediaPro))) ? (parseFloat(e.mediaPro) - xg) : null;
+  const dM = difDe(em, xgM), dV = difDe(ev, xgV);
+  const somaDif = (dM||0) + (dV||0);
+  if ((dM!=null || dV!=null) && Math.abs(somaDif) >= 0.4){
+    let c = 0;
+    // marcando ACIMA do xG (sorte na finalização): esfria over, esquenta under
+    if (/OVER|AMBAS|BTTS/.test(M)) c = lim(-somaDif*0.35, 0.4);
+    else if (/UNDER/.test(M)) c = lim(somaDif*0.35, 0.4);
+    if (c){ delta += c;
+      porques.push(somaDif > 0 ? `finalização acima do xG (${somaDif>0?'+':''}${somaDif.toFixed(2)}), tende a regredir`
+                               : `finalização abaixo do xG (${somaDif.toFixed(2)}), tende a voltar a marcar`); }
+  }
+  return { delta: +delta.toFixed(2), porque: porques.join(' · ') };
+}
+window.ajusteXg = ajusteXg;
+
 async function estatisticasComCache(time, id, jogosSaoPassados){
   const chaveTime = id ? ('id'+String(id)) : ('nm'+(time||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''));
   const soAtual = $('su-so-temporada') ? $('su-so-temporada').checked : false;
@@ -4321,6 +4418,14 @@ async function estatisticasComCache(time, id, jogosSaoPassados){
     st._temporada = ft.info;
     st._casa = estatisticas(ft.jogos, 'casa');
     st._fora = estatisticas(ft.jogos, 'fora');
+    // médias de stats_times (xG, chutes a gol, posse) — leitura do cache, sem custo
+    const ex = statsTimeDe(id);
+    if (ex){
+      st._xg = ex.media_xg!=null ? +ex.media_xg : null;
+      st._chutesGol = ex.media_chutes_gol!=null ? +ex.media_chutes_gol : null;
+      st._chutes = ex.media_chutes!=null ? +ex.media_chutes : null;
+      st._posse = ex.media_posse!=null ? +ex.media_posse : null;
+    }
     return { ...st };
   };
 
@@ -5723,6 +5828,8 @@ async function gerarSugestoes(){
     const sugestoes = [];
     const situSu = $('su-situacao') ? $('su-situacao').value : 'ocorrer';
     const suPassados = situSu === 'ocorridos';
+    // carrega de uma vez o xG/chutes/posse de todos os times da rodada (banco, grátis)
+    await preloadStatsTimes(candidatos.flatMap(c => [c.j.mandante_id, c.j.visitante_id]));
     for (let i=0; i<candidatos.length; i+=3){
       aviso($('su-aviso'), `⏳ Analisando ${Math.min(i+3,candidatos.length)}/${candidatos.length}…`);
       const leva = candidatos.slice(i, i+3);
@@ -6099,7 +6206,13 @@ function pontuarJogo(c, todos){
       const favForte = Math.max(formaMand, formaVis) >= 65;
       if (favForte) ajuste += 0.2;
     }
-    nt.nota = Math.min(10, +(nt.nota + ajuste).toFixed(1));
+    // xG: qualidade das chances entra em TODOS os mercados
+    const ax = ajusteXg(nt.mercado, emReal?._xg, evReal?._xg, emReal, evReal, favEhMandante);
+    if (ax.delta){
+      ajuste += ax.delta;
+      if (ax.porque) nt.porque = (nt.porque ? nt.porque + ' · ' : '') + `📐 xG: ${ax.porque}`;
+    }
+    nt.nota = Math.max(0, Math.min(10, +(nt.nota + ajuste).toFixed(1)));
   });
 
   notas.sort((a,b2) => b2.nota - a.nota);
@@ -7319,6 +7432,7 @@ $('btn-topdia').addEventListener('click', async () => {
       for (let i=0; i<comOdds.length; i+=8){
         $('td-status').textContent = `⏳ Analisando ${Math.min(i+8,comOdds.length)}/${comOdds.length} jogos…`;
         const leva = comOdds.slice(i, i+8);
+        await preloadStatsTimes(leva.flatMap(j => [j.mandante_id, j.visitante_id]));
         const res = await Promise.all(leva.map(async j => {
           try{
             const [em, ev] = await Promise.all([
@@ -7338,7 +7452,16 @@ $('btn-topdia').addEventListener('click', async () => {
     // pontua para o mercado escolhido (instantâneo, local)
     let pontuados = [];
     jogosComStats.forEach(x => {
-      const nota = pontuarTD(mercado, oddsMap[x.j.fixture_id], x.em, x.ev);
+      let nota = pontuarTD(mercado, oddsMap[x.j.fixture_id], x.em, x.ev);
+      if (nota != null){
+        const oTD = oddsMap[x.j.fixture_id] || {};
+        const favMandTD = (oTD.odd_home ?? 99) <= (oTD.odd_away ?? 99);
+        const rotuloTD = ({ back_fav:'BACK FAVORITO', lay_zebra:'LAY ZEBRA', under25:'UNDER 2.5', under35:'UNDER 3.5',
+          over25:'OVER 2.5', over05:'OVER 0.5', over15:'OVER 1.5', btts:'AMBAS MARCAM',
+          lay_1x0:'LAY 1X0', lay_0x1:'LAY 0X1', lay_goleada:'LAY GOLEADA' })[mercado] || String(mercado).toUpperCase();
+        const axTD = ajusteXg(rotuloTD, x.em?._xg, x.ev?._xg, x.em, x.ev, favMandTD);
+        if (axTD.delta) nota = Math.max(0, Math.min(100, Math.round(nota + axTD.delta*10)));
+      }
       if (nota != null) pontuados.push({ ...x, nota });
     });
     // filtro de faixa de favoritismo (pela odd do favorito)
