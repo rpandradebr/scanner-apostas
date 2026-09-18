@@ -412,6 +412,32 @@
   .fv-margem{font-size:10px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace}
   .fv-pe{font-size:12px;color:var(--chalk-dim);margin-top:6px;line-height:1.6}
   .fv-pe b{color:var(--chalk)}
+  /* ---- Múltiplas do dia (v5.02) ---- */
+  .mt-card{background:var(--pitch);border:1px solid rgba(237,234,224,.12);border-radius:13px;padding:14px 16px;margin-bottom:16px}
+  .mt-cab{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:11px;
+    font-family:'Saira Condensed',sans-serif;font-size:19px;font-weight:800;text-transform:uppercase}
+  .mt-qtd{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:400;color:var(--chalk-dim);text-transform:none}
+  .mt-perna{display:flex;align-items:center;gap:11px;background:var(--card-2);border-radius:9px;
+    padding:9px 12px;margin-bottom:6px;cursor:pointer;transition:border-color .15s;border:1px solid transparent}
+  .mt-perna:hover{border-color:var(--amber)}
+  .mt-num{font-family:'Saira Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--chalk-dim);min-width:18px;text-align:center}
+  .mt-info{flex:1;min-width:0}
+  .mt-info b{display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mt-info span{display:block;font-size:11.5px;color:var(--amber)}
+  .mt-info small{display:block;font-size:10.5px;color:var(--chalk-dim)}
+  .mt-nums{text-align:right;min-width:62px}
+  .mt-nums b{display:block;font-family:'IBM Plex Mono',monospace;font-size:14.5px}
+  .mt-nums span{font-size:11px;font-family:'IBM Plex Mono',monospace}
+  .mt-total{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:11px;padding-top:11px;
+    border-top:1px solid rgba(237,234,224,.1);text-align:center}
+  .mt-total span{display:block;font-size:10px;color:var(--chalk-dim);text-transform:uppercase;letter-spacing:.06em}
+  .mt-total b{font-family:'Saira Condensed',sans-serif;font-size:22px;font-weight:800}
+  .mt-leitura{background:var(--card-2);border-left:3px solid var(--amber);border-radius:8px;
+    padding:9px 13px;margin-top:11px;font-size:12.5px;color:var(--chalk-dim);line-height:1.5}
+  .mt-leitura b{color:var(--chalk)}
+  .mt-pe{font-size:12px;color:var(--chalk-dim);line-height:1.6;margin-top:4px}
+  .mt-pe b{color:var(--chalk)}
+  @media(max-width:560px){.mt-total{grid-template-columns:repeat(2,1fr);row-gap:12px}}
 </style>
 </head>
 <body>
@@ -525,6 +551,7 @@
       <div class="menu-grupo-itens">
         <button data-aba="punter-sugestoes" title="Sugestões de mercados de estatística (escanteios, cartões, desarmes, faltas, chutes).">💡 Sugestões do dia</button>
         <button data-aba="punter-topdia" title="Ranking dos times por mercado de estatística com base nos dados salvos.">🏆 TOP do dia</button>
+        <button data-aba="multiplas" title="Monta as melhores múltiplas do dia de Vencedor, Over 2.5 e Under 2.5, com a probabilidade real e o valor de cada combinação.">🎰 Múltiplas do dia</button>
         <button data-aba="punter-rodada" title="Panorama de uma rodada inteira: todos os jogos do campeonato com as linhas de desarmes, faltas, cartões, escanteios e chutes dos dois times.">📋 Panorama da rodada</button>
       </div>
     </div>
@@ -832,6 +859,31 @@
   </section>
 
   <!-- ================= PUNTER — PANORAMA DA RODADA ================= -->
+  <section id="aba-multiplas">
+    <h2>🎰 Múltiplas do dia</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:14px">
+      Monta três múltiplas com os jogos do dia: <b>vencedor</b> (favoritos mais sólidos), <b>Over 2.5</b> e <b>Under 2.5</b>.
+      Cada seleção passa pelo mesmo modelo das fichas, e o bloco final mostra a <b>chance real</b> da combinação contra o que o mercado paga.
+    </p>
+    <div class="linha c3" style="align-items:end">
+      <div><label for="mt-data">Data</label><input type="date" id="mt-data"></div>
+      <div><label for="mt-pernas">Seleções por múltipla</label>
+        <select id="mt-pernas">
+          <option value="2">2 jogos (mais seguro)</option>
+          <option value="3" selected>3 jogos</option>
+          <option value="4">4 jogos</option>
+          <option value="5">5 jogos (arriscado)</option>
+        </select></div>
+      <div><button class="acao" id="btn-multiplas" onclick="gerarMultiplas()">🎰 Montar múltiplas</button></div>
+    </div>
+    <div class="linha" style="grid-template-columns:auto 1fr;align-items:center;gap:8px;margin-bottom:10px">
+      <input type="checkbox" id="mt-principais" style="width:auto" checked>
+      <label for="mt-principais" style="margin:0;cursor:pointer">⭐ Só minhas ligas principais</label>
+    </div>
+    <div id="mt-aviso"></div>
+    <div id="mt-resultado"></div>
+  </section>
+
   <section id="aba-punter-rodada">
     <h2>📋 Panorama da rodada</h2>
     <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
@@ -1299,6 +1351,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v5.02</b></td><td>Nova aba <b>🎰 Múltiplas do dia</b> no grupo Punter: monta três combinações (Vencedor, Over 2.5 e Under 2.5) com as seleções mais sólidas do dia, de 2 a 5 jogos, cada perna clicável para a ficha. Mostra odd combinada, <b>chance real</b> pelo modelo, <b>odd justa</b> e o <b>valor</b> da múltipla — deixando claro quando o mercado paga menos do que o risco e as simples rendem mais.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.01</b></td><td>A tela <b>Favoritos do dia</b> saiu da tabela larga e virou <b>cards</b>: escudos dos times, odd em destaque, <b>probabilidade implícita</b> (a chance que o mercado enxerga), barra 1·X·2 já sem a margem da casa, over/under com o lado favorito marcado e a <b>margem da casa</b> em cada jogo. Funciona bem no celular e cada card abre a ficha.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.00</b></td><td><b>xG entra na pontuação de todos os mercados</b> das Sugestões do dia e do TOP do dia: volume de chances (xG somado) puxa over/lay de placar seco para cima e under para baixo, desequilíbrio de xG reforça lay zebra e back favorito, e a <b>regressão</b> (time marcando acima ou abaixo do xG) corrige a nota — o motivo aparece escrito no card. O <b>Resumo</b> da ficha ganhou o duelo de <b>chutes a gol, posse de bola e xG</b> entre os dois times.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.99</b></td><td>A aba Mercados ganhou <b>defesas do goleiro, passes totais e passes certos</b>, além de um card próprio de <b>xG (gols esperados)</b> que compara o xG com os gols reais e avisa quem está finalizando acima ou abaixo do esperado. A aba Jogadores passou a mostrar <b>linha sugerida por jogador</b> (desarmes, chutes, chutes a gol, passes). Exige republicar a Edge Function e rodar o SQL das novas colunas.</td></tr>
@@ -1932,7 +1985,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.01";
+const APP_VERSAO = "v5.02";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2164,6 +2217,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'hist0x0' && typeof listarHist0x0 === 'function'){ listarHist0x0(); }
   // renderiza os Lembretes de pagamento ao abrir
   if (b.dataset.aba === 'lembretes' && typeof renderLembretes === 'function'){ renderLembretes(); }
+  // inicializa a data das Múltiplas ao abrir
+  if (b.dataset.aba === 'multiplas' && $('mt-data') && !$('mt-data').value){ $('mt-data').value = hojeISO(); }
   atualizarBtnVoltar();
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
@@ -5874,6 +5929,152 @@ function celulaAoVivo(fixtureId){
   return `<span style="display:inline-flex;align-items:center;gap:4px;color:var(--amber);font-size:11.5px;font-weight:700;font-family:'IBM Plex Mono',monospace"><span style="width:6px;height:6px;border-radius:50%;background:var(--amber);display:inline-block;animation:pulse 1.5s infinite"></span>${v.gm}x${v.gv}${min?' '+min:''}</span>`;
 }
 window.celulaAoVivo = celulaAoVivo;
+
+// ==========================================================
+// MÚLTIPLAS DO DIA (v5.02)
+// Monta as melhores combinações de Vencedor, Over 2.5 e Under 2.5
+// usando o mesmo modelo Poisson e o histórico das outras abas.
+// Mostra a matemática honesta: prob. real x odd paga = valor.
+// ==========================================================
+let _mtCands = null;
+
+async function gerarMultiplas(){
+  const b = $('btn-multiplas'); b.disabled = true;
+  const data = $('mt-data').value || hojeISO();
+  const pernas = Number($('mt-pernas').value) || 3;
+  const soPrin = $('mt-principais') && $('mt-principais').checked;
+  aviso($('mt-aviso'), ''); $('mt-resultado').innerHTML = '';
+  try{
+    aviso($('mt-aviso'), '⏳ Carregando os jogos e as odds do dia…');
+    const rg = await chamarEdge({ acao:'grade', data });
+    await carregarOddsMapa(data);
+    let jogos = semBase(rg.jogos ?? []).filter(j => ['NS','TBD'].includes(j.status));
+    if (soPrin) jogos = jogos.filter(j => ehLigaPrincipal(j));
+    const comOdds = jogos.filter(j => oddsMap[j.fixture_id]?.odd_home);
+    if (!comOdds.length){
+      aviso($('mt-aviso'), 'Nenhum jogo com odds para esta data. Rode "Buscar odds do dia" na aba Favoritos primeiro.', 'erro');
+      b.disabled = false; return;
+    }
+
+    // estatísticas dos dois times de cada jogo (banco/cache — as mesmas dos outros funis)
+    const cands = [];
+    for (let i=0; i<comOdds.length; i+=8){
+      aviso($('mt-aviso'), `⏳ Analisando ${Math.min(i+8, comOdds.length)}/${comOdds.length} jogos…`);
+      const leva = comOdds.slice(i, i+8);
+      await preloadStatsTimes(leva.flatMap(j => [j.mandante_id, j.visitante_id]));
+      const res = await Promise.all(leva.map(async j => {
+        try{
+          const [em, ev] = await Promise.all([
+            estatisticasComCache(j.mandante, j.mandante_id, false),
+            estatisticasComCache(j.visitante, j.visitante_id, false),
+          ]);
+          if (!em || !ev) return null;
+          return { j, o: oddsMap[j.fixture_id], em, ev };
+        } catch(_){ return null; }
+      }));
+      res.filter(Boolean).forEach(x => cands.push(x));
+    }
+    if (!cands.length){
+      aviso($('mt-aviso'), 'Nenhum jogo com histórico suficiente. Carregue as grades dos últimos dias para encher o banco.', 'erro');
+      b.disabled = false; return;
+    }
+
+    // probabilidades pelo modelo, por jogo
+    cands.forEach(c => {
+      const { lC, lF } = jgLambdas(c.em, c.ev);
+      let p1=0, pX=0, p2=0, pOver=0;
+      for (let h=0; h<=8; h++) for (let a=0; a<=8; a++){
+        const p = pois(h,lC)*pois(a,lF);
+        if (h>a) p1+=p; else if (h===a) pX+=p; else p2+=p;
+        if (h+a>=3) pOver+=p;
+      }
+      const favEhMand = (c.o.odd_home ?? 99) <= (c.o.odd_away ?? 99);
+      c.mod = { p1, pX, p2, pOver, pUnder: 1-pOver, lC, lF, favEhMand };
+    });
+
+    _mtCands = cands;
+    const blocos = [
+      montarMultipla('vencedor', cands, pernas),
+      montarMultipla('over', cands, pernas),
+      montarMultipla('under', cands, pernas),
+    ].filter(Boolean);
+    aviso($('mt-aviso'), '');
+    $('mt-resultado').innerHTML = blocos.length
+      ? blocos.join('') + `<p class="mt-pe">As probabilidades saem do mesmo modelo Poisson das fichas, cruzando o histórico dos dois times.
+         <b>Odd justa</b> é quanto a múltipla deveria pagar pela probabilidade real; <b>valor</b> é a diferença para o que o mercado paga.
+         Valor negativo significa que a múltipla paga menos do que o risco que você corre.</p>`
+      : '<p class="msg-vazia">Nenhuma seleção passou no corte de confiança hoje. Dia ruim para múltipla — melhor ficar em simples.</p>';
+  } catch(e){ aviso($('mt-aviso'), 'Falha: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; }
+}
+window.gerarMultiplas = gerarMultiplas;
+
+function montarMultipla(tipo, cands, pernas){
+  const cfg = {
+    vencedor: { ico:'🏆', nome:'Vencedor', corte:0.62,
+      sel: c => { const m=c.mod; const pFav = m.favEhMand ? m.p1 : m.p2;
+        const odd = m.favEhMand ? c.o.odd_home : c.o.odd_away;
+        const time = m.favEhMand ? c.j.mandante : c.j.visitante;
+        return { prob:pFav, odd:Number(odd), rot:`${time} vence`, extra:`${m.favEhMand?c.j.mandante:c.j.visitante} em ${m.favEhMand?'casa':'fora'}` }; } },
+    over:     { ico:'⚽', nome:'Over 2.5 gols', corte:0.58,
+      sel: c => ({ prob:c.mod.pOver, odd:Number(c.o.odd_over25), rot:'Over 2.5 gols',
+        extra:`expectativa ${(c.mod.lC+c.mod.lF).toFixed(1)} gols` }) },
+    under:    { ico:'🔒', nome:'Under 2.5 gols', corte:0.58,
+      sel: c => ({ prob:c.mod.pUnder, odd:Number(c.o.odd_under25), rot:'Under 2.5 gols',
+        extra:`expectativa ${(c.mod.lC+c.mod.lF).toFixed(1)} gols` }) },
+  }[tipo];
+
+  const pool = cands.map(c => ({ c, ...cfg.sel(c) }))
+    .filter(x => x.prob >= cfg.corte && x.odd > 1.01 && isFinite(x.odd))
+    .sort((a,b) => b.prob - a.prob)
+    .slice(0, pernas);
+
+  if (pool.length < 2){
+    return `<div class="mt-card">
+      <div class="mt-cab"><span>${cfg.ico} Múltipla de ${cfg.nome}</span></div>
+      <p class="msg-vazia" style="padding:6px 0">Só ${pool.length} seleção passou do corte de ${Math.round(cfg.corte*100)}% hoje — sem jogos suficientes para uma múltipla.</p>
+    </div>`;
+  }
+
+  const probComb = pool.reduce((p,x) => p*x.prob, 1);
+  const oddComb  = pool.reduce((p,x) => p*x.odd, 1);
+  const oddJusta = 1/probComb;
+  const valor = (probComb*oddComb - 1) * 100;
+  const corV = valor >= 0 ? 'var(--green)' : valor >= -12 ? 'var(--amber)' : 'var(--red)';
+  const retorno = (10 * oddComb);
+
+  const pernasHtml = pool.map((x,i) => {
+    const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
+    return `<div class="mt-perna" onclick="fichaJogo(${idx})" title="Abrir a ficha deste jogo">
+      <span class="mt-num">${i+1}</span>
+      <div class="mt-info">
+        <b>${x.c.j.mandante} x ${x.c.j.visitante}</b>
+        <span>${x.rot} · ${x.extra}</span>
+        <small>${x.c.j.hora||''} · ${x.c.j.pais?x.c.j.pais+' — ':''}${x.c.j.liga||''}</small>
+      </div>
+      <div class="mt-nums">
+        <b>${fmtOdd(x.odd)}</b>
+        <span style="color:${x.prob>=0.7?'var(--green)':'var(--amber)'}">${Math.round(x.prob*100)}%</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="mt-card">
+    <div class="mt-cab"><span>${cfg.ico} Múltipla de ${cfg.nome}</span><span class="mt-qtd">${pool.length} seleções</span></div>
+    ${pernasHtml}
+    <div class="mt-total">
+      <div><span>Odd combinada</span><b>${oddComb.toFixed(2)}</b></div>
+      <div><span>Chance real</span><b style="color:${probComb>=0.5?'var(--green)':probComb>=0.3?'var(--amber)':'var(--red)'}">${(probComb*100).toFixed(1)}%</b></div>
+      <div><span>Odd justa</span><b>${oddJusta.toFixed(2)}</b></div>
+      <div><span>Valor</span><b style="color:${corV}">${valor>=0?'+':''}${valor.toFixed(1)}%</b></div>
+    </div>
+    <div class="mt-leitura" style="border-left-color:${corV}">
+      ${valor >= 0
+        ? `✅ A múltipla paga <b>${oddComb.toFixed(2)}</b> e a chance real é de <b>${(probComb*100).toFixed(1)}%</b> — o mercado está pagando acima do justo (${oddJusta.toFixed(2)}). R$ 10 retornam R$ ${retorno.toFixed(2)} se todas entrarem.`
+        : `⚠️ A múltipla paga <b>${oddComb.toFixed(2)}</b>, mas pela chance real de <b>${(probComb*100).toFixed(1)}%</b> deveria pagar <b>${oddJusta.toFixed(2)}</b>. Você perde ${Math.abs(valor).toFixed(1)}% de valor a cada aposta dessas. As mesmas seleções em <b>apostas simples</b> mantêm o retorno e reduzem muito o risco de zerar tudo por causa de uma perna.`}
+    </div>
+  </div>`;
+}
 
 async function gerarSugestoes(){
   const b = $('btn-sugestoes'); b.disabled = true;
