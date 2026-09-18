@@ -256,6 +256,58 @@
   .jg-h2h-lado b{font-family:'Saira Condensed',sans-serif;font-size:28px;color:var(--amber);display:block;line-height:1}
   .jg-h2h-lado span{font-size:11.5px;color:var(--chalk-dim);text-transform:uppercase}
   @media(max-width:760px){.jg-race-grid{grid-template-columns:1fr}.jg-nome{font-size:19px}.jg-cards{grid-template-columns:1fr}}
+  /* ---- Resumo (v4.94) — cards estilo props ---- */
+  .rs-card{background:var(--pitch);border:1px solid rgba(237,234,224,.1);border-radius:14px;padding:16px;margin-bottom:14px}
+  .rs-destaque{border-color:rgba(76,196,112,.4)}
+  .rs-h2{font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--chalk-dim);margin-bottom:12px}
+  .rs-mercado{display:flex;align-items:center;gap:10px;background:rgba(76,196,112,.12);border:1px solid rgba(76,196,112,.35);border-radius:11px;padding:10px 14px;margin-bottom:14px;font-size:15px}
+  .rs-mercado b{font-size:15.5px} .rs-odd{margin-left:auto;color:var(--amber);font-weight:800;font-family:'IBM Plex Mono',monospace}
+  .rs-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+  .rs-kpi{text-align:center}
+  .rs-rot{font-size:9.5px;letter-spacing:.09em;color:var(--chalk-dim);text-transform:uppercase;margin-bottom:6px}
+  .rs-val{font-size:21px;font-weight:800;font-family:'Saira Condensed',sans-serif}
+  .rs-sub{font-size:10px;color:var(--chalk-dim);margin-top:3px;line-height:1.3}
+  .rs-gauge{position:relative;margin:0 auto}
+  .rs-gauge svg{transform:rotate(-90deg);display:block}
+  .rs-gnum{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;font-family:'Saira Condensed',sans-serif}
+  .rs-faixa{background:var(--card-2);border-left:3px solid var(--amber);border-radius:8px;padding:8px 12px;font-size:12.5px;color:var(--chalk-dim);margin-bottom:8px}
+  .rs-faixa b{color:var(--chalk)}
+  .rs-chart-tit{font-size:11.5px;font-weight:700;color:var(--chalk-dim);margin:12px 0 4px;display:flex;align-items:center;gap:6px}
+  .rs-chart-tit span{margin-left:auto;font-weight:400;font-size:10.5px}
+  .rs-chart{position:relative}
+  .rs-linha{position:absolute;left:0;right:0;border-top:2px dashed rgba(237,234,224,.35);z-index:1;pointer-events:none}
+  .rs-barras{display:flex;align-items:flex-end;gap:4px;height:130px}
+  .rs-b{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;min-width:0}
+  .rs-b i{display:block;border-radius:4px 4px 0 0;min-height:6px}
+  .rs-bn{font-size:10.5px;font-weight:700;text-align:center;margin-top:3px;font-family:'IBM Plex Mono',monospace}
+  .rs-bd{font-size:8px;color:var(--chalk-dim);text-align:center;line-height:1.25;margin-top:1px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .rs-recortes{display:flex;margin-top:12px;border-top:1px solid rgba(237,234,224,.1)}
+  .rs-rec{flex:1;text-align:center;padding:9px 2px 0}
+  .rs-rec.on{border-bottom:2px solid var(--green)}
+  .rs-r1{font-size:9.5px;color:var(--chalk-dim);letter-spacing:.05em}
+  .rs-r2{font-size:15px;font-weight:800;margin-top:2px;font-family:'Saira Condensed',sans-serif}
+  .rs-hero{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+  .rs-hero .rs-gnum{font-size:21px}
+  .rs-htxt b{font-size:15px;display:block} .rs-htxt span{font-size:12px;color:var(--chalk-dim)}
+  .rs-pilares{display:flex;flex-direction:column;gap:8px}
+  .rs-pilar{background:var(--card-2);border-radius:10px;padding:9px 13px}
+  .rs-pcab{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700}
+  .rs-ptag{margin-left:auto;font-size:10px;font-weight:800;letter-spacing:.05em}
+  .rs-pdesc{font-size:10.5px;color:var(--chalk-dim);margin:2px 0 7px}
+  .rs-pdesc b{color:var(--chalk)}
+  .rs-pbar{height:6px;background:rgba(237,234,224,.09);border-radius:4px;overflow:hidden}
+  .rs-pbar i{display:block;height:100%;border-radius:4px}
+  .rs-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .rs-gm{background:var(--card-2);border-radius:10px;padding:9px 12px}
+  .rs-gm-link{cursor:pointer;border:1px dashed rgba(237,234,224,.2)}
+  .rs-gt{display:flex;align-items:center;justify-content:space-between;font-size:12px;font-weight:700}
+  .rs-gt b{font-family:'Saira Condensed',sans-serif;font-size:16px}
+  .rs-gt b.v{color:var(--green)} .rs-gt b.n{color:var(--amber)} .rs-gt b.r{color:var(--red)}
+  .rs-gl{font-size:10px;color:var(--chalk-dim)}
+  .rs-gb{height:4px;background:rgba(237,234,224,.09);border-radius:3px;margin-top:6px;overflow:hidden}
+  .rs-gb i{display:block;height:100%;border-radius:3px}
+  .rs-nota-pe{font-size:10.5px;color:var(--chalk-dim);margin-top:10px}
+  @media(max-width:560px){.rs-kpis{grid-template-columns:repeat(2,1fr);row-gap:14px}}
 </style>
 </head>
 <body>
@@ -1120,6 +1172,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v4.94</b></td><td>Nova aba <b>📋 Resumo</b> na ficha do jogo (agora a primeira): mercado sugerido com Projeção, % Bateu, Score e Matchup em medidores, faixas de contexto, gráfico dos últimos 10 jogos de cada time contra a linha 2.5, régua Tend/L5/L10/Casa/Fora/H2H, nota do sinal em 5 pilares (incluindo valor na odd) e o "jogo inteiro numa tela só" com os mercados de exchange. Tudo calculado do Poisson e do histórico já carregados — nenhuma requisição extra.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.77</b></td><td>As <b>Sugestões do dia, TOP do dia e demais funis</b> passam a usar a mesma fonte completa de histórico das fichas (Edge + banco + busca direta na API) — antes ainda liam só a Edge e podiam sugerir com dados velhos. Cache de estatísticas encurtado (24h/2h) para acompanhar.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.76</b></td><td><b>Busca direta na API-Football</b> (solução definitiva para históricos desatualizados): salvando sua chave da API no botão 🔑 (aba Histórico ou no aviso da ficha), o site busca os últimos 15 jogos de cada time direto na API — sem depender da Edge nem de grades carregadas. Cache de 30 min por time, e o resultado ainda é gravado no banco para as outras telas. Se a ficha detectar histórico parado há 4+ dias, ela completa sozinha pela API.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.75</b></td><td><b>Colheita sem depender de clique</b>: a varredura de dias faltantes roda em toda abertura do site enquanto houver buraco (não mais 1x por dia), o guard diário só é gravado quando a colheita completa de verdade, e a ficha do jogo colhe os dias pendentes sozinha ao detectar — o aviso vira indicador de progresso e a ficha recarrega ao terminar.</td></tr>
@@ -1745,7 +1798,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.93";
+const APP_VERSAO = "v4.94";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2376,7 +2429,7 @@ async function fichaJogo(idx){
   const alvo = $('jogo-tela');
   alvo.innerHTML = `<p class="msg-vazia">⏳ Montando a ficha de ${j.mandante} x ${j.visitante}…</p>`;
   window.scrollTo({top:0, behavior:'smooth'});
-  jogoUI.principal = 'matchodds'; jogoUI.sub = 'ia'; jogoUI.filtro = 'geral'; jogoUI.raceM = 'geral'; jogoUI.raceV = 'geral'; jogoUI.tempo='1'; jogoUI.ou='over'; jogoUI.ladoGols='m'; jogoUI.ladoJog='m';
+  jogoUI.principal = 'matchodds'; jogoUI.sub = 'resumo'; jogoUI.filtro = 'geral'; jogoUI.raceM = 'geral'; jogoUI.raceV = 'geral'; jogoUI.tempo='1'; jogoUI.ou='over'; jogoUI.ladoGols='m'; jogoUI.ladoJog='m';
   try{
     const [rm, rv] = await Promise.all([
       historicoCompleto(j.mandante, j.mandante_id),
@@ -2864,7 +2917,7 @@ function renderTelaJogo(){
     </div>
     <div id="jogo-resumo-mercados"></div>
     ${jogoUI.principal==='matchodds' ? `<div class="jg-subabas">
-      ${btnS('ia','Análise I.A.')}${btnS('estat','Estatísticas')}${btnS('desempenho','Desempenho')}${btnS('gols','Gols')}${btnS('cartoes','Cartões')}${btnS('race','Race 10')}${btnS('h2h','Confronto Direto')}${btnS('jogadores','Jogadores')}${btnS('liga','Jogos da Liga')}${btnS('tabela','Tabela')}
+      ${btnS('resumo','Resumo')}${btnS('ia','Análise I.A.')}${btnS('estat','Estatísticas')}${btnS('desempenho','Desempenho')}${btnS('gols','Gols')}${btnS('cartoes','Cartões')}${btnS('race','Race 10')}${btnS('h2h','Confronto Direto')}${btnS('jogadores','Jogadores')}${btnS('liga','Jogos da Liga')}${btnS('tabela','Tabela')}
     </div>` : ''}
     <div id="jogo-pendencias">${d.pendentes?.length ? montarAvisoPendencias() : ''}</div>
     <div id="jogo-conteudo"></div>`;
@@ -2923,7 +2976,8 @@ function renderJogoConteudo(){
   if (!d.rmJogos.length && !d.rvJogos.length && !['liga','tabela','jogadores','h2h','cartoes'].includes(jogoUI.sub)){
     alvo.innerHTML = avisoHist; return;
   }
-  if (jogoUI.sub==='ia') alvo.innerHTML = avisoHist + renderJogoIA();
+  if (jogoUI.sub==='resumo') alvo.innerHTML = avisoHist + renderJogoResumo();
+  else if (jogoUI.sub==='ia') alvo.innerHTML = avisoHist + renderJogoIA();
   else if (jogoUI.sub==='estat') alvo.innerHTML = avisoHist + renderJogoEstat();
   else if (jogoUI.sub==='desempenho') alvo.innerHTML = avisoHist + renderJogoDesempenho();
   else if (jogoUI.sub==='gols') alvo.innerHTML = avisoHist + renderJogoGols();
@@ -2936,6 +2990,197 @@ function renderJogoConteudo(){
 }
 
 // ---------- ANÁLISE I.A. (regras automáticas + veredito exchange + Gemini) ----------
+// ---------- RESUMO (v4.94) — análise em cards no estilo props ----------
+function renderJogoResumo(){
+  const d = jogoDados, j = d.j, o = d.o, nm = j.mandante, nv = j.visitante;
+  const em = calcRecorte(d.rmJogos, nm, j.mandante_id), ev = calcRecorte(d.rvJogos, nv, j.visitante_id);
+  if (!em.n && !ev.n) return '<p class="msg-vazia">Sem histórico dos dois times para montar o resumo.</p>';
+  const ec = calcRecorte(jgFiltra(d.rmJogos, nm, j.mandante_id, 'casa'), nm, j.mandante_id);
+  const ef = calcRecorte(jgFiltra(d.rvJogos, nv, j.visitante_id, 'fora'), nv, j.visitante_id);
+  const { lC, lF } = jgLambdas(em, ev);
+  const P = (h,a) => pois(h,lC)*pois(a,lF);
+  let pOver=0, p1=0, pX=0, p2=0, gol=0;
+  for (let h=0;h<=8;h++) for (let a=0;a<=8;a++){ const p=P(h,a); if (h+a>=3) pOver+=p; if (h>a) p1+=p; else if (h===a) pX+=p; else p2+=p; if ((h>=4&&h>a)||(a>=4&&a>h)) gol+=p; }
+  const p10 = P(1,0), p01 = P(0,1);
+  const oh = Number(o?.odd_home)||0, oa = Number(o?.odd_away)||0;
+  const zebraEhVis = oh && oa ? oa > oh : p1 > p2;
+  const pZebra = zebraEhVis ? p2 : p1, nZebra = zebraEhVis ? nv : nm;
+
+  // ---- escolhe o mercado sugerido ----
+  const cand = [];
+  const oddU = Number(o?.odd_under25)||0, oddO = Number(o?.odd_over25)||0;
+  if ((1-pOver) >= 0.58) cand.push({ id:'under', nome:'Under 2.5 gols', prob:1-pOver, odd:oddU, linha:2.5, tipoGols:'under' });
+  if (pOver >= 0.58) cand.push({ id:'over', nome:'Over 2.5 gols', prob:pOver, odd:oddO, linha:2.5, tipoGols:'over' });
+  cand.push({ id:'lay10', nome:'Lay 1x0', prob:1-p10, teste:(gm,gv)=>!(gm===1&&gv===0) });
+  cand.push({ id:'lay01', nome:'Lay 0x1', prob:1-p01, teste:(gm,gv)=>!(gm===0&&gv===1) });
+  cand.push({ id:'laygol', nome:'Lay goleada', prob:1-gol, teste:(gm,gv)=>!((gm>=4&&gm>gv)||(gv>=4&&gv>gm)) });
+  if (pZebra <= 0.22) cand.push({ id:'layzebra', nome:`Lay zebra (${nZebra})`, prob:1-pZebra });
+  // prioridade: over/under com sinal claro; senão o lay mais provável (fora goleada, que é quase sempre alto)
+  let M = cand.find(c => c.tipoGols) || cand.filter(c=>c.id!=='laygol').sort((a,b)=>b.prob-a.prob)[0] || cand[0];
+
+  // ---- % que bateu nos últimos jogos (dois times) ----
+  const bateuPct = (e, jogosLista, nomeT, idT) => {
+    if (M.tipoGols==='under') return e.n ? 100-e.pctOver[2.5] : null;
+    if (M.tipoGols==='over') return e.n ? e.pctOver[2.5] : null;
+    if (!M.teste || !jogosLista?.length) return null;
+    let ok=0, n=0;
+    jogosLista.slice(0,10).forEach(g => { if (g.gols_mandante==null) return; n++; if (M.teste(g.gols_mandante, g.gols_visitante)) ok++; });
+    return n ? Math.round(ok/n*100) : null;
+  };
+  const bm = bateuPct(em, d.rmJogos), bv = bateuPct(ev, d.rvJogos);
+  const bateu = (bm!=null&&bv!=null) ? Math.round((bm+bv)/2) : (bm ?? bv ?? Math.round(M.prob*100));
+  if (M.id==='layzebra'){ const ez = zebraEhVis ? ev : em; M.bateuTxt = `${nZebra} venceu só ${ez.pctVit}% dos últimos ${ez.n}`; }
+
+  const scoreN = Math.round(M.prob*100);
+  const corScore = scoreN>=65 ? 'var(--green)' : scoreN>=50 ? 'var(--amber)' : 'var(--red)';
+  const gapAprov = (zebraEhVis ? ec.aprov - ef.aprov : ef.aprov - ec.aprov);
+  const matchLetra = M.id==='layzebra' ? (gapAprov>=25?'A':gapAprov>=10?'B':'C')
+    : (Math.abs((+em.mediaTotal||2.5) - (+ev.mediaTotal||2.5)) <= 0.6 ? 'B' : 'C');
+  const gauge = (tam, val, cor, texto) => { const r=(tam/2)-4, circ=2*Math.PI*r; return `<div class="rs-gauge" style="width:${tam}px;height:${tam}px">
+    <svg width="${tam}" height="${tam}"><circle cx="${tam/2}" cy="${tam/2}" r="${r}" fill="none" stroke="rgba(237,234,224,.12)" stroke-width="5"/>
+    <circle cx="${tam/2}" cy="${tam/2}" r="${r}" fill="none" stroke="${cor}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(circ*val/100).toFixed(1)} ${circ.toFixed(1)}"/></svg>
+    <div class="rs-gnum">${texto}</div></div>`; };
+
+  // ---- faixas de contexto ----
+  const faixas = [];
+  if (M.tipoGols==='under'){
+    const defFora = +ef.mediaContra || +ev.mediaContra, defCasa = +ec.mediaContra || +em.mediaContra;
+    if (isFinite(defFora) && defFora <= 1.0 && ef.n>=3) faixas.push(`🛡️ <b>${nv}</b> sofre só <b>${ef.mediaContra||ev.mediaContra} gols</b>/jogo fora — defesa fechada como visitante`);
+    if (isFinite(defCasa) && defCasa <= 1.0 && ec.n>=3) faixas.push(`🛡️ <b>${nm}</b> sofre só <b>${ec.mediaContra||em.mediaContra} gols</b>/jogo em casa`);
+    if (!faixas.length) faixas.push(`⚽ Médias baixas: <b>${em.mediaTotal}</b> (${nm}) e <b>${ev.mediaTotal}</b> (${nv}) gols/jogo nos últimos ${em.n} x ${ev.n}`);
+  } else if (M.tipoGols==='over'){
+    faixas.push(`⚽ Médias altas: <b>${em.mediaTotal}</b> (${nm}) e <b>${ev.mediaTotal}</b> (${nv}) gols/jogo · BTTS ${em.pctBtts}% x ${ev.pctBtts}%`);
+  } else if (M.id==='layzebra'){
+    const ez = zebraEhVis ? ef : ec;
+    faixas.push(`📉 <b>${nZebra}</b> ${zebraEhVis?'fora':'em casa'}: aproveitamento de <b>${ez.aprov||'-'}%</b> em ${ez.n} jogos — cenário de lay`);
+  } else {
+    faixas.push(`🎯 Placar exato raro no modelo: <b>${pct(M.id==='lay10'?p10:M.id==='lay01'?p01:gol)}%</b> de chance — expectativa ${lC.toFixed(2)} x ${lF.toFixed(2)} gols`);
+  }
+
+  // ---- barras L10 por time ----
+  const chartTime = (nomeT, idT, jogosLista) => {
+    const ult = (jogosLista||[]).filter(g=>g.gols_mandante!=null).slice(0,10).reverse();
+    if (!ult.length) return `<p class="msg-vazia" style="padding:6px 0;font-size:12px">Sem jogos do ${nomeT}.</p>`;
+    const escala = 15, base = 6, alturaMax = 90;
+    const temLinha = !!M.tipoGols;
+    const barras = ult.map(g => {
+      const tot = g.gols_mandante + g.gols_visitante;
+      const m2 = jgEhMandante(g, nomeT, idT);
+      const adv = m2 ? g.visitante : g.mandante;
+      let bom;
+      if (M.tipoGols==='under') bom = tot <= 2;
+      else if (M.tipoGols==='over') bom = tot >= 3;
+      else if (M.teste) bom = M.teste(g.gols_mandante, g.gols_visitante);
+      else { const pro = m2?g.gols_mandante:g.gols_visitante, con = m2?g.gols_visitante:g.gols_mandante; bom = M.id==='layzebra' ? ((zebraEhVis?nv:nm)===nomeT ? pro<=con : pro>=con) : true; }
+      const h = Math.min(base + tot*escala, alturaMax);
+      return `<div class="rs-b"><i style="height:${h}px;background:${bom?'var(--green)':'var(--red)'}"></i>
+        <div class="rs-bn">${tot}</div><div class="rs-bd">${jgData(g.data).slice(0,5)}<br>${adv.slice(0,9)}</div></div>`;
+    }).join('');
+    const linhaRef = temLinha ? `<div class="rs-linha" style="bottom:${28 + base + 2.5*escala}px"></div>` : '';
+    return `<div class="rs-chart-tit">${jgEscudo(idT,16)} ${nomeT} — total de gols, últimos ${ult.length}${temLinha?` <span>linha 2.5</span>`:''}</div>
+      <div class="rs-chart">${linhaRef}<div class="rs-barras">${barras}</div></div>`;
+  };
+
+  // ---- recortes ----
+  const recBateu = (lista, nomeT, idT) => {
+    const e = calcRecorte(lista, nomeT, idT);
+    return bateuPct(e, lista, nomeT, idT);
+  };
+  const l5 = (()=>{ const a=recBateu((d.rmJogos||[]).slice(0,5), nm, j.mandante_id), b=recBateu((d.rvJogos||[]).slice(0,5), nv, j.visitante_id);
+    return (a!=null&&b!=null)?Math.round((a+b)/2):(a??b); })();
+  const casaPct = recBateu(jgFiltra(d.rmJogos, nm, j.mandante_id, 'casa'), nm, j.mandante_id);
+  const foraPct = recBateu(jgFiltra(d.rvJogos, nv, j.visitante_id, 'fora'), nv, j.visitante_id);
+  const h2hPct = (()=>{ const h=(d.h2h||[]).filter(g=>g.gm!=null); if (!h.length) return null;
+    let ok=0; h.forEach(g=>{ const tot=g.gm+g.gv; let b2; if (M.tipoGols==='under') b2=tot<=2; else if (M.tipoGols==='over') b2=tot>=3; else if (M.teste) b2=M.teste(g.gm,g.gv); else b2=true; if(b2)ok++; });
+    return Math.round(ok/h.length*100); })();
+  const tend = Math.round((bateu*0.5 + (l5??bateu)*0.3 + ((casaPct??bateu)+(foraPct??bateu))/2*0.2));
+  const corR = v => v==null?'var(--chalk-dim)':v>=65?'var(--green)':v>=45?'var(--amber)':'var(--red)';
+  const rec = (rot,v,on) => `<div class="rs-rec ${on?'on':''}"><div class="rs-r1">${rot}</div><div class="rs-r2" style="color:${corR(v)}">${v==null?'—':v+'%'}</div></div>`;
+
+  // ---- pilares ----
+  const oddM = M.odd || 0;
+  const oddJusta = M.prob>0 ? (1/M.prob) : 0;
+  const valor = oddM ? Math.round((M.prob*oddM-1)*100) : null;
+  const aprovMedio = Math.round((em.aprov+ev.aprov)/2);
+  const pilar = (ico, nome2, descr, v, tag) => `<div class="rs-pilar"><div class="rs-pcab">${ico} ${nome2}<span class="rs-ptag" style="color:${tag==='A FAVOR'?'var(--green)':tag==='NEUTRO'?'var(--amber)':'var(--red)'}">${tag}</span></div>
+    <div class="rs-pdesc">${descr}</div><div class="rs-pbar"><i style="width:${Math.max(4,Math.min(100,v))}%;background:${tag==='A FAVOR'?'var(--green)':tag==='NEUTRO'?'var(--amber)':'var(--red)'}"></i></div></div>`;
+  const tagDe = v => v==null?'NEUTRO':v>=60?'A FAVOR':v>=42?'NEUTRO':'CONTRA';
+  const projTxt = M.tipoGols ? `expectativa <b>${(lC+lF).toFixed(1)}</b> gols vs linha 2.5` : `probabilidade do modelo: ${scoreN}%`;
+  const projV = M.tipoGols==='under' ? Math.round(Math.max(0,Math.min(100,(2.5-(lC+lF))/1.5*50+50)))
+    : M.tipoGols==='over' ? Math.round(Math.max(0,Math.min(100,((lC+lF)-2.5)/1.5*50+50))) : scoreN;
+  const momentoTag = aprovMedio>=40&&aprovMedio<=63 ? 'NEUTRO' : 'A FAVOR';
+  const pilares = [
+    { v: projV, tag: tagDe(projV), html: p => pilar('📊','Média dos jogos', projTxt, p.v, p.tag) },
+    { v: bateu, tag: tagDe(bateu), html: p => pilar('🎯','Quantas vezes bateu', `${bateu}% dos últimos jogos dos dois times`, p.v, p.tag) },
+    { v: aprovMedio, tag: momentoTag, html: p => pilar('🚩','Momento e contexto', `aprov. ${em.aprov}% (${nm}) · ${ev.aprov}% (${nv}) · mando incluído`, p.v, p.tag) },
+    { v: h2hPct, tag: h2hPct==null?'NEUTRO':tagDe(h2hPct), html: p => pilar('⚔️','Confronto direto', h2hPct==null?'sem H2H recente na base':`bateu em ${h2hPct}% dos confrontos diretos`, p.v??50, p.tag) },
+    { v: valor==null?null:valor+50, tag: valor==null?'NEUTRO':(valor>=3?'A FAVOR':valor>=-3?'NEUTRO':'CONTRA'),
+      html: p => pilar('💰','Valor na odd', valor==null?`sem odd salva — odd justa ${oddJusta?oddJusta.toFixed(2):'—'}`:`odd justa ${oddJusta.toFixed(2)} · mercado paga ${oddM.toFixed(2)} (${valor>=0?'+':''}${valor}%)`, p.v??50, p.tag) },
+  ];
+  const nota = (pilares.reduce((s,p)=>s+(p.v==null?50:Math.max(0,Math.min(100,p.v))),0)/pilares.length/10).toFixed(1);
+  const aFavor = pilares.filter(p=>p.tag==='A FAVOR').length, neutros = pilares.filter(p=>p.tag==='NEUTRO').length;
+
+  // ---- grid jogo inteiro ----
+  const gm2 = (nome2, sub, p) => { const v=Math.round(p); const cls=v>=65?'v':v>=45?'n':'r';
+    return `<div class="rs-gm"><div class="rs-gt"><span>${nome2}</span><b class="${cls}">${v}%</b></div><span class="rs-gl">${sub}</span>
+      <div class="rs-gb"><i style="width:${v}%;background:${v>=65?'var(--green)':v>=45?'var(--amber)':'var(--red)'}"></i></div></div>`; };
+  const btts = Math.round((em.pctBtts+ev.pctBtts)/2);
+  const htOk = em.nHt || ev.nHt;
+  const golHT = htOk ? Math.round(((em.nHt?em.htPctOver05:ev.htPctOver05)+(ev.nHt?ev.htPctOver05:em.htPctOver05))/2) : null;
+  const grid = [
+    gm2('Under 2.5', `média ${((+em.mediaTotal+ +ev.mediaTotal)/2).toFixed(1)} gols/jogo`, (1-pOver)*100),
+    gm2('Lay 1x0', `placar 1x0: ${pct(p10)}% (Poisson)`, (1-p10)*100),
+    gm2('Lay 0x1', `placar 0x1: ${pct(p01)}%`, (1-p01)*100),
+    gm2('Ambas marcam', `${nm} ${em.pctBtts}% · ${nv} ${ev.pctBtts}%`, btts),
+    golHT!=null ? gm2('Gol no 1ºT', `HT over 0.5 nos últimos 10`, golHT) : gm2('Gol no 1ºT','sem placar de intervalo', 50),
+    gm2('Lay goleada', `4+ e vitória: ${pct(gol)}%`, (1-gol)*100),
+    gm2(`Lay zebra (${nZebra})`, `vitória da zebra: ${pct(pZebra)}%`, (1-pZebra)*100),
+    `<div class="rs-gm rs-gm-link" onclick="trocaJogoSub('cartoes')"><div class="rs-gt"><span>Cartões</span><b>→</b></div><span class="rs-gl">linhas e médias na aba Cartões</span></div>`,
+  ].join('');
+
+  const esc = s => (s||'').replace(/'/g, String.fromCharCode(92,39));
+  return `
+    <div class="rs-card rs-destaque">
+      <div class="rs-h2">Mercado sugerido</div>
+      <div class="rs-mercado">🎯 <b>${M.nome}</b>${oddM?`<span class="rs-odd">${oddM.toFixed(2)}</span>`:''}</div>
+      <div class="rs-kpis">
+        <div class="rs-kpi"><div class="rs-rot">Projeção</div><div class="rs-val" style="color:var(--green)">${M.tipoGols?(lC+lF).toFixed(1):pct(M.prob)+'%'}</div>
+          <div class="rs-sub">${M.tipoGols?`gols esperados<br>${((lC+lF)-2.5>=0?'+':'')}${((lC+lF)-2.5).toFixed(1)} vs linha`:'prob. do modelo'}</div></div>
+        <div class="rs-kpi"><div class="rs-rot">Bateu</div><div class="rs-val" style="color:${corR(bateu)}">${bateu}%</div><div class="rs-sub">últimos 10<br>dos dois times</div></div>
+        <div class="rs-kpi"><div class="rs-rot">Score</div>${gauge(54, scoreN, corScore, scoreN)}<div class="rs-sub">prob. ${scoreN}%</div></div>
+        <div class="rs-kpi"><div class="rs-rot">Matchup</div>${gauge(54, matchLetra==='A'?90:matchLetra==='B'?70:50, matchLetra==='C'?'var(--amber)':'var(--green)', matchLetra)}<div class="rs-sub">${matchLetra==='A'?'muito favorável':matchLetra==='B'?'favorável':'neutro'}</div></div>
+      </div>
+      ${faixas.map(f=>`<div class="rs-faixa">${f}</div>`).join('')}
+      ${chartTime(nm, j.mandante_id, d.rmJogos)}
+      ${chartTime(nv, j.visitante_id, d.rvJogos)}
+      <div class="rs-recortes">
+        ${rec('TEND.', tend)}${rec('L5', l5)}${rec('L10', bateu, true)}${rec('CASA', casaPct)}${rec('FORA', foraPct)}${rec('H2H', h2hPct)}
+      </div>
+    </div>
+
+    <div class="rs-card">
+      <div class="rs-h2">Nota do sinal · 5 pilares</div>
+      <div class="rs-hero">
+        ${gauge(72, Math.round(nota*10), nota>=6.5?'var(--green)':nota>=5?'var(--amber)':'var(--red)', nota)}
+        <div class="rs-htxt"><b>${nota>=7?'Sinal forte':nota>=5.5?'Sinal moderado':'Sinal fraco'} para ${M.nome}</b>
+        <span>${aFavor} a favor · ${neutros} neutro(s) · ${5-aFavor-neutros} contra</span></div>
+      </div>
+      <div class="rs-pilares">${pilares.map(p=>p.html(p)).join('')}</div>
+    </div>
+
+    <div class="rs-card">
+      <div class="rs-h2">O jogo inteiro numa tela só</div>
+      <div class="rs-grid">${grid}</div>
+      <div class="rs-nota-pe">verde = a favor · amarelo = neutro · vermelho = evitar · probabilidades do Poisson e % dos últimos 10</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:2px">
+      <button class="mini" onclick="trocaJogoSub('ia')">🤖 Análise I.A. completa</button>
+      <button class="mini" onclick="trocaJogoPrincipal('modelo')">📐 Placares e Modelo</button>
+      <button class="mini" onclick="analisarComIA('${esc(nm)}','${esc(nv)}','${esc(j.liga)}', this)" style="border-color:#8e7cff;color:#8e7cff">🤖 Gemini</button>
+    </div>
+    <div id="ficha-ia-resultado">${d.iaHtml||''}</div>`;
+}
+
 function renderJogoIA(){
   const d = jogoDados, j = d.j, o = d.o, nm = j.mandante, nv = j.visitante;
   const em = calcRecorte(d.rmJogos, nm, j.mandante_id), ev = calcRecorte(d.rvJogos, nv, j.visitante_id);
