@@ -360,6 +360,12 @@
   .rs-mom-cel i{display:block;border-radius:3px 3px 0 0;margin:0 auto 2px;width:70%}
   .rs-mom-cel b{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--chalk)}
   .rs-mom-cab .rs-mom-cel{font-weight:700;color:var(--chalk);padding-bottom:4px}
+  .rs-xg{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;background:var(--card-2);border-radius:10px;padding:14px}
+  .rs-xg-lado{text-align:center} .rs-xg-lado span{display:block;font-size:11.5px;color:var(--chalk-dim);margin-bottom:3px}
+  .rs-xg-lado b{font-family:'Saira Condensed',sans-serif;font-size:27px;font-weight:800}
+  .rs-xg-meio{text-align:center;border-left:1px solid rgba(237,234,224,.12);border-right:1px solid rgba(237,234,224,.12);padding:0 14px}
+  .rs-xg-meio b{display:block;font-family:'Saira Condensed',sans-serif;font-size:31px;font-weight:800;color:var(--amber);line-height:1}
+  .rs-xg-meio span{font-size:10.5px;color:var(--chalk-dim)} .rs-xg-meio em{display:block;font-size:11px;color:var(--green);font-style:normal;margin-top:4px}
   @media(max-width:560px){.rs-mk-times{grid-template-columns:1fr;gap:6px}.rs-mom-rot{min-width:70px;font-size:10px}}
 </style>
 </head>
@@ -1248,6 +1254,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v4.99</b></td><td>A aba Mercados ganhou <b>defesas do goleiro, passes totais e passes certos</b>, além de um card próprio de <b>xG (gols esperados)</b> que compara o xG com os gols reais e avisa quem está finalizando acima ou abaixo do esperado. A aba Jogadores passou a mostrar <b>linha sugerida por jogador</b> (desarmes, chutes, chutes a gol, passes). Exige republicar a Edge Function e rodar o SQL das novas colunas.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.98</b></td><td>Nova aba <b>📈 Mercados</b> na ficha do jogo: linhas sugeridas de <b>escanteios, faltas, desarmes, chutes, chutes a gol, impedimentos e cartões</b> (média de cada time, projeção do confronto e tendência over/under), mais o bloco <b>Momentos dos gols</b> cruzando quando cada time marca e quando sofre, com destaque para a janela de 15 minutos mais quente do confronto. Lê as médias já salvas no banco (grátis) e tem botão para buscar na API quando o time ainda não tem dados.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.97</b></td><td>O campo de texto do <b>Configurar ligas principais</b> agora <b>busca de verdade</b>: filtra a lista enquanto você digita, ignorando acento e maiúscula, e procura tanto no nome da liga quanto no país. A lista também deixou de mostrar só as ligas do dia — agora traz todas as competições salvas no banco (60 dias para trás e 15 para frente), então Libertadores, Sul-Americana e copas aparecem mesmo sem jogo hoje. "Marcar/Desmarcar todas" passou a respeitar o filtro.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.96</b></td><td><b>Login obrigatório</b> com autenticação real do Supabase (e-mail e senha): o site só abre depois de entrar, a sessão fica salva no navegador e expira sozinha, há "esqueci minha senha" por e-mail e um botão de sair no topo. Nenhuma senha fica no código-fonte.</td></tr>
@@ -1878,7 +1885,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.98";
+const APP_VERSAO = "v4.99";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3088,6 +3095,9 @@ const RS_MERCADOS = [
   { id:'media_chutes_gol',  ico:'⚽', nome:'Chutes a gol',  unid:'chutes a gol' },
   { id:'media_impedimentos',ico:'🚫', nome:'Impedimentos',  unid:'impedimentos' },
   { id:'media_amarelos',    ico:'🟨', nome:'Cartões amarelos', unid:'cartões' },
+  { id:'media_defesas',     ico:'🧤', nome:'Defesas do goleiro', unid:'defesas' },
+  { id:'media_passes',      ico:'🔄', nome:'Passes (total)',  unid:'passes', casas:0 },
+  { id:'media_passes_certos',ico:'✅', nome:'Passes certos',   unid:'passes certos', casas:0 },
 ];
 async function carregarMercadosJogo(){
   const d = jogoDados; if (!d || d.merc || d.mercCarregando) return;
@@ -3148,6 +3158,7 @@ function renderJogoMercados(){
     const parcial = (a==null || b==null);
     // linha sugerida: meio ponto mais próximo abaixo da soma
     const linha = Math.floor(soma) + 0.5;
+    const casas = mk.casas===0 ? 0 : 2;
     const folga = soma - linha; // > 0 = soma acima da linha (tende a over)
     const lean = folga >= 0.6 ? ['OVER','var(--green)'] : folga <= -0.4 ? ['UNDER','var(--red)'] : ['NEUTRO','var(--amber)'];
     const barra = pctA => `<div class="rs-mk-bar"><i style="width:${Math.max(3,Math.min(100,pctA))}%"></i></div>`;
@@ -3159,16 +3170,41 @@ function renderJogoMercados(){
         <span class="rs-mk-lean" style="color:${lean[1]}">${lean[0]}</span>
       </div>
       <div class="rs-mk-times">
-        <div><span>${nm}</span><b>${a!=null?a.toFixed(2):'—'}</b>${barra(a!=null?(a/maxRef*100):0)}</div>
-        <div><span>${nv}</span><b>${b!=null?b.toFixed(2):'—'}</b>${barra(b!=null?(b/maxRef*100):0)}</div>
+        <div><span>${nm}</span><b>${a!=null?a.toFixed(casas):'—'}</b>${barra(a!=null?(a/maxRef*100):0)}</div>
+        <div><span>${nv}</span><b>${b!=null?b.toFixed(casas):'—'}</b>${barra(b!=null?(b/maxRef*100):0)}</div>
       </div>
-      <div class="rs-mk-pe">projeção do confronto: <b style="color:${lean[1]}">${soma.toFixed(2)}</b> ${mk.unid}${parcial?' <span style="color:var(--amber)">(só um time)</span>':''} · ${folga>=0?'+':''}${folga.toFixed(2)} vs a linha</div>
+      <div class="rs-mk-pe">projeção do confronto: <b style="color:${lean[1]}">${soma.toFixed(casas)}</b> ${mk.unid}${parcial?' <span style="color:var(--amber)">(só um time)</span>':''} · ${folga>=0?'+':''}${folga.toFixed(2)} vs a linha</div>
     </div>`;
   }).filter(Boolean).join('');
 
+  // ---- xG: card próprio, é o melhor indicador de qualidade de chance ----
+  const xgA = A && A.media_xg!=null ? +A.media_xg : null;
+  const xgB = B && B.media_xg!=null ? +B.media_xg : null;
+  const cardXg = (xgA!=null || xgB!=null) ? `
+    <div class="rs-card">
+      <div class="rs-h2">📐 xG — gols esperados por jogo</div>
+      <div class="rs-xg">
+        <div class="rs-xg-lado"><span>${nm}</span><b>${xgA!=null?xgA.toFixed(2):'—'}</b></div>
+        <div class="rs-xg-meio"><b>${((xgA||0)+(xgB||0)).toFixed(2)}</b><span>xG somado do confronto</span>
+          <em>linha sugerida ${(Math.floor((xgA||0)+(xgB||0))+0.5).toFixed(1)} gols</em></div>
+        <div class="rs-xg-lado"><span>${nv}</span><b>${xgB!=null?xgB.toFixed(2):'—'}</b></div>
+      </div>
+      ${(()=>{ const em2 = calcRecorte(d.rmJogos, nm, j.mandante_id), ev2 = calcRecorte(d.rvJogos, nv, j.visitante_id);
+        const realA = +em2.mediaPro, realB = +ev2.mediaPro;
+        const difA = (xgA!=null && isFinite(realA)) ? realA - xgA : null;
+        const difB = (xgB!=null && isFinite(realB)) ? realB - xgB : null;
+        const txt = (nome2, dif) => dif==null ? '' :
+          dif >= 0.35 ? `<b>${nome2}</b> marca <b style="color:var(--amber)">acima</b> do xG (${dif>0?'+':''}${dif.toFixed(2)}) — finalização acima da média, pode regredir. `
+          : dif <= -0.35 ? `<b>${nome2}</b> marca <b style="color:var(--green)">abaixo</b> do xG (${dif.toFixed(2)}) — cria e não converte, tende a voltar a marcar. `
+          : `<b>${nome2}</b> converte na média do xG. `;
+        const corpo = txt(nm,difA)+txt(nv,difB);
+        return corpo ? `<div class="rs-faixa" style="margin-top:10px">🎯 ${corpo}</div>` : ''; })()}
+      <p class="rs-nota-pe">xG mede a <b>qualidade das chances</b>, não o placar. Quem marca muito acima do xG costuma regredir; quem marca abaixo costuma voltar a fazer gol. Bom filtro antes de entrar em over/under.</p>
+    </div>` : '';
+
   const amostra = `<p class="rs-nota-pe">Médias por jogo salvas no banco${A?.jogos_amostra?` (${A.jogos_amostra} jogos do ${nm}`:''}${B?.jogos_amostra?`, ${B.jogos_amostra} do ${nv}`:''}${A?.jogos_amostra?')':''}.
     A linha sugerida é a soma das médias dos dois times, arredondada para o meio ponto abaixo. OVER/UNDER indica só a tendência do número, sempre confira a linha real da casa.
-    <br><b>Laterais</b> e <b>tiro de meta</b> não aparecem porque a API-Football não fornece essas estatísticas em nenhum plano.</p>`;
+    <br><b>Laterais</b>, <b>tiro de meta</b> e o recorte de <b>1º tempo</b> destes mercados não aparecem porque a API-Football só entrega o total do jogo — para chutes e escanteios não existe divisão por tempo em nenhum plano. Só os <b>gols</b> têm placar de intervalo (veja as abas Desempenho e Gols).</p>`;
 
   // ---- momentos dos gols ----
   const faixas = ['0-15','16-30','31-45','46-60','61-75','76-90'];
@@ -3208,6 +3244,7 @@ function renderJogoMercados(){
       ${linhas || '<p class="msg-vazia">Sem médias salvas para estes mercados.</p>'}
       ${amostra}
     </div>
+    ${cardXg}
     <div class="rs-card">
       <div class="rs-h2">Momentos dos gols · quando sai gol neste confronto</div>
       ${momentos}
@@ -3937,17 +3974,19 @@ function renderJogoJogadores(){
   }
   const ordenada = [...lista].filter(p=>p[est]!=null).sort((a,b)=>(b[est]||0)-(a[est]||0)).slice(0,18);
   return cabeca + `<div class="tabela-scroll"><table class="jg-tab">
-      <tr><th style="text-align:left">#</th><th style="text-align:left">Jogador</th><th>Posição</th><th>Jogos</th><th>${rot[est]} (média)</th><th>Total</th></tr>
+      <tr><th style="text-align:left">#</th><th style="text-align:left">Jogador</th><th>Posição</th><th>Jogos</th><th>${rot[est]} (média)</th><th>Linha sugerida</th><th>Total</th></tr>
       ${ordenada.map((p,i)=>`<tr>
         <td>${i+1}º</td>
         <td style="text-align:left;font-family:inherit"><b>${p.nome}</b></td>
         <td>${typeof traduzPos==='function'?traduzPos(p.posicao):(p.posicao||'')}</td>
         <td>${p.jogos??''}</td>
         <td><b style="color:var(--amber)">${p[est]}</b></td>
+        <td><b style="color:var(--green)">${(Math.floor(+p[est])+0.5).toFixed(1)}</b></td>
         <td style="color:var(--chalk-dim)">${p[totCampo[est]]??''}</td>
       </tr>`).join('')}
     </table></div>
-    <p style="font-size:12px;color:var(--chalk-dim);margin-top:8px">Médias da temporada, lidas da base de Mercados especiais (grátis, sem gastar requisição).</p>`;
+    <p style="font-size:12px;color:var(--chalk-dim);margin-top:8px">Médias da temporada, lidas da base de Mercados especiais (grátis, sem gastar requisição).
+      A <b>linha sugerida</b> é o meio ponto abaixo da média do jogador — acima dela o mercado tende ao over, mas confira minutagem e escalação antes de entrar.</p>`;
 }
 
 // ---------- JOGOS DA LIGA ----------
