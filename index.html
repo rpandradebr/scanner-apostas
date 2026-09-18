@@ -137,6 +137,10 @@
   /* Semáforo de mercados — o coração do scanner */
   .semaforo{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:14px}
   .mercado{background:var(--pitch);border-radius:10px;padding:14px;border-left:5px solid var(--chalk-dim)}
+  .n10-card{cursor:pointer;transition:background .12s,transform .12s}
+  .n10-card:hover{background:#12321f;transform:translateX(2px)}
+  .n10-abrir{font-size:11px;color:var(--chalk-dim);font-weight:400;white-space:nowrap}
+  .n10-card:hover .n10-abrir{color:var(--amber)}
   .mercado.verde{border-left-color:var(--green)}
   .mercado.amarelo{border-left-color:var(--yellow)}
   .mercado.vermelho{border-left-color:var(--red)}
@@ -1355,6 +1359,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v5.04</b></td><td>Agora o <b>card inteiro abre a ficha</b> do jogo nas abas <b>⭐ Notas</b>, <b>🔟 Aposta Nota 10</b> e <b>💡 Sugestões do dia</b> — antes só o nome era clicável, num alvo pequeno. O card destaca ao passar o mouse e mostra "abrir ficha ›". Os botões de salvar, remover e "Peguei" continuam funcionando sem abrir a ficha. Além disso, quando o jogo não está mais na grade em memória, o sistema <b>busca o jogo no banco</b> (tolerando acentos e variações de nome) para a ficha abrir completa — com escudos, odds e estatísticas — em vez de abrir só com os nomes.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.03</b></td><td>Em <b>Favoritos do dia</b> agora você escolhe <b>🗂️ Cards</b> ou <b>📋 Lista</b>. A lista voltou no formato de tabela compacta, mas melhor que a original: traz a probabilidade implícita ao lado da odd e uma coluna de margem da casa. A escolha fica salva no navegador.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.02</b></td><td>Nova aba <b>🎰 Múltiplas do dia</b> no grupo Punter: monta três combinações (Vencedor, Over 2.5 e Under 2.5) com as seleções mais sólidas do dia, de 2 a 5 jogos, cada perna clicável para a ficha. Mostra odd combinada, <b>chance real</b> pelo modelo, <b>odd justa</b> e o <b>valor</b> da múltipla — deixando claro quando o mercado paga menos do que o risco e as simples rendem mais.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.01</b></td><td>A tela <b>Favoritos do dia</b> saiu da tabela larga e virou <b>cards</b>: escudos dos times, odd em destaque, <b>probabilidade implícita</b> (a chance que o mercado enxerga), barra 1·X·2 já sem a margem da casa, over/under com o lado favorito marcado e a <b>margem da casa</b> em cada jogo. Funciona bem no celular e cada card abre a ficha.</td></tr>
@@ -1990,7 +1995,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.03";
+const APP_VERSAO = "v5.04";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -6221,8 +6226,8 @@ async function gerarSugestoes(){
     } else {
       aviso($('su-aviso'), `✅ ${sugestoes.length} sugestão(ões) acima da nota ${corte}.`);
       $('su-lista').innerHTML = '<div class="semaforo">' + sugestoes.slice(0,10).map(s => `
-        <div class="mercado verde">
-          <div class="nome">${s.j.mandante} x ${s.j.visitante}${seloAoVivo(s.j.fixture_id)}</div>
+        <div class="mercado verde n10-card" onclick="fichaJogo(${gradeJogos.indexOf(s.j) >= 0 ? gradeJogos.indexOf(s.j) : (gradeJogos.push(s.j)-1)})" title="Abrir a ficha completa deste jogo">
+          <div class="nome">${s.j.mandante} x ${s.j.visitante}${seloAoVivo(s.j.fixture_id)} <span class="n10-abrir">abrir ficha ›</span></div>
           <div class="sinal">● ${s.mercado} — NOTA ${s.nota.toFixed(1)}</div>
           <div class="porque">${s.j.hora||''} · ${s.j.pais} — ${s.j.liga}<br>${s.motivo}</div>
           ${(() => {
@@ -10075,9 +10080,10 @@ function renderNota10(){
     const seloGR = x.resultado === 'GREEN' ? `<span style="font-size:11px;background:var(--green);color:var(--pitch);padding:2px 7px;border-radius:4px;font-weight:800">✅ GREEN ${x.placar||''}</span>`
       : x.resultado === 'RED' ? `<span style="font-size:11px;background:var(--red);color:#fff;padding:2px 7px;border-radius:4px;font-weight:800">❌ RED ${x.placar||''}</span>`
       : '';
-    return `<div class="mercado" style="border-left-color:${x.resultado==='GREEN'?'var(--green)':x.resultado==='RED'?'var(--red)':corNota};display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+    return `<div class="mercado n10-card" style="border-left-color:${x.resultado==='GREEN'?'var(--green)':x.resultado==='RED'?'var(--red)':corNota};display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px"
+      onclick="abrirFichaNota10(${idxReal})" title="Abrir a ficha completa deste jogo">
       <div style="flex:1">
-        <div class="nome" style="font-size:16px;cursor:pointer" onclick="abrirFichaNota10(${idxReal})">${Number(x.nota)>=10?'🔟':'⭐'} ${x.mandante} x ${x.visitante} ${seloGR}</div>
+        <div class="nome" style="font-size:16px">${Number(x.nota)>=10?'🔟':'⭐'} ${x.mandante} x ${x.visitante} ${seloGR} <span class="n10-abrir">abrir ficha ›</span></div>
         <div class="porque">${x.hora||''} ${x.data?('· '+x.data):''} · ${x.pais?x.pais+' — ':''}${x.liga||''} · ${seloSit}</div>
         <div style="font-size:13px;margin-top:4px">
           <span style="color:${corNota};font-weight:700">● ${x.mercado}</span>
@@ -10089,8 +10095,8 @@ function renderNota10(){
         <div style="font-size:9px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace">NOTA</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
-        <button class="mini" onclick="salvarApostaN10(${idxReal})" style="border-color:var(--amber);color:var(--amber);padding:4px 8px" title="Salvar aposta no histórico">💾</button>
-        <button class="mini" onclick="removerNota10(${idxReal})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
+        <button class="mini" onclick="event.stopPropagation();salvarApostaN10(${idxReal})" style="border-color:var(--amber);color:var(--amber);padding:4px 8px" title="Salvar aposta no histórico">💾</button>
+        <button class="mini" onclick="event.stopPropagation();removerNota10(${idxReal})" style="border-color:var(--red);color:var(--red);padding:4px 8px" title="Remover">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -10206,14 +10212,15 @@ function renderAposta10(){
     else if (x.resultado === 'RED') seloGR = '<span style="background:var(--red);color:#fff;padding:1px 7px;border-radius:5px;font-size:11px;font-weight:700;margin-left:6px">RED</span>';
     const situ = situacaoN10(x);
     const situTxt = situ==='ocorridos' ? '<span style="font-size:11px;color:var(--chalk-dim)">já ocorreu</span>' : `<span style="font-size:11px;color:var(--amber)">${x.hora||''}</span>`;
-    return `<div class="mercado" style="border-left-color:var(--amber)">
+    const idxReal = getNota10().findIndex(y => y.mandante===x.mandante && y.visitante===x.visitante && y.mercado===x.mercado && (y.data||'')===(x.data||''));
+    return `<div class="mercado n10-card" style="border-left-color:var(--amber)" onclick="abrirFichaNota10(${idxReal})" title="Abrir a ficha completa deste jogo">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="nome" style="font-size:16px">🔟 ${x.mandante} x ${x.visitante}${seloGR}</div>
+        <div class="nome" style="font-size:16px">🔟 ${x.mandante} x ${x.visitante}${seloGR} <span class="n10-abrir">abrir ficha ›</span></div>
         <div style="font-family:'Saira Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--amber)">10.0</div>
       </div>
       <div class="porque">${x.data ? x.data.split('-').reverse().join('/') : ''} ${situTxt} · ${x.pais?x.pais+' — ':''}${x.liga||''} · <b style="color:var(--amber)">${x.mercado}</b> · ${fonteMap[x.origem]||x.origem||''}</div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="salvarSugestao('${(x.mandante||'').replace(/'/g,String.fromCharCode(92,39))}','${(x.visitante||'').replace(/'/g,String.fromCharCode(92,39))}','${((x.pais?x.pais+' — ':'')+(x.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${x.mercado}',10,'Aposta Nota 10 (${x.origem||''})', this, '${x.hora||''}', '${x.data||''}', ${x.fixture_id||'null'}, true)">✅ Peguei</button>
+        <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="event.stopPropagation();salvarSugestao('${(x.mandante||'').replace(/'/g,String.fromCharCode(92,39))}','${(x.visitante||'').replace(/'/g,String.fromCharCode(92,39))}','${((x.pais?x.pais+' — ':'')+(x.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${x.mercado}',10,'Aposta Nota 10 (${x.origem||''})', this, '${x.hora||''}', '${x.data||''}', ${x.fixture_id||'null'}, true)">✅ Peguei</button>
       </div>
     </div>`;
   }).join('');
@@ -10242,15 +10249,40 @@ function salvarApostaN10(i){
 }
 window.salvarApostaN10 = salvarApostaN10;
 
-// abre a ficha de um jogo nota 10 (procura na grade em memória)
-function abrirFichaNota10(i){
+// abre a ficha de um jogo nota 10.
+// 1) procura na grade em memória  2) busca o jogo real no banco (para vir com
+// fixture_id e ids dos times, senão a ficha abre sem escudos, odds nem stats)
+// 3) só em último caso monta um objeto mínimo.
+async function abrirFichaNota10(i){
   const x = getNota10()[i];
-  if (!x) return;
-  // tenta achar o jogo na grade já carregada
-  let idx = gradeJogos.findIndex(j => j.mandante===x.mandante && j.visitante===x.visitante);
+  if (!x){ aviso($('n10-aviso'), 'Não achei esse jogo na lista — atualize a aba.', 'erro'); return; }
+  const nrm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  // token principal: primeira palavra com 4+ letras (mesma regra usada no resto do sistema)
+  const tok = s => nrm(s).split(' ').filter(p => p.length>=4)[0] || nrm(s);
+  const igual  = j => nrm(j.mandante)===nrm(x.mandante) && nrm(j.visitante)===nrm(x.visitante);
+  const parece = j => tok(j.mandante)===tok(x.mandante) && tok(j.visitante)===tok(x.visitante);
+  const mesmaData = j => !x.data || !j.data_jogo || j.data_jogo===x.data;
+
+  let idx = gradeJogos.findIndex(j => igual(j) && mesmaData(j));
+  if (idx < 0) idx = gradeJogos.findIndex(j => parece(j) && mesmaData(j));
+  if (idx < 0) idx = gradeJogos.findIndex(igual);
+  if (idx < 0) idx = gradeJogos.findIndex(parece);
+
   if (idx < 0){
-    // adiciona um objeto mínimo para a ficha funcionar
+    try{
+      aviso($('n10-aviso'), '⏳ Buscando os dados completos de ' + x.mandante + ' x ' + x.visitante + '…');
+      let q = db.from('jogos_dia').select('*');
+      if (x.data) q = q.eq('data_jogo', x.data);
+      const { data } = await q.limit(800);
+      const achado = (data||[]).find(igual) || (data||[]).find(parece);
+      if (achado) idx = gradeJogos.push(achado) - 1;
+      aviso($('n10-aviso'), '');
+    } catch(_){ aviso($('n10-aviso'), ''); }
+  }
+  if (idx < 0){
     idx = gradeJogos.push({ mandante:x.mandante, visitante:x.visitante, liga:x.liga, pais:x.pais, hora:x.hora, data_jogo:x.data }) - 1;
+    aviso($('n10-aviso'), '⚠️ Esse jogo não está no banco — a ficha abre só com o histórico dos times, sem odds nem escudos.');
   }
   fichaJogo(idx);
 }
