@@ -961,6 +961,10 @@
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px">
       <button class="mini" id="sub-vencedor" style="border-color:var(--amber);color:var(--amber)">🏆 Mercado de vencedor</button>
       <button class="mini" id="sub-gols">⚽ Mercado de gols (under 2.5 / 3.5)</button>
+      <span style="flex:1"></span>
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--chalk-dim)">Ver como:</span>
+      <button class="mini" id="fav-ver-cards" onclick="trocaVisaoFav('cards')" title="Cards com barra de probabilidade — melhor no celular">🗂️ Cards</button>
+      <button class="mini" id="fav-ver-lista" onclick="trocaVisaoFav('lista')" title="Tabela compacta — mais jogos na tela de uma vez">📋 Lista</button>
     </div>
     <div id="fav-listas"></div>
     <div id="fav-listas-gols" style="display:none"></div>
@@ -1351,6 +1355,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v5.03</b></td><td>Em <b>Favoritos do dia</b> agora você escolhe <b>🗂️ Cards</b> ou <b>📋 Lista</b>. A lista voltou no formato de tabela compacta, mas melhor que a original: traz a probabilidade implícita ao lado da odd e uma coluna de margem da casa. A escolha fica salva no navegador.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.02</b></td><td>Nova aba <b>🎰 Múltiplas do dia</b> no grupo Punter: monta três combinações (Vencedor, Over 2.5 e Under 2.5) com as seleções mais sólidas do dia, de 2 a 5 jogos, cada perna clicável para a ficha. Mostra odd combinada, <b>chance real</b> pelo modelo, <b>odd justa</b> e o <b>valor</b> da múltipla — deixando claro quando o mercado paga menos do que o risco e as simples rendem mais.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.01</b></td><td>A tela <b>Favoritos do dia</b> saiu da tabela larga e virou <b>cards</b>: escudos dos times, odd em destaque, <b>probabilidade implícita</b> (a chance que o mercado enxerga), barra 1·X·2 já sem a margem da casa, over/under com o lado favorito marcado e a <b>margem da casa</b> em cada jogo. Funciona bem no celular e cada card abre a ficha.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.00</b></td><td><b>xG entra na pontuação de todos os mercados</b> das Sugestões do dia e do TOP do dia: volume de chances (xG somado) puxa over/lay de placar seco para cima e under para baixo, desequilíbrio de xG reforça lay zebra e back favorito, e a <b>regressão</b> (time marcando acima ou abaixo do xG) corrige a nota — o motivo aparece escrito no card. O <b>Resumo</b> da ficha ganhou o duelo de <b>chutes a gol, posse de bola e xG</b> entre os dois times.</td></tr>
@@ -1985,7 +1990,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.02";
+const APP_VERSAO = "v5.03";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2219,6 +2224,8 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'lembretes' && typeof renderLembretes === 'function'){ renderLembretes(); }
   // inicializa a data das Múltiplas ao abrir
   if (b.dataset.aba === 'multiplas' && $('mt-data') && !$('mt-data').value){ $('mt-data').value = hojeISO(); }
+  // marca a visão escolhida em Favoritos
+  if (b.dataset.aba === 'favoritos' && typeof marcaBotoesVisaoFav === 'function'){ marcaBotoesVisaoFav(); }
   atualizarBtnVoltar();
 }));
 function irParaAba(nome){ document.querySelector(`nav button[data-aba="${nome}"]`).click(); }
@@ -5675,7 +5682,48 @@ function cardFav(x, tipo){
     </div>
   </div>`;
 }
+// ---- alterna entre cards e lista (fica salvo no navegador) ----
+function getVisaoFav(){ try{ return localStorage.getItem('fav_visao') || 'cards'; }catch(_){ return 'cards'; } }
+function trocaVisaoFav(v){
+  try{ localStorage.setItem('fav_visao', v); }catch(_){ }
+  marcaBotoesVisaoFav();
+  if (window._favUltimos) desenharFavoritos(window._favUltimos);
+}
+function marcaBotoesVisaoFav(){
+  const v = getVisaoFav();
+  [['fav-ver-cards','cards'],['fav-ver-lista','lista']].forEach(([id,val]) => {
+    const b = $(id); if (!b) return;
+    b.style.borderColor = v===val ? 'var(--amber)' : '';
+    b.style.color = v===val ? 'var(--amber)' : '';
+  });
+}
+window.trocaVisaoFav = trocaVisaoFav;
+
+// linha da visão em lista — compacta, com a probabilidade implícita junto
+function linhaFav(x, tipo){
+  const { j, o } = x;
+  const idx = gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1);
+  const n = fvNormaliza(o);
+  const oddDestaque = tipo === 'zebra' ? x.maior : x.menor;
+  const nomeDestaque = tipo === 'zebra' ? x.ladoZebra : x.ladoFav;
+  const p = fvProb(oddDestaque);
+  const corSelo = tipo === 'zebra' ? 'var(--red)' : tipo === 'super' ? 'var(--amber)' : 'var(--green)';
+  return `<tr class="clicavel" onclick="fichaJogo(${idx})">
+    <td style="white-space:nowrap">${j.hora||''}</td>
+    <td style="font-size:12px">${j.pais?j.pais+' — ':''}${j.liga||''}</td>
+    <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
+    <td style="white-space:nowrap"><b style="color:${corSelo}">${nomeDestaque}</b>
+      <span style="font-family:'IBM Plex Mono',monospace;color:${corSelo}"> @ ${fmtOdd(oddDestaque)}</span>
+      ${p!=null?`<span style="font-size:11px;color:var(--chalk-dim)"> · ${Math.round(p*100)}%</span>`:''}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}</td>
+    <td style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--chalk-dim);white-space:nowrap">${n?n.margem.toFixed(1)+'%':'—'}</td>
+  </tr>`;
+}
+
 function desenharFavoritos(jogos){
+  window._favUltimos = jogos;
+  const visao = getVisaoFav();
   const comFav = jogos.map(j => {
     const o = oddsMap[j.fixture_id];
     if (!o) return null;
@@ -5690,22 +5738,27 @@ function desenharFavoritos(jogos){
   const favs   = comFav.filter(x => x.menor > 1.35 && x.menor <= 1.65).sort((a,b) => a.menor - b.menor);
   const zebras = comFav.filter(x => x.maior >= 4.5).sort((a,b) => b.maior - a.maior).slice(0, 20);
 
+  const cabTab = `<tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>Destaque</th><th>1 · X · 2</th><th>O/U 2.5</th><th title="Margem embutida pela casa nas odds">Margem</th></tr>`;
   const bloco = (titulo, sub, lista, tipo) => `
     <div class="fv-secao">
       <div class="fv-secao-cab">
         <h3>${titulo}</h3><span class="fv-cont">${lista.length} jogo(s)</span>
       </div>
       <p class="fv-secao-sub">${sub}</p>
-      ${lista.length ? `<div class="fv-grid">${lista.map(x => cardFav(x, tipo)).join('')}</div>`
-                     : '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'}
+      ${!lista.length ? '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'
+        : visao === 'lista'
+          ? `<div class="tabela-scroll"><table>${cabTab}${lista.map(x => linhaFav(x, tipo)).join('')}</table></div>`
+          : `<div class="fv-grid">${lista.map(x => cardFav(x, tipo)).join('')}</div>`}
     </div>`;
 
   $('fav-listas').innerHTML =
     bloco('🔥 Super favoritos', 'Odd até 1.35 — o mercado dá mais de 74% de chance. Zona clássica de <b>lay do favorito</b> a preço alto e de <b>lay zebra</b> a preço baixo.', supers, 'super') +
     bloco('⭐ Favoritos', 'Odd de 1.36 a 1.65 — favorito claro, mas com espaço de valor nos dois lados.', favs, 'fav') +
     bloco('🦓 Maiores zebras', 'Odd 4.5 ou mais no azarão. Útil para <b>lay zebra</b>: quanto maior a odd, menor a chance que o mercado enxerga.', zebras, 'zebra') +
-    `<p class="fv-pe">Clique em qualquer card para abrir a ficha completa. A <b>probabilidade implícita</b> é 1 ÷ odd, ou seja, a chance que o mercado enxerga.
-     A <b>barra</b> mostra as três probabilidades já sem a margem da casa. Odds de referência pré-jogo — confira na exchange no momento da entrada.</p>`;
+    `<p class="fv-pe">Clique em qualquer ${visao==='lista'?'linha':'card'} para abrir a ficha completa. A <b>probabilidade implícita</b> é 1 ÷ odd, ou seja, a chance que o mercado enxerga.
+     ${visao==='lista'?'A <b>margem</b> é o quanto a casa embute nas odds: abaixo de 6% é competitivo, acima de 10% é caro.'
+                      :'A <b>barra</b> mostra as três probabilidades já sem a margem da casa.'}
+     Odds de referência pré-jogo — confira na exchange no momento da entrada.</p>`;
 }
 
 // ==========================================================
