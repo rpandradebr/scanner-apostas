@@ -315,10 +315,56 @@
   .rs-sug-mid small{font-size:10.5px;color:var(--chalk-dim)} .rs-sug-mid small b{display:inline;font-size:10.5px;color:var(--chalk)}
   .rs-sug-acoes{display:flex;gap:6px}
   @media(max-width:560px){.rs-kpis{grid-template-columns:repeat(2,1fr);row-gap:14px}}
+  /* ---- Login (v4.96) ---- */
+  #login-overlay{position:fixed;inset:0;z-index:99999;background:var(--pitch);display:none;
+    align-items:center;justify-content:center;padding:20px}
+  #login-caixa{width:100%;max-width:380px;background:var(--card);border:1px solid rgba(237,234,224,.12);
+    border-radius:16px;padding:28px 26px;text-align:center}
+  #login-caixa h1{font-family:'Saira Condensed',sans-serif;font-size:26px;text-transform:uppercase;
+    letter-spacing:.02em;margin:14px 0 4px}
+  #login-caixa h1 span{color:var(--amber)}
+  #login-caixa .sub{font-size:12.5px;color:var(--chalk-dim);margin-bottom:22px}
+  #login-caixa label{display:block;text-align:left;font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--chalk-dim);margin:0 0 5px}
+  #login-caixa input{width:100%;padding:11px 13px;margin-bottom:14px;background:var(--pitch);
+    border:1px solid rgba(237,234,224,.18);border-radius:9px;color:var(--chalk);font-size:15px;font-family:inherit}
+  #login-caixa input:focus{outline:none;border-color:var(--amber)}
+  #btn-login{width:100%;padding:12px;font-size:15px;margin-bottom:12px}
+  #login-aviso{font-size:12.5px;min-height:18px;margin-bottom:10px;line-height:1.4}
+  #login-caixa .link{background:none;border:none;color:var(--chalk-dim);font-size:12px;
+    cursor:pointer;text-decoration:underline;font-family:inherit;padding:4px}
+  #login-caixa .link:hover{color:var(--amber)}
+  #login-rodape{font-size:11px;color:var(--chalk-dim);margin-top:16px;line-height:1.5;
+    border-top:1px solid rgba(237,234,224,.08);padding-top:14px}
+  #user-chip{display:none;align-items:center;gap:5px;background:var(--card-2);border:1px solid rgba(237,234,224,.15);
+    color:var(--chalk-dim);border-radius:999px;padding:4px 11px;font-size:11.5px;cursor:pointer;font-family:inherit}
+  #user-chip:hover{border-color:var(--red);color:var(--red)}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div id="login-overlay">
+  <div id="login-caixa">
+    <svg width="54" height="54" viewBox="0 0 46 46" fill="none" aria-hidden="true">
+      <circle cx="23" cy="23" r="20" stroke="var(--amber)" stroke-width="2.5"/>
+      <circle cx="23" cy="23" r="12" stroke="var(--amber)" stroke-width="1.5" opacity=".5"/>
+      <circle cx="23" cy="23" r="3" fill="var(--amber)"/>
+      <path d="M23 23 L38 15" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="34" cy="17" r="2.5" fill="var(--green)"/>
+    </svg>
+    <h1>RPA <span>BET SCANNER</span></h1>
+    <p class="sub">Acesso restrito — entre com sua conta</p>
+    <label for="login-email">E-mail</label>
+    <input type="email" id="login-email" autocomplete="username" placeholder="voce@email.com">
+    <label for="login-senha">Senha</label>
+    <input type="password" id="login-senha" autocomplete="current-password" placeholder="••••••••">
+    <div id="login-aviso"></div>
+    <button class="acao" id="btn-login" onclick="fazerLogin()">Entrar</button>
+    <button class="link" onclick="recuperarSenha()">Esqueci minha senha</button>
+    <p id="login-rodape">Ferramenta pessoal de apoio à decisão.<br>Aposte com responsabilidade · +18</p>
+  </div>
+</div>
+
+<div class="wrap" style="display:none">
   <header>
     <div style="display:flex;align-items:center;gap:14px">
       <button class="hamburguer" id="btn-menu" onclick="toggleMenu()" title="Menu" aria-label="Abrir menu">
@@ -338,6 +384,7 @@
     </div>
     <div style="text-align:right">
       <div class="versao" id="versao"></div>
+      <button id="user-chip" onclick="sairDaConta()" title="Sair da conta">👤 sair</button>
       <div id="cota-medidor" style="font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--chalk-dim);margin-top:4px;cursor:pointer" onclick="atualizarCota()" title="Clique para atualizar">📊 cota: —</div>
     </div>
   </header>
@@ -1179,7 +1226,8 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
-      <tr><td class="valor" style="text-align:center"><b>v4.95</b></td><td>A aba <b>Resumo</b> ganhou o bloco <b>Sugestões de aposta para este jogo</b>: as melhores entradas ranqueadas (Under/Over 2.5, Lay 1x0, Lay 0x1, Lay zebra, Ambas marcam) com nota, odd justa, % de valor contra a odd salva e botões 💾/✅ que gravam direto no Histórico de sugestões — mesmo fluxo e green/red automático do funil.</td></tr>
+      <tr><td class="valor" style="text-align:center"><b>v4.96</b></td><td><b>Login obrigatório</b> com autenticação real do Supabase (e-mail e senha): o site só abre depois de entrar, a sessão fica salva no navegador e expira sozinha, há "esqueci minha senha" por e-mail e um botão de sair no topo. Nenhuma senha fica no código-fonte.</td></tr>
+            <tr><td class="valor" style="text-align:center"><b>v4.95</b></td><td>A aba <b>Resumo</b> ganhou o bloco <b>Sugestões de aposta para este jogo</b>: as melhores entradas ranqueadas (Under/Over 2.5, Lay 1x0, Lay 0x1, Lay zebra, Ambas marcam) com nota, odd justa, % de valor contra a odd salva e botões 💾/✅ que gravam direto no Histórico de sugestões — mesmo fluxo e green/red automático do funil.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.94</b></td><td>Nova aba <b>📋 Resumo</b> na ficha do jogo (agora a primeira): mercado sugerido com Projeção, % Bateu, Score e Matchup em medidores, faixas de contexto, gráfico dos últimos 10 jogos de cada time contra a linha 2.5, régua Tend/L5/L10/Casa/Fora/H2H, nota do sinal em 5 pilares (incluindo valor na odd) e o "jogo inteiro numa tela só" com os mercados de exchange. Tudo calculado do Poisson e do histórico já carregados — nenhuma requisição extra.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.77</b></td><td>As <b>Sugestões do dia, TOP do dia e demais funis</b> passam a usar a mesma fonte completa de histórico das fichas (Edge + banco + busca direta na API) — antes ainda liam só a Edge e podiam sugerir com dados velhos. Cache de estatísticas encurtado (24h/2h) para acompanhar.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.76</b></td><td><b>Busca direta na API-Football</b> (solução definitiva para históricos desatualizados): salvando sua chave da API no botão 🔑 (aba Histórico ou no aviso da ficha), o site busca os últimos 15 jogos de cada time direto na API — sem depender da Edge nem de grades carregadas. Cache de 30 min por time, e o resultado ainda é gravado no banco para as outras telas. Se a ficha detectar histórico parado há 4+ dias, ela completa sozinha pela API.</td></tr>
@@ -1806,7 +1854,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.95";
+const APP_VERSAO = "v4.96";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -8071,7 +8119,7 @@ async function autoColheitaDiaria(){
   } catch(_){ }
   if (medidor) medidor.title = 'Clique para atualizar';
 }
-setTimeout(autoColheitaDiaria, 4000); // espera o site abrir antes de rodar
+// a colheita automática só roda depois do login (ver liberarApp)
 setTimeout(() => { if ($('ajuda-conteudo') && !$('ajuda-conteudo').innerHTML) trocaAjuda('fluxos'); }, 500);
 
 
@@ -10581,6 +10629,96 @@ function formatarForma(f){
     return `<span style="color:${cor};font-weight:700">${letra}</span>`;
   }).join(' ');
 }
+
+
+// ==========================================================
+// LOGIN (v4.96) — autenticação real via Supabase Auth.
+// A sessão fica guardada pelo próprio cliente do Supabase e
+// expira sozinha. Sem senha no código-fonte.
+// ==========================================================
+let _usuarioAtual = null;
+
+async function iniciarSessao(){
+  try{
+    const { data } = await db.auth.getSession();
+    if (data?.session?.user){ liberarApp(data.session.user); return; }
+  } catch(e){ }
+  mostrarLogin();
+}
+function mostrarLogin(msg, tipo){
+  const ov = $('login-overlay'); if (!ov) return;
+  ov.style.display = 'flex';
+  document.querySelector('.wrap').style.display = 'none';
+  if (msg) avisoLogin(msg, tipo);
+}
+function avisoLogin(msg, tipo){
+  const el = $('login-aviso'); if (!el) return;
+  el.textContent = msg || '';
+  el.style.color = tipo === 'ok' ? 'var(--green)' : tipo === 'erro' ? 'var(--red)' : 'var(--chalk-dim)';
+}
+function liberarApp(user){
+  _usuarioAtual = user;
+  const ov = $('login-overlay'); if (ov) ov.style.display = 'none';
+  document.querySelector('.wrap').style.display = '';
+  const chip = $('user-chip');
+  if (chip){
+    chip.style.display = 'inline-flex';
+    chip.title = 'Conectado como ' + (user.email||'') + ' — clique para sair';
+  }
+  if (!window.__appIniciado){
+    window.__appIniciado = true;
+    setTimeout(() => { try{ atualizarCota(); }catch(_){ } }, 300);
+    setTimeout(() => { try{ autoColheitaDiaria(); }catch(_){ } }, 4000);
+  }
+}
+async function fazerLogin(){
+  const email = ($('login-email').value||'').trim();
+  const senha = $('login-senha').value||'';
+  if (!email || !senha){ avisoLogin('Preencha e-mail e senha.', 'erro'); return; }
+  const b = $('btn-login'); b.disabled = true; b.textContent = '⏳ Entrando…';
+  try{
+    const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
+    if (error){
+      const m = String(error.message||'');
+      avisoLogin(m.includes('Invalid login') ? 'E-mail ou senha incorretos.'
+        : m.includes('Email not confirmed') ? 'E-mail ainda não confirmado — confira sua caixa de entrada.'
+        : 'Não foi possível entrar: ' + m, 'erro');
+      return;
+    }
+    $('login-senha').value = '';
+    liberarApp(data.user);
+  } catch(e){ avisoLogin('Falha de conexão: ' + e.message, 'erro'); }
+  finally{ b.disabled = false; b.textContent = 'Entrar'; }
+}
+async function recuperarSenha(){
+  const email = ($('login-email').value||'').trim();
+  if (!email){ avisoLogin('Digite seu e-mail no campo acima e clique de novo.', 'erro'); return; }
+  try{
+    const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: location.href });
+    if (error) throw error;
+    avisoLogin('📧 Link de redefinição enviado para ' + email, 'ok');
+  } catch(e){ avisoLogin('Não consegui enviar: ' + e.message, 'erro'); }
+}
+async function sairDaConta(){
+  if (!confirm('Sair da conta neste navegador?')) return;
+  try{ await db.auth.signOut(); }catch(_){ }
+  location.reload();
+}
+window.fazerLogin = fazerLogin;
+window.recuperarSenha = recuperarSenha;
+window.sairDaConta = sairDaConta;
+// Enter no campo de senha faz login
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && $('login-overlay') && $('login-overlay').style.display !== 'none'
+      && document.activeElement && document.activeElement.closest('#login-caixa')) fazerLogin();
+});
+// se a sessão cair (expirou ou logout em outra aba), volta pro login
+try{
+  db.auth.onAuthStateChange((evento) => {
+    if (evento === 'SIGNED_OUT' && window.__appIniciado) location.reload();
+  });
+}catch(_){ }
+iniciarSessao();
 
 </script>
 </body>
