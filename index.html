@@ -1745,7 +1745,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.92";
+const APP_VERSAO = "v4.93";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5036,10 +5036,10 @@ function desenharRankingsSug(){
           ? (m.id==='layz' ? `Favorito vence ${Math.max(x.c.em.pctVit,x.c.ev.pctVit)}%`
              : m.id==='laygm' ? `${x.c.nm} goleia ${x.c.em.pctGoleadaPro}% · improvável golear`
              : m.id==='laygv' ? `${x.c.nv} goleia ${x.c.ev.pctGoleadaPro}% · improvável golear`
-             : m.id==='lay01' ? `${x.c.nm} marca ${x.c.em.pctMarcou}% · ${x.c.nv} sofre ${x.c.ev.pctSofreu}% (evita 0x1)`
-             : m.id==='lay10' ? `${x.c.nv} marca ${x.c.ev.pctMarcou}% · ${x.c.nm} sofre ${x.c.em.pctSofreu}% (evita 1x0)`
+             : m.id==='lay01' ? (()=>{ const mand=x.c.em._casa?.n>=3?x.c.em._casa:x.c.em, vis=x.c.ev._fora?.n>=3?x.c.ev._fora:x.c.ev; return `${x.c.nm} marca ${mand.pctMarcou}%🏠 · ${x.c.nv} sofre ${vis.pctSofreu}%✈️ (evita 0x1)`; })()
+             : m.id==='lay10' ? (()=>{ const mand=x.c.em._casa?.n>=3?x.c.em._casa:x.c.em, vis=x.c.ev._fora?.n>=3?x.c.ev._fora:x.c.ev; return `${x.c.nv} marca ${vis.pctMarcou}%✈️ · ${x.c.nm} sofre ${mand.pctSofreu}%🏠 (evita 1x0)`; })()
              : `Over médio ${Math.round((x.c.em.pctOver+x.c.ev.pctOver)/2)}% · improvável ${mktSist.replace('LAY ','')}`)
-          : m.id==='o05' ? `${x.c.nm} marca ${x.c.em.pctMarcou}% · ${x.c.nv} marca ${x.c.ev.pctMarcou}% (raro zerar)`
+          : m.id==='o05' ? (()=>{ const mand=x.c.em._casa?.n>=3?x.c.em._casa:x.c.em, vis=x.c.ev._fora?.n>=3?x.c.ev._fora:x.c.ev; return `${x.c.nm} marca ${mand.pctMarcou}%🏠 · ${x.c.nv} marca ${vis.pctMarcou}%✈️ (raro zerar)`; })()
           : `${x.c.nm} ${x.c.em[m.campo]}% · ${x.c.nv} ${x.c.ev[m.campo]}%`;
         const mostrarV = ehLay ? (x.v/10).toFixed(1) : x.v + '%';
         return `<tr class="clicavel">
@@ -5480,6 +5480,9 @@ function pontuarJogo(c, todos){
   };
   const emReal = c.em, evReal = c.ev;
   const em = mandoAjustado(c.em, c.em?._casa, 0.6); // mandante: pesa o desempenho em casa
+  // recortes de mando para os textos (mandante em casa, visitante fora) — com fallback pro geral
+  const mCasa = (c.em?._casa?.n>=3) ? c.em._casa : c.em;
+  const vFora = (c.ev?._fora?.n>=3) ? c.ev._fora : c.ev;
   const ev = mandoAjustado(c.ev, c.ev?._fora, 0.6); // visitante: pesa o desempenho fora
   const o = c.o;
   const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
@@ -5502,17 +5505,17 @@ function pontuarJogo(c, todos){
       motivo:`${Math.round(overComb)}% de over 2.5 no histórico das duas, mercado junto (over @ ${fmtOdd(o.odd_over25)}).` });
   if (em.pctMarcou >= 80 && ev.pctSofreu >= 70)
     notas.push({ mercado:'LAY 0x1', nota: Math.min(10, 6 + (em.pctMarcou-80)/8 + (ev.pctSofreu-70)/12),
-      motivo:`${c.nm} marcou em ${em.pctMarcou}% dos últimos 10 e ${c.nv} sofreu gol em ${ev.pctSofreu}% — o 0x1 exige duas improbabilidades juntas.` });
+      motivo:`${c.nm} marcou em ${mCasa.pctMarcou}% jogando em casa 🏠 e ${c.nv} sofreu gol em ${vFora.pctSofreu}% jogando fora ✈️ — o 0x1 exige duas improbabilidades juntas.` });
   if (bttsComb >= 68 && mediaJogo >= 2.9 && ev.pctMarcou >= 70)
     notas.push({ mercado:'LAY 1x0', nota: Math.min(10, 6 + (bttsComb-68)/8 + (ev.pctMarcou-70)/15),
-      motivo:`${c.nv} marcou em ${ev.pctMarcou}% dos últimos e ambas marcam em ${Math.round(bttsComb)}% (média ${mediaJogo.toFixed(1)} gols) — 1x0 seco (só o mandante marcar) é minoria.` });
+      motivo:`${c.nv} marcou em ${vFora.pctMarcou}% jogando fora ✈️ e ambas marcam em ${Math.round(bttsComb)}% (média ${mediaJogo.toFixed(1)} gols) — 1x0 seco (só o mandante marcar) é minoria.` });
   // OVER 0.5: sai pelo menos 1 gol. Valida que os dois times vêm marcando/sofrendo (raro zerar).
   {
     const saiGol = Math.round(((em.pctMarcou + ev.pctMarcou)/2 + (em.pctSofreu + ev.pctSofreu)/2)/2);
     const ambosMarcamMuito = em.pctMarcou >= 75 && ev.pctMarcou >= 75;
     if (saiGol >= 80 || ambosMarcamMuito)
       notas.push({ mercado:'OVER 0.5', nota: Math.min(10, 6 + (saiGol-80)/6 + (ambosMarcamMuito?1:0)),
-        motivo:`${c.nm} marca em ${em.pctMarcou}% e ${c.nv} em ${ev.pctMarcou}% dos últimos 10 — jogo zerar (0x0) é cenário improvável. Base para Over 0.5 / Lay 0x0.` });
+        motivo:`${c.nm} marca em ${mCasa.pctMarcou}% em casa 🏠 e ${c.nv} em ${vFora.pctMarcou}% fora ✈️ — jogo zerar (0x0) é cenário improvável. Base para Over 0.5 / Lay 0x0.` });
   }
 
   // ===== LAYS "MUITO FAVORITO" — versões mais rigorosas (favoritismo forte + score alto) =====
