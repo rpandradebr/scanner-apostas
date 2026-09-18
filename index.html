@@ -339,6 +339,28 @@
   #user-chip{display:none;align-items:center;gap:5px;background:var(--card-2);border:1px solid rgba(237,234,224,.15);
     color:var(--chalk-dim);border-radius:999px;padding:4px 11px;font-size:11.5px;cursor:pointer;font-family:inherit}
   #user-chip:hover{border-color:var(--red);color:var(--red)}
+  /* ---- Mercados de estatística (v4.98) ---- */
+  .rs-mk{background:var(--card-2);border-radius:10px;padding:11px 13px;margin-bottom:9px}
+  .rs-mk-top{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .rs-mk-nome{font-size:13.5px;font-weight:700;flex:1}
+  .rs-mk-linha{font-size:11.5px;color:var(--chalk-dim)}
+  .rs-mk-linha b{font-family:'IBM Plex Mono',monospace;color:var(--chalk);font-size:13px}
+  .rs-mk-lean{font-size:10.5px;font-weight:800;letter-spacing:.05em;min-width:52px;text-align:right}
+  .rs-mk-times{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rs-mk-times > div{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--chalk-dim);min-width:0}
+  .rs-mk-times span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%}
+  .rs-mk-times b{font-family:'IBM Plex Mono',monospace;color:var(--chalk);font-size:12.5px}
+  .rs-mk-bar{flex:1;height:5px;background:rgba(237,234,224,.1);border-radius:3px;overflow:hidden;min-width:20px}
+  .rs-mk-bar i{display:block;height:100%;background:var(--amber);border-radius:3px}
+  .rs-mk-pe{font-size:10.5px;color:var(--chalk-dim);margin-top:8px}
+  .rs-mom-cab,.rs-mom-linha{display:flex;align-items:flex-end;gap:3px;margin-bottom:5px}
+  .rs-mom-rot{min-width:96px;font-size:11px;color:var(--chalk-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rs-mom-cel{flex:1;text-align:center;font-size:9.5px;color:var(--chalk-dim);border-radius:5px;padding:2px 0}
+  .rs-mom-cel.quente{background:rgba(255,197,61,.12)}
+  .rs-mom-cel i{display:block;border-radius:3px 3px 0 0;margin:0 auto 2px;width:70%}
+  .rs-mom-cel b{font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:var(--chalk)}
+  .rs-mom-cab .rs-mom-cel{font-weight:700;color:var(--chalk);padding-bottom:4px}
+  @media(max-width:560px){.rs-mk-times{grid-template-columns:1fr;gap:6px}.rs-mom-rot{min-width:70px;font-size:10px}}
 </style>
 </head>
 <body>
@@ -1226,6 +1248,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v4.98</b></td><td>Nova aba <b>📈 Mercados</b> na ficha do jogo: linhas sugeridas de <b>escanteios, faltas, desarmes, chutes, chutes a gol, impedimentos e cartões</b> (média de cada time, projeção do confronto e tendência over/under), mais o bloco <b>Momentos dos gols</b> cruzando quando cada time marca e quando sofre, com destaque para a janela de 15 minutos mais quente do confronto. Lê as médias já salvas no banco (grátis) e tem botão para buscar na API quando o time ainda não tem dados.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.97</b></td><td>O campo de texto do <b>Configurar ligas principais</b> agora <b>busca de verdade</b>: filtra a lista enquanto você digita, ignorando acento e maiúscula, e procura tanto no nome da liga quanto no país. A lista também deixou de mostrar só as ligas do dia — agora traz todas as competições salvas no banco (60 dias para trás e 15 para frente), então Libertadores, Sul-Americana e copas aparecem mesmo sem jogo hoje. "Marcar/Desmarcar todas" passou a respeitar o filtro.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.96</b></td><td><b>Login obrigatório</b> com autenticação real do Supabase (e-mail e senha): o site só abre depois de entrar, a sessão fica salva no navegador e expira sozinha, há "esqueci minha senha" por e-mail e um botão de sair no topo. Nenhuma senha fica no código-fonte.</td></tr>
             <tr><td class="valor" style="text-align:center"><b>v4.95</b></td><td>A aba <b>Resumo</b> ganhou o bloco <b>Sugestões de aposta para este jogo</b>: as melhores entradas ranqueadas (Under/Over 2.5, Lay 1x0, Lay 0x1, Lay zebra, Ambas marcam) com nota, odd justa, % de valor contra a odd salva e botões 💾/✅ que gravam direto no Histórico de sugestões — mesmo fluxo e green/red automático do funil.</td></tr>
@@ -1855,7 +1878,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.97";
+const APP_VERSAO = "v4.98";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2486,7 +2509,14 @@ async function fichaJogo(idx){
   const alvo = $('jogo-tela');
   alvo.innerHTML = `<p class="msg-vazia">⏳ Montando a ficha de ${j.mandante} x ${j.visitante}…</p>`;
   window.scrollTo({top:0, behavior:'smooth'});
-  jogoUI.principal = 'matchodds'; jogoUI.sub = 'resumo'; jogoUI.filtro = 'geral'; jogoUI.raceM = 'geral'; jogoUI.raceV = 'geral'; jogoUI.tempo='1'; jogoUI.ou='over'; jogoUI.ladoGols='m'; jogoUI.ladoJog='m';
+  // só zera as abas quando é OUTRO jogo — assim um recarregamento (colheita automática)
+  // não tira você da aba que estava aberta
+  const mesmoJogo = jogoDados && jogoDados.j && (
+    (j.fixture_id && String(jogoDados.j.fixture_id) === String(j.fixture_id)) ||
+    (jogoDados.j.mandante === j.mandante && jogoDados.j.visitante === j.visitante && jogoDados.j.data_jogo === j.data_jogo));
+  if (!mesmoJogo){
+    jogoUI.principal = 'matchodds'; jogoUI.sub = 'resumo'; jogoUI.filtro = 'geral'; jogoUI.raceM = 'geral'; jogoUI.raceV = 'geral'; jogoUI.tempo='1'; jogoUI.ou='over'; jogoUI.ladoGols='m'; jogoUI.ladoJog='m';
+  }
   try{
     const [rm, rv] = await Promise.all([
       historicoCompleto(j.mandante, j.mandante_id),
@@ -2974,7 +3004,7 @@ function renderTelaJogo(){
     </div>
     <div id="jogo-resumo-mercados"></div>
     ${jogoUI.principal==='matchodds' ? `<div class="jg-subabas">
-      ${btnS('resumo','Resumo')}${btnS('ia','Análise I.A.')}${btnS('estat','Estatísticas')}${btnS('desempenho','Desempenho')}${btnS('gols','Gols')}${btnS('cartoes','Cartões')}${btnS('race','Race 10')}${btnS('h2h','Confronto Direto')}${btnS('jogadores','Jogadores')}${btnS('liga','Jogos da Liga')}${btnS('tabela','Tabela')}
+      ${btnS('resumo','Resumo')}${btnS('mercados','Mercados')}${btnS('ia','Análise I.A.')}${btnS('estat','Estatísticas')}${btnS('desempenho','Desempenho')}${btnS('gols','Gols')}${btnS('cartoes','Cartões')}${btnS('race','Race 10')}${btnS('h2h','Confronto Direto')}${btnS('jogadores','Jogadores')}${btnS('liga','Jogos da Liga')}${btnS('tabela','Tabela')}
     </div>` : ''}
     <div id="jogo-pendencias">${d.pendentes?.length ? montarAvisoPendencias() : ''}</div>
     <div id="jogo-conteudo"></div>`;
@@ -3030,10 +3060,11 @@ function renderJogoConteudo(){
   }
   const avisoHist = (!d.rmJogos.length || !d.rvJogos.length)
     ? `<div class="aviso" style="margin-bottom:10px">⚠️ Sem histórico de <b>${!d.rmJogos.length?d.j.mandante:''}${!d.rmJogos.length&&!d.rvJogos.length?' e ':''}${!d.rvJogos.length?d.j.visitante:''}</b> no banco — os números desse lado ficam vazios. Rode o backfill/importações.</div>` : '';
-  if (!d.rmJogos.length && !d.rvJogos.length && !['liga','tabela','jogadores','h2h','cartoes'].includes(jogoUI.sub)){
+  if (!d.rmJogos.length && !d.rvJogos.length && !['liga','tabela','jogadores','h2h','cartoes','mercados'].includes(jogoUI.sub)){
     alvo.innerHTML = avisoHist; return;
   }
   if (jogoUI.sub==='resumo') alvo.innerHTML = avisoHist + renderJogoResumo();
+  else if (jogoUI.sub==='mercados') alvo.innerHTML = renderJogoMercados();
   else if (jogoUI.sub==='ia') alvo.innerHTML = avisoHist + renderJogoIA();
   else if (jogoUI.sub==='estat') alvo.innerHTML = avisoHist + renderJogoEstat();
   else if (jogoUI.sub==='desempenho') alvo.innerHTML = avisoHist + renderJogoDesempenho();
@@ -3048,6 +3079,141 @@ function renderJogoConteudo(){
 
 // ---------- ANÁLISE I.A. (regras automáticas + veredito exchange + Gemini) ----------
 // ---------- RESUMO (v4.94) — análise em cards no estilo props ----------
+// ---------- MERCADOS DE ESTATÍSTICA + MOMENTOS DOS GOLS (v4.98) ----------
+const RS_MERCADOS = [
+  { id:'media_escanteios',  ico:'🚩', nome:'Escanteios',    unid:'escanteios' },
+  { id:'media_faltas',      ico:'⚠️', nome:'Faltas',        unid:'faltas' },
+  { id:'media_desarmes',    ico:'🛡️', nome:'Desarmes',      unid:'desarmes' },
+  { id:'media_chutes',      ico:'🎯', nome:'Chutes',        unid:'chutes' },
+  { id:'media_chutes_gol',  ico:'⚽', nome:'Chutes a gol',  unid:'chutes a gol' },
+  { id:'media_impedimentos',ico:'🚫', nome:'Impedimentos',  unid:'impedimentos' },
+  { id:'media_amarelos',    ico:'🟨', nome:'Cartões amarelos', unid:'cartões' },
+];
+async function carregarMercadosJogo(){
+  const d = jogoDados; if (!d || d.merc || d.mercCarregando) return;
+  const j = d.j; d.mercCarregando = true;
+  try{
+    const ids = [j.mandante_id, j.visitante_id].filter(Boolean);
+    if (!ids.length){ d.merc = { m:null, v:null, semId:true }; d.mercCarregando = false; return; }
+    const { data } = await db.from('stats_times').select('*').in('time_id', ids);
+    const acha = id => (data||[]).find(r => String(r.time_id) === String(id)) || null;
+    d.merc = { m: acha(j.mandante_id), v: acha(j.visitante_id) };
+  } catch(e){ d.merc = { m:null, v:null, erro:e.message }; }
+  d.mercCarregando = false;
+  if (jogoDados === d && jogoUI.sub==='mercados') renderJogoConteudo();
+}
+// popula as estatísticas de um time na API (1 requisição de fixtures + n de estatísticas)
+async function popularStatsTime(qual, botao){
+  const d = jogoDados; if (!d) return;
+  const j = d.j;
+  const id = qual==='m' ? j.mandante_id : j.visitante_id;
+  const nome = qual==='m' ? j.mandante : j.visitante;
+  if (!id){ botao.textContent = 'sem id do time'; return; }
+  botao.disabled = true; botao.textContent = '⏳ Buscando na API…';
+  try{
+    const p = { acao:'stats_time', time_id:id, nome, n:10 };
+    if (j.liga_id) p.liga = j.liga_id;
+    const r = await chamarEdge(p);
+    if (r.erro){ botao.disabled=false; botao.textContent = '❌ ' + r.erro; return; }
+    d.merc = null; carregarMercadosJogo();
+  } catch(e){ botao.disabled=false; botao.textContent = '❌ ' + e.message; }
+}
+window.popularStatsTime = popularStatsTime;
+
+function renderJogoMercados(){
+  const d = jogoDados, j = d.j, nm = j.mandante, nv = j.visitante;
+  if (!d.merc){
+    if (!d.mercCarregando) carregarMercadosJogo();
+    return '<p class="msg-vazia">⏳ Lendo as estatísticas salvas dos dois times…</p>';
+  }
+  if (d.merc.semId) return '<p class="msg-vazia">Este jogo não tem o id dos times — sem como buscar as estatísticas.</p>';
+  const A = d.merc.m, B = d.merc.v;
+  const btnPop = (qual, nome2) => `<button class="mini" onclick="popularStatsTime('${qual}', this)" style="border-color:var(--amber);color:var(--amber)">📥 Buscar estatísticas do ${nome2}</button>`;
+  if (!A && !B){
+    return `<p class="msg-vazia">Nenhum dos dois times tem estatísticas salvas ainda. Elas ficam guardadas no banco depois da primeira busca (não gasta API de novo).</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${btnPop('m',nm)}${btnPop('v',nv)}</div>`;
+  }
+  const falta = [];
+  if (!A) falta.push(btnPop('m',nm));
+  if (!B) falta.push(btnPop('v',nv));
+  const avisoFalta = falta.length ? `<div class="aviso" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span style="flex:1">⚠️ Faltam as estatísticas de <b>${!A?nm:nv}</b> — as linhas abaixo usam só um lado.</span>${falta.join('')}</div>` : '';
+
+  // ---- linhas sugeridas por mercado ----
+  const linhas = RS_MERCADOS.map(mk => {
+    const a = A && A[mk.id]!=null ? +A[mk.id] : null;
+    const b = B && B[mk.id]!=null ? +B[mk.id] : null;
+    if (a==null && b==null) return '';
+    const soma = (a||0) + (b||0);
+    const parcial = (a==null || b==null);
+    // linha sugerida: meio ponto mais próximo abaixo da soma
+    const linha = Math.floor(soma) + 0.5;
+    const folga = soma - linha; // > 0 = soma acima da linha (tende a over)
+    const lean = folga >= 0.6 ? ['OVER','var(--green)'] : folga <= -0.4 ? ['UNDER','var(--red)'] : ['NEUTRO','var(--amber)'];
+    const barra = pctA => `<div class="rs-mk-bar"><i style="width:${Math.max(3,Math.min(100,pctA))}%"></i></div>`;
+    const maxRef = Math.max(a||0, b||0) || 1;
+    return `<div class="rs-mk">
+      <div class="rs-mk-top">
+        <span class="rs-mk-nome">${mk.ico} ${mk.nome}</span>
+        <span class="rs-mk-linha">linha <b>${linha.toFixed(1)}</b></span>
+        <span class="rs-mk-lean" style="color:${lean[1]}">${lean[0]}</span>
+      </div>
+      <div class="rs-mk-times">
+        <div><span>${nm}</span><b>${a!=null?a.toFixed(2):'—'}</b>${barra(a!=null?(a/maxRef*100):0)}</div>
+        <div><span>${nv}</span><b>${b!=null?b.toFixed(2):'—'}</b>${barra(b!=null?(b/maxRef*100):0)}</div>
+      </div>
+      <div class="rs-mk-pe">projeção do confronto: <b style="color:${lean[1]}">${soma.toFixed(2)}</b> ${mk.unid}${parcial?' <span style="color:var(--amber)">(só um time)</span>':''} · ${folga>=0?'+':''}${folga.toFixed(2)} vs a linha</div>
+    </div>`;
+  }).filter(Boolean).join('');
+
+  const amostra = `<p class="rs-nota-pe">Médias por jogo salvas no banco${A?.jogos_amostra?` (${A.jogos_amostra} jogos do ${nm}`:''}${B?.jogos_amostra?`, ${B.jogos_amostra} do ${nv}`:''}${A?.jogos_amostra?')':''}.
+    A linha sugerida é a soma das médias dos dois times, arredondada para o meio ponto abaixo. OVER/UNDER indica só a tendência do número, sempre confira a linha real da casa.
+    <br><b>Laterais</b> e <b>tiro de meta</b> não aparecem porque a API-Football não fornece essas estatísticas em nenhum plano.</p>`;
+
+  // ---- momentos dos gols ----
+  const faixas = ['0-15','16-30','31-45','46-60','61-75','76-90'];
+  let momentos;
+  if (!d.temp){
+    if (!d.tempCarregando) carregarTempJogo();
+    momentos = '<p class="msg-vazia">⏳ Buscando os momentos dos gols na API…</p>';
+  } else if (!d.temp.m?.golsProMinuto && !d.temp.v?.golsProMinuto){
+    momentos = '<p class="msg-vazia">Sem minutagem de gols para estes times (time sem id na API ou temporada sem cobertura).</p>';
+  } else {
+    const serie = (obj) => { const v = faixas.map(f => parseInt(obj?.[f]?.total)||0); const t = v.reduce((s,x)=>s+x,0)||1;
+      return { v, pct: v.map(x=>Math.round(x/t*100)), tot: t }; };
+    const mPro = serie(d.temp.m?.golsProMinuto), mCon = serie(d.temp.m?.golsContraMinuto);
+    const vPro = serie(d.temp.v?.golsProMinuto), vCon = serie(d.temp.v?.golsContraMinuto);
+    // combinado: quando sai gol NESTE jogo = (mandante marca + visitante sofre) e vice-versa
+    const combo = faixas.map((_,i) => (mPro.pct[i]+vCon.pct[i]+vPro.pct[i]+mCon.pct[i])/4);
+    const maxCombo = Math.max(...combo) || 1;
+    const iQuente = combo.indexOf(Math.max(...combo));
+    const barraLinha = (rot, s, cor) => `<div class="rs-mom-linha">
+      <span class="rs-mom-rot">${rot}</span>
+      ${s.pct.map((p,i)=>`<div class="rs-mom-cel ${i===iQuente?'quente':''}" title="${faixas[i]} min: ${s.v[i]} gols (${p}%)">
+        <i style="height:${Math.max(4,p/ (Math.max(...s.pct)||1) *34)}px;background:${cor}"></i><b>${p}%</b></div>`).join('')}
+    </div>`;
+    momentos = `
+      <div class="rs-mom-cab"><span class="rs-mom-rot"></span>${faixas.map((f,i)=>`<div class="rs-mom-cel ${i===iQuente?'quente':''}">${f}</div>`).join('')}</div>
+      ${barraLinha(`${nm} marca`, mPro, 'var(--green)')}
+      ${barraLinha(`${nm} sofre`, mCon, 'var(--red)')}
+      ${barraLinha(`${nv} marca`, vPro, 'var(--green)')}
+      ${barraLinha(`${nv} sofre`, vCon, 'var(--red)')}
+      <div class="rs-faixa" style="margin-top:12px">🔥 <b>Janela mais quente do confronto: ${faixas[iQuente]} min</b> — cruzando quem marca e quem sofre nessa faixa. ${iQuente>=4?'Jogo com gols no fim: bom para entrar no 2º tempo e para lay do favorito cedo.':iQuente<=1?'Gols saem cedo: atenção ao over HT e ao lay 0x0 logo no começo.':'Janela no miolo do jogo.'}</div>
+      <p class="rs-nota-pe">Percentuais da temporada (API). "${nm} marca" cruzado com "${nv} sofre" mostra quando o mandante tende a abrir o placar, e vice-versa. Coluna destacada = janela mais quente somando os quatro indicadores.</p>`;
+  }
+
+  return `${avisoFalta}
+    <div class="rs-card">
+      <div class="rs-h2">Linhas sugeridas por mercado</div>
+      ${linhas || '<p class="msg-vazia">Sem médias salvas para estes mercados.</p>'}
+      ${amostra}
+    </div>
+    <div class="rs-card">
+      <div class="rs-h2">Momentos dos gols · quando sai gol neste confronto</div>
+      ${momentos}
+    </div>`;
+}
+
 function renderJogoResumo(){
   const d = jogoDados, j = d.j, o = d.o, nm = j.mandante, nv = j.visitante;
   const em = calcRecorte(d.rmJogos, nm, j.mandante_id), ev = calcRecorte(d.rvJogos, nv, j.visitante_id);
@@ -3379,7 +3545,7 @@ async function carregarTempJogo(){
     d.temp = { m: tm.resumo||null, v: tv.resumo||null };
   } catch(_){ d.temp = { m:null, v:null }; }
   d.tempCarregando = false;
-  if (jogoDados === d && jogoUI.principal==='matchodds' && (jogoUI.sub==='estat' || jogoUI.sub==='ia')) renderJogoConteudo();
+  if (jogoDados === d && jogoUI.principal==='matchodds' && ['estat','ia','gols','mercados','resumo'].includes(jogoUI.sub)) renderJogoConteudo();
 }
 function renderJogoEstat(){
   const d = jogoDados, j = d.j, nm = j.mandante, nv = j.visitante, f = jogoUI.filtro;
