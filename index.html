@@ -324,6 +324,7 @@
         <button data-aba="campeonatos" title="Estatísticas por campeonato: mais Under, mais Over, mais gols.">🏆 Campeonatos</button>
         <button data-aba="statsligas" title="Estatísticas detalhadas dos times na temporada atual.">📈 Estatísticas de time</button>
         <button data-aba="especiais" title="Rankings de times por desarmes, cartões, faltas, chutes, escanteios, posse.">📊 Mercados especiais</button>
+        <button data-aba="arbitros" title="Árbitros designados para os jogos do dia, com média de cartões de cada um.">⚖️ Árbitros do dia</button>
         <button data-aba="analises" title="Suas análises salvas, com veredito, análise completa e green/red.">💾 Minhas análises</button>
         <button data-aba="ia" title="Faça qualquer pergunta à IA (Gemini): jogos, times, mercados, estratégias.">🤖 Perguntar à IA</button>
       </div>
@@ -1410,6 +1411,22 @@
     <div id="especiais-conteudo"><p class="msg-vazia">Clique em "Carregar rankings" para ver os times por estatística.</p></div>
   </section>
 
+  <!-- ================= ÁRBITROS DO DIA ================= -->
+  <section id="aba-arbitros">
+    <h2>⚖️ Árbitros do dia</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Os árbitros designados para os jogos do dia, com a média de cartões de cada um. A API só informa o árbitro <b>perto do jogo</b> (às vezes só no dia), então o campo pode vir vazio para jogos distantes. Ligas menores nem sempre têm árbitro na API.
+    </p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <input type="date" id="arb-data" style="width:auto;padding:7px 10px" title="Dia dos jogos (em branco = hoje)">
+      <button class="acao" id="btn-arb-buscar">🔍 Buscar árbitros</button>
+    </div>
+    <div id="arb-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
+    <div id="arb-aviso"></div>
+    <div id="arb-lista"></div>
+  </section>
+
+
   <!-- ================= ESTATÍSTICAS POR JOGO ================= -->
   <section id="aba-estats">
     <h2>Rankings de estatísticas detalhadas</h2>
@@ -1728,7 +1745,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.91";
+const APP_VERSAO = "v4.92";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3627,6 +3644,63 @@ async function estatsDetalhadas(fixtureId, botao){
   }
 }
 window.estatsDetalhadas = estatsDetalhadas;
+
+
+// ===================== ÁRBITROS DO DIA =====================
+async function gerarArbitrosDoDia(){
+  const btn = $('btn-arb-buscar'); btn.disabled = true;
+  const data = $('arb-data').value;
+  aviso($('arb-aviso'),''); $('arb-lista').innerHTML='';
+  $('arb-status').textContent = '⏳ Buscando os árbitros dos jogos do dia...';
+  try{
+    const r = await chamarEdge(data ? { acao:'arbitros_do_dia', data } : { acao:'arbitros_do_dia' });
+    if (r.aviso && (!r.arbitros || !r.arbitros.length)){
+      $('arb-status').textContent = '';
+      aviso($('arb-aviso'), r.aviso, '');
+      btn.disabled = false; return;
+    }
+    const arbitros = r.arbitros || [];
+    $('arb-status').textContent = `✅ ${arbitros.length} árbitro(s) designado(s) para ${arbitros.reduce((s,a)=>s+a.jogos.length,0)} jogo(s).`;
+    // ordena: quem tem mais cartões primeiro (mais relevante para mercado de cartões)
+    arbitros.sort((a,b) => (b.media?.media_cartoes||0) - (a.media?.media_cartoes||0));
+
+    const corCartoes = m => m>=5 ? 'var(--red)' : m>=4 ? 'var(--amber)' : 'var(--green)';
+    $('arb-lista').innerHTML = arbitros.map(a => {
+      const m = a.media;
+      const bloco = m
+        ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">
+             <div style="text-align:center"><div style="font-family:'Saira Condensed',sans-serif;font-size:26px;font-weight:800;color:${corCartoes(m.media_cartoes)}">${m.media_cartoes}</div><div style="font-size:10px;color:var(--chalk-dim)">cartões/jogo</div></div>
+             <div style="text-align:center"><div style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--amber)">${m.media_amarelos}</div><div style="font-size:10px;color:var(--chalk-dim)">🟨 amarelos</div></div>
+             <div style="text-align:center"><div style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:700">${m.media_faltas??'—'}</div><div style="font-size:10px;color:var(--chalk-dim)">⚠️ faltas</div></div>
+             <div style="text-align:center"><div style="font-family:'Saira Condensed',sans-serif;font-size:20px;font-weight:700">${m.media_penaltis??'—'}</div><div style="font-size:10px;color:var(--chalk-dim)">🎯 pênaltis</div></div>
+             <div style="align-self:center;font-size:11px;color:var(--chalk-dim)">amostra: ${m.jogos_amostra} jogos</div>
+           </div>`
+        : `<div style="margin-top:6px"><span style="font-size:12px;color:var(--chalk-dim)">Sem média salva.</span> <button class="mini" onclick="calcularMediaArbitro('${a.arbitro.replace(/'/g,String.fromCharCode(92,39))}', this)" style="border-color:var(--amber);color:var(--amber)">📊 Calcular média deste árbitro</button></div>`;
+      const jogos = a.jogos.map(j => `<div style="font-size:12.5px;padding:3px 8px;color:var(--chalk-dim)">${j.hora||''} · ${j.mandante} x ${j.visitante} <span style="font-size:11px">(${j.pais?j.pais+' — ':''}${j.liga})</span></div>`).join('');
+      return `<div class="mercado" style="border-left-color:${m?corCartoes(m.media_cartoes):'var(--chalk-dim)'}">
+        <div class="nome" style="font-size:16px">⚖️ ${a.arbitro}</div>
+        ${bloco}
+        <div style="margin-top:8px;border-top:1px solid var(--linha);padding-top:6px">
+          <div style="font-size:11px;color:var(--chalk-dim);text-transform:uppercase;margin-bottom:2px">Jogos que vai apitar hoje</div>
+          ${jogos}
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){ aviso($('arb-aviso'), 'Erro: '+e.message, 'erro'); $('arb-status').textContent=''; }
+  finally{ btn.disabled = false; }
+}
+window.gerarArbitrosDoDia = gerarArbitrosDoDia;
+if ($('btn-arb-buscar')) $('btn-arb-buscar').addEventListener('click', gerarArbitrosDoDia);
+
+// calcula a média de um árbitro sob demanda (gasta API) e re-renderiza
+async function calcularMediaArbitro(arbitro, botao){
+  botao.disabled = true; botao.textContent = '⏳ calculando...';
+  try{
+    await chamarEdge({ acao:'stats_arbitro', arbitro, n: 15 });
+    gerarArbitrosDoDia(); // recarrega a lista com a média nova
+  }catch(e){ botao.textContent = '❌ erro'; }
+}
+window.calcularMediaArbitro = calcularMediaArbitro;
 
 async function verArbitro(fixtureId, botao){
   botao.disabled = true; botao.textContent = '⏳ buscando árbitro…';
