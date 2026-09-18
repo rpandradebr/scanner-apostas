@@ -376,6 +376,42 @@
   .rs-duelo-bar i{display:block;height:100%;background:var(--green);border-radius:3px}
   .rs-duelo-pe{font-size:10px;color:var(--chalk-dim);margin-top:7px;text-align:center}
   @media(max-width:560px){.rs-mk-times{grid-template-columns:1fr;gap:6px}.rs-mom-rot{min-width:70px;font-size:10px}}
+  /* ---- Favoritos do dia (v5.01) ---- */
+  .fv-secao{margin-bottom:22px}
+  .fv-secao-cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .fv-secao-cab h3{margin:0}
+  .fv-cont{font-size:11.5px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace}
+  .fv-secao-sub{font-size:12.5px;color:var(--chalk-dim);margin:4px 0 12px;line-height:1.5}
+  .fv-secao-sub b{color:var(--chalk)}
+  .fv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px}
+  .fv-card{background:var(--pitch);border:1px solid rgba(237,234,224,.1);border-radius:12px;
+    padding:12px 14px;cursor:pointer;transition:border-color .15s,transform .15s}
+  .fv-card:hover{border-color:var(--amber);transform:translateY(-1px)}
+  .fv-topo{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .fv-hora{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--chalk)}
+  .fv-liga{flex:1;font-size:10.5px;color:var(--chalk-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fv-selo{font-family:'IBM Plex Mono',monospace;font-size:12.5px;font-weight:700;
+    border:1px solid;border-radius:6px;padding:2px 8px;white-space:nowrap}
+  .fv-times{display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:7px}
+  .fv-t{flex:1;display:flex;align-items:center;gap:5px;min-width:0;color:var(--chalk-dim)}
+  .fv-t.dir{justify-content:flex-end;text-align:right}
+  .fv-t.destaque{color:var(--chalk);font-weight:700}
+  .fv-x{font-size:11px;color:var(--chalk-dim)}
+  .fv-dest{font-size:12px;color:var(--chalk-dim);margin-bottom:9px}
+  .fv-dest b{color:var(--chalk)}
+  .fv-prob{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--chalk-dim);
+    background:var(--card-2);border-radius:5px;padding:1px 6px;margin-left:4px;white-space:nowrap;display:inline-block}
+  .fv-barra{display:flex;height:7px;border-radius:4px;overflow:hidden;gap:2px;background:var(--card-2)}
+  .fv-barra i{display:block;height:100%}
+  .fv-barra-rot{display:flex;justify-content:space-between;font-size:10px;color:var(--chalk-dim);margin-top:4px}
+  .fv-rodape{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;
+    border-top:1px solid rgba(237,234,224,.08);padding-top:8px}
+  .fv-ou{display:flex;gap:6px;flex:1;flex-wrap:wrap}
+  .fv-ou span{font-size:10.5px;color:var(--chalk-dim);background:var(--card-2);border-radius:5px;padding:2px 7px}
+  .fv-ou span.on{color:var(--amber)} .fv-ou b{font-family:'IBM Plex Mono',monospace;color:var(--chalk)}
+  .fv-margem{font-size:10px;color:var(--chalk-dim);font-family:'IBM Plex Mono',monospace}
+  .fv-pe{font-size:12px;color:var(--chalk-dim);margin-top:6px;line-height:1.6}
+  .fv-pe b{color:var(--chalk)}
 </style>
 </head>
 <body>
@@ -1263,6 +1299,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v5.01</b></td><td>A tela <b>Favoritos do dia</b> saiu da tabela larga e virou <b>cards</b>: escudos dos times, odd em destaque, <b>probabilidade implícita</b> (a chance que o mercado enxerga), barra 1·X·2 já sem a margem da casa, over/under com o lado favorito marcado e a <b>margem da casa</b> em cada jogo. Funciona bem no celular e cada card abre a ficha.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v5.00</b></td><td><b>xG entra na pontuação de todos os mercados</b> das Sugestões do dia e do TOP do dia: volume de chances (xG somado) puxa over/lay de placar seco para cima e under para baixo, desequilíbrio de xG reforça lay zebra e back favorito, e a <b>regressão</b> (time marcando acima ou abaixo do xG) corrige a nota — o motivo aparece escrito no card. O <b>Resumo</b> da ficha ganhou o duelo de <b>chutes a gol, posse de bola e xG</b> entre os dois times.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.99</b></td><td>A aba Mercados ganhou <b>defesas do goleiro, passes totais e passes certos</b>, além de um card próprio de <b>xG (gols esperados)</b> que compara o xG com os gols reais e avisa quem está finalizando acima ou abaixo do esperado. A aba Jogadores passou a mostrar <b>linha sugerida por jogador</b> (desarmes, chutes, chutes a gol, passes). Exige republicar a Edge Function e rodar o SQL das novas colunas.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.98</b></td><td>Nova aba <b>📈 Mercados</b> na ficha do jogo: linhas sugeridas de <b>escanteios, faltas, desarmes, chutes, chutes a gol, impedimentos e cartões</b> (média de cada time, projeção do confronto e tendência over/under), mais o bloco <b>Momentos dos gols</b> cruzando quando cada time marca e quando sofre, com destaque para a janela de 15 minutos mais quente do confronto. Lê as médias já salvas no banco (grátis) e tem botão para buscar na API quando o time ainda não tem dados.</td></tr>
@@ -1895,7 +1932,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.00";
+const APP_VERSAO = "v5.01";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5520,40 +5557,100 @@ function desenharGols(jogos){
     '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Clique em qualquer linha para abrir a ficha completa. Confira o histórico de gols das duas equipes na ficha antes de confiar só na odd.</p>';
 }
 
-function linhaFav(j, o, destaque){
-  return `<tr class="clicavel" onclick="fichaJogo(${gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1)})">
-    <td>${j.hora||''}</td><td style="font-size:12px">${j.pais?j.pais+' — ':''}${j.liga||''}</td>
-    <td><b>${j.mandante}</b> x <b>${j.visitante}</b></td>
-    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${destaque}</td>
-    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">${fmtOdd(o.odd_home)} · ${fmtOdd(o.odd_draw)} · ${fmtOdd(o.odd_away)}</td>
-    <td style="font-family:'IBM Plex Mono',monospace;font-size:12px;white-space:nowrap">O ${fmtOdd(o.odd_over25)} / U ${fmtOdd(o.odd_under25)}</td>
-  </tr>`;
+// ---------- FAVORITOS DO DIA (v5.01) — cards com probabilidade implícita ----------
+function fvProb(odd){ const o = Number(odd); return (o && o > 1) ? 1/o : null; }
+// remove a margem da casa e devolve as 3 probabilidades normalizadas + o overround
+function fvNormaliza(o){
+  const p1 = fvProb(o.odd_home), px = fvProb(o.odd_draw), p2 = fvProb(o.odd_away);
+  if (p1==null || p2==null) return null;
+  const soma = p1 + (px||0) + p2;
+  return { p1:p1/soma, px:(px||0)/soma, p2:p2/soma, margem:(soma-1)*100 };
+}
+function cardFav(x, tipo){
+  const { j, o } = x;
+  const idx = gradeJogos.indexOf(j) >= 0 ? gradeJogos.indexOf(j) : (gradeJogos.push(j)-1);
+  const n = fvNormaliza(o);
+  const favEhMandante = (o.odd_home ?? 99) <= (o.odd_away ?? 99);
+  // nos cards de zebra o destaque vai para o azarão, não para o favorito
+  const destacaMandante = tipo === 'zebra' ? ((o.odd_home ?? 0) >= (o.odd_away ?? 0)) : favEhMandante;
+  const oddDestaque = tipo === 'zebra' ? x.maior : x.menor;
+  const nomeDestaque = tipo === 'zebra' ? x.ladoZebra : x.ladoFav;
+  const probDestaque = fvProb(oddDestaque);
+  const corSelo = tipo === 'zebra' ? 'var(--red)' : tipo === 'super' ? 'var(--amber)' : 'var(--green)';
+
+  // barra normalizada 1 · X · 2
+  const barra = n ? `<div class="fv-barra" role="img" aria-label="Mandante ${Math.round(n.p1*100)}%, empate ${Math.round(n.px*100)}%, visitante ${Math.round(n.p2*100)}%">
+      <i style="width:${(n.p1*100).toFixed(1)}%;background:var(--green)"></i>
+      <i style="width:${(n.px*100).toFixed(1)}%;background:var(--chalk-dim)"></i>
+      <i style="width:${(n.p2*100).toFixed(1)}%;background:var(--red)"></i>
+    </div>
+    <div class="fv-barra-rot">
+      <span style="color:var(--green)">${Math.round(n.p1*100)}% casa</span>
+      <span>${Math.round(n.px*100)}% empate</span>
+      <span style="color:var(--red)">${Math.round(n.p2*100)}% fora</span>
+    </div>` : '';
+
+  const ou = (o.odd_over25 || o.odd_under25) ? (()=>{
+    const po = fvProb(o.odd_over25), pu = fvProb(o.odd_under25);
+    const leva = (po!=null && pu!=null) ? (po > pu ? 'over' : 'under') : null;
+    return `<div class="fv-ou">
+      <span class="${leva==='over'?'on':''}">Over 2.5 <b>${fmtOdd(o.odd_over25)}</b></span>
+      <span class="${leva==='under'?'on':''}">Under 2.5 <b>${fmtOdd(o.odd_under25)}</b></span>
+    </div>`; })() : '';
+
+  return `<div class="fv-card" onclick="fichaJogo(${idx})" title="Abrir a ficha completa deste jogo">
+    <div class="fv-topo">
+      <span class="fv-hora">${j.hora||''}</span>
+      <span class="fv-liga">${j.pais?j.pais+' · ':''}${j.liga||''}</span>
+      <span class="fv-selo" style="border-color:${corSelo};color:${corSelo}">${fmtOdd(oddDestaque)}</span>
+    </div>
+    <div class="fv-times">
+      <span class="fv-t ${destacaMandante?'destaque':''}">${jgEscudo(j.mandante_id,20)} ${j.mandante}</span>
+      <span class="fv-x">x</span>
+      <span class="fv-t dir ${!destacaMandante?'destaque':''}">${j.visitante} ${jgEscudo(j.visitante_id,20)}</span>
+    </div>
+    <div class="fv-dest">
+      <b>${nomeDestaque}</b> ${tipo==='zebra'?'paga':'vence'} a <b style="color:${corSelo}">${fmtOdd(oddDestaque)}</b>
+      ${probDestaque!=null?`<span class="fv-prob">${Math.round(probDestaque*100)}% implícito</span>`:''}
+    </div>
+    ${barra}
+    <div class="fv-rodape">
+      ${ou}
+      ${n ? `<span class="fv-margem" title="Quanto a casa embute de margem nas odds. Abaixo de 6% é competitivo; acima de 10% é caro.">margem ${n.margem.toFixed(1)}%</span>` : ''}
+    </div>
+  </div>`;
 }
 function desenharFavoritos(jogos){
   const comFav = jogos.map(j => {
     const o = oddsMap[j.fixture_id];
+    if (!o) return null;
     const menor = Math.min(o.odd_home ?? 99, o.odd_away ?? 99);
     const ladoFav = (o.odd_home ?? 99) <= (o.odd_away ?? 99) ? j.mandante : j.visitante;
     const maior = Math.max(o.odd_home ?? 0, o.odd_away ?? 0);
     const ladoZebra = (o.odd_home ?? 0) >= (o.odd_away ?? 0) ? j.mandante : j.visitante;
     return { j, o, menor, ladoFav, maior, ladoZebra };
-  }).filter(x => x.menor < 99);
+  }).filter(x => x && x.menor < 99);
 
   const supers = comFav.filter(x => x.menor <= 1.35).sort((a,b) => a.menor - b.menor);
   const favs   = comFav.filter(x => x.menor > 1.35 && x.menor <= 1.65).sort((a,b) => a.menor - b.menor);
   const zebras = comFav.filter(x => x.maior >= 4.5).sort((a,b) => b.maior - a.maior).slice(0, 20);
 
-  const cab = '<tr><th>Hora</th><th>Liga</th><th>Confronto</th><th>Destaque</th><th>1 · X · 2</th><th>O/U 2.5</th></tr>';
-  const bloco = (titulo, lista, fD) => `
-    <h3>${titulo} — ${lista.length} jogo(s)</h3>
-    ${lista.length ? '<div class="tabela-scroll"><table>' + cab + lista.map(x => linhaFav(x.j, x.o, fD(x))).join('') + '</table></div>'
-                   : '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'}`;
+  const bloco = (titulo, sub, lista, tipo) => `
+    <div class="fv-secao">
+      <div class="fv-secao-cab">
+        <h3>${titulo}</h3><span class="fv-cont">${lista.length} jogo(s)</span>
+      </div>
+      <p class="fv-secao-sub">${sub}</p>
+      ${lista.length ? `<div class="fv-grid">${lista.map(x => cardFav(x, tipo)).join('')}</div>`
+                     : '<p class="msg-vazia">Nenhum jogo nesse critério hoje.</p>'}
+    </div>`;
 
   $('fav-listas').innerHTML =
-    bloco('🔥 Super favoritos (odd ≤ 1.35)', supers, x => `${x.ladoFav} @ ${fmtOdd(x.menor)}`) +
-    bloco('⭐ Favoritos (1.36 – 1.65)', favs, x => `${x.ladoFav} @ ${fmtOdd(x.menor)}`) +
-    bloco('🦓 Maiores zebras (odd ≥ 4.5)', zebras, x => `${x.ladoZebra} @ ${fmtOdd(x.maior)}`) +
-    '<p style="font-size:12.5px;color:var(--chalk-dim);margin-top:10px">Clique em qualquer linha para abrir a ficha. Odds de referência pré-jogo — confira na exchange no momento da entrada.</p>';
+    bloco('🔥 Super favoritos', 'Odd até 1.35 — o mercado dá mais de 74% de chance. Zona clássica de <b>lay do favorito</b> a preço alto e de <b>lay zebra</b> a preço baixo.', supers, 'super') +
+    bloco('⭐ Favoritos', 'Odd de 1.36 a 1.65 — favorito claro, mas com espaço de valor nos dois lados.', favs, 'fav') +
+    bloco('🦓 Maiores zebras', 'Odd 4.5 ou mais no azarão. Útil para <b>lay zebra</b>: quanto maior a odd, menor a chance que o mercado enxerga.', zebras, 'zebra') +
+    `<p class="fv-pe">Clique em qualquer card para abrir a ficha completa. A <b>probabilidade implícita</b> é 1 ÷ odd, ou seja, a chance que o mercado enxerga.
+     A <b>barra</b> mostra as três probabilidades já sem a margem da casa. Odds de referência pré-jogo — confira na exchange no momento da entrada.</p>`;
 }
 
 // ==========================================================
