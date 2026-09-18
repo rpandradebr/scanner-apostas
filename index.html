@@ -1226,6 +1226,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v4.97</b></td><td>O campo de texto do <b>Configurar ligas principais</b> agora <b>busca de verdade</b>: filtra a lista enquanto você digita, ignorando acento e maiúscula, e procura tanto no nome da liga quanto no país. A lista também deixou de mostrar só as ligas do dia — agora traz todas as competições salvas no banco (60 dias para trás e 15 para frente), então Libertadores, Sul-Americana e copas aparecem mesmo sem jogo hoje. "Marcar/Desmarcar todas" passou a respeitar o filtro.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.96</b></td><td><b>Login obrigatório</b> com autenticação real do Supabase (e-mail e senha): o site só abre depois de entrar, a sessão fica salva no navegador e expira sozinha, há "esqueci minha senha" por e-mail e um botão de sair no topo. Nenhuma senha fica no código-fonte.</td></tr>
             <tr><td class="valor" style="text-align:center"><b>v4.95</b></td><td>A aba <b>Resumo</b> ganhou o bloco <b>Sugestões de aposta para este jogo</b>: as melhores entradas ranqueadas (Under/Over 2.5, Lay 1x0, Lay 0x1, Lay zebra, Ambas marcam) com nota, odd justa, % de valor contra a odd salva e botões 💾/✅ que gravam direto no Histórico de sugestões — mesmo fluxo e green/red automático do funil.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.94</b></td><td>Nova aba <b>📋 Resumo</b> na ficha do jogo (agora a primeira): mercado sugerido com Projeção, % Bateu, Score e Matchup em medidores, faixas de contexto, gráfico dos últimos 10 jogos de cada time contra a linha 2.5, régua Tend/L5/L10/Casa/Fora/H2H, nota do sinal em 5 pilares (incluindo valor na odd) e o "jogo inteiro numa tela só" com os mercados de exchange. Tudo calculado do Poisson e do histórico já carregados — nenhuma requisição extra.</td></tr>
@@ -1854,7 +1855,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.96";
+const APP_VERSAO = "v4.97";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -9172,6 +9173,16 @@ async function abrirConfigPrincipais(){
     // guarda "País — Liga" para diferenciar ligas homônimas
     ligasDisponiveis = [...new Set((r.jogos||[]).map(j => `${j.pais} — ${j.liga}`).filter(x => x && !x.startsWith('undefined')))];
   }catch(_){}
+  // amplia com todas as ligas já salvas no banco (últimos 60 dias e próximos 15) — assim
+  // competições sem jogo hoje (Libertadores, Sul-Americana, copas) também aparecem na busca
+  try{
+    const de = new Date(Date.now() - 60*86400000).toISOString().slice(0,10);
+    const ate = new Date(Date.now() + 15*86400000).toISOString().slice(0,10);
+    const { data: rows } = await db.from('jogos_dia').select('pais,liga')
+      .gte('data_jogo', de).lte('data_jogo', ate).limit(20000);
+    const doBanco = [...new Set((rows||[]).map(j => `${j.pais} — ${j.liga}`).filter(x => x && !x.startsWith('undefined') && !x.includes('null')))];
+    ligasDisponiveis = [...new Set([...ligasDisponiveis, ...doBanco])];
+  }catch(_){}
   const principais = getLigasPrincipais();
   // junta as disponíveis com as já marcadas (pra não perder nenhuma) e as padrão
   const todas = [...new Set([...principais, ...LIGAS_PRINCIPAIS_PADRAO, ...ligasDisponiveis])].sort();
@@ -9181,8 +9192,8 @@ async function abrirConfigPrincipais(){
       Marque as ligas que você quer ver. Cada uma mostra o <b>país</b> ao lado, para diferenciar ligas com o mesmo nome (ex: Premier League da Inglaterra vs de outros países). Fica salvo automaticamente.
     </p>
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input type="text" id="prin-add-liga" placeholder="Adicionar no formato: País — Liga" style="flex:1;min-width:200px;padding:6px 8px">
-      <button class="mini" onclick="adicionarLigaPrincipal()">➕ Adicionar</button>
+      <input type="text" id="prin-add-liga" placeholder="🔍 Buscar liga ou país (ex: liberta, brasil, premier)…" oninput="filtrarLigasPrincipais()" style="flex:1;min-width:200px;padding:6px 8px">
+      <button class="mini" onclick="adicionarLigaPrincipal()" title="Adiciona o texto digitado como liga (formato: País — Liga)">➕ Adicionar</button>
       <button class="mini" onclick="marcarTodasPrincipais(true)">Marcar todas</button>
       <button class="mini" onclick="marcarTodasPrincipais(false)">Desmarcar todas</button>
       <button class="mini" onclick="restaurarLigasPadrao()" style="border-color:var(--amber);color:var(--amber)">↩️ Restaurar padrão</button>
@@ -9192,15 +9203,39 @@ async function abrirConfigPrincipais(){
         const partes = item.split(' — ');
         const pais = partes.length > 1 ? partes[0] : '';
         const liga = partes.length > 1 ? partes.slice(1).join(' — ') : item;
+        const busca = item.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
         return `
-        <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:5px 8px;background:var(--card);border-radius:6px">
+        <label class="prin-item" data-busca="${busca.replace(/"/g,'&quot;')}" style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding:5px 8px;background:var(--card);border-radius:6px">
           <input type="checkbox" style="width:auto" value="${item.replace(/"/g,'&quot;')}" ${principais.includes(item)?'checked':''} onchange="togglePrincipal(this)">
           <span>${liga}${pais?` <span style="font-size:11px;color:var(--amber)">· ${pais}</span>`:''}</span>
         </label>`;
       }).join('')}
     </div>
-    <p style="font-size:12px;color:var(--green);margin-top:10px" id="prin-config-status">✅ ${principais.length} ligas marcadas como principais</p>`;
+    <p class="msg-vazia" id="prin-sem-resultado" style="display:none;font-size:13px">
+      Nenhuma liga encontrada com esse texto. Ela só aparece aqui depois que algum jogo dela entrar no banco —
+      carregue a data em que ela tem jogo na Grade do dia, ou digite no formato <b>País — Liga</b> e clique em ➕ Adicionar.
+    </p>
+    <p style="font-size:12px;color:var(--green);margin-top:10px" id="prin-config-status">✅ ${principais.length} ligas marcadas como principais · ${todas.length} disponíveis</p>`;
 }
+// filtra a lista conforme o texto digitado (ignora acento e maiúscula)
+function filtrarLigasPrincipais(){
+  const inp = $('prin-add-liga'); if (!inp) return;
+  const termo = inp.value.trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const itens = document.querySelectorAll('#prin-lista-checks .prin-item');
+  let visiveis = 0;
+  itens.forEach(el => {
+    const bate = !termo || (el.dataset.busca||'').includes(termo);
+    el.style.display = bate ? 'flex' : 'none';
+    if (bate) visiveis++;
+  });
+  const vazio = $('prin-sem-resultado');
+  if (vazio) vazio.style.display = (termo && visiveis === 0) ? 'block' : 'none';
+  const st = $('prin-config-status');
+  if (st) st.textContent = termo
+    ? `🔍 ${visiveis} liga(s) encontrada(s) para "${inp.value.trim()}"`
+    : `✅ ${getLigasPrincipais().length} ligas marcadas como principais · ${itens.length} disponíveis`;
+}
+window.filtrarLigasPrincipais = filtrarLigasPrincipais;
 window.abrirConfigPrincipais = abrirConfigPrincipais;
 
 function togglePrincipal(cb){
@@ -9232,16 +9267,18 @@ function restaurarLigasPadrao(){
 window.restaurarLigasPadrao = restaurarLigasPadrao;
 
 function marcarTodasPrincipais(marcar){
-  const checks = document.querySelectorAll('#prin-lista-checks input[type=checkbox]');
-  if (marcar){
-    const todas = [...checks].map(c => c.value);
-    setLigasPrincipais([...new Set(todas)]);
-  } else {
-    setLigasPrincipais([]);
-  }
-  checks.forEach(c => c.checked = marcar);
+  // respeita o filtro: só mexe nas ligas visíveis na tela
+  const itens = [...document.querySelectorAll('#prin-lista-checks .prin-item')].filter(el => el.style.display !== 'none');
+  let principais = getLigasPrincipais();
+  itens.forEach(el => {
+    const cb = el.querySelector('input[type=checkbox]'); if (!cb) return;
+    cb.checked = !!marcar;
+    if (marcar){ if (!principais.includes(cb.value)) principais.push(cb.value); }
+    else { principais = principais.filter(l => l !== cb.value); }
+  });
+  setLigasPrincipais(principais);
   const st = $('prin-config-status');
-  if (st) st.textContent = `✅ ${getLigasPrincipais().length} ligas marcadas como principais`;
+  if (st) st.textContent = `✅ ${principais.length} ligas marcadas como principais`;
 }
 window.marcarTodasPrincipais = marcarTodasPrincipais;
 
