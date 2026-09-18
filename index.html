@@ -1903,6 +1903,7 @@
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
       <input type="date" id="bot-data-atualizar" style="width:auto;padding:5px 8px" title="Deixe em branco para atualizar todos, ou escolha um dia específico">
       <button class="acao" id="btn-bot-atualizar">🔄 Atualizar resultados</button>
+      <button class="acao" id="btn-bot-nova-rodada" style="background:var(--amber);color:var(--pitch)" title="Pede ao robô para reenviar agora os melhores jogos das próximas horas no Telegram">📲 Pedir nova rodada</button>
       <span style="align-self:center;font-size:13px;color:var(--chalk-dim)" id="bot-status"></span>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim);margin-left:auto">
         Mercado:
@@ -1995,7 +1996,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.04";
+const APP_VERSAO = "v5.05";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -9539,6 +9540,19 @@ async function marcarApostaFeitaBot(id, feita){
 window.marcarApostaFeitaBot = marcarApostaFeitaBot;
 
 if ($('btn-bot-atualizar')) $('btn-bot-atualizar').addEventListener('click', atualizarResultadosBot);
+if ($('btn-bot-nova-rodada')) $('btn-bot-nova-rodada').addEventListener('click', async () => {
+  const b = $('btn-bot-nova-rodada'); b.disabled = true;
+  const st = $('bot-status'); if (st) st.textContent = '⏳ Pedindo nova rodada ao robô...';
+  try{
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/vigia-telegram?acao=nova_rodada`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY }
+    });
+    const j = await r.json();
+    if (j.ok){ if (st) st.textContent = `✅ Rodada enviada no Telegram (${j.jogos_no_resumo||0} jogos).`; }
+    else { if (st) st.textContent = '⚠️ ' + (j.erro || 'não foi possível enviar'); }
+  }catch(e){ if (st) st.textContent = '❌ Erro ao chamar o robô: ' + e.message; }
+  finally{ b.disabled = false; }
+});
 document.addEventListener('change', e => {
   if (['bot-filtro-mercado','bot-filtro-pegas','bot-filtro-situacao','bot-filtro-nota','bot-filtro-data'].includes(e.target?.id)) listarBotSug();
 });
