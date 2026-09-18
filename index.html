@@ -307,6 +307,13 @@
   .rs-gb{height:4px;background:rgba(237,234,224,.09);border-radius:3px;margin-top:6px;overflow:hidden}
   .rs-gb i{display:block;height:100%;border-radius:3px}
   .rs-nota-pe{font-size:10.5px;color:var(--chalk-dim);margin-top:10px}
+  .rs-sug{display:flex;align-items:center;gap:12px;background:var(--card-2);border-radius:10px;padding:10px 14px;margin-bottom:8px}
+  .rs-sug-nota{font-family:'Saira Condensed',sans-serif;font-size:26px;font-weight:800;min-width:44px;text-align:center}
+  .rs-sug-mid{flex:1;min-width:0}
+  .rs-sug-mid b{font-size:13.5px;display:block}
+  .rs-sug-mid span{font-size:11px;color:var(--chalk-dim);display:block;line-height:1.35}
+  .rs-sug-mid small{font-size:10.5px;color:var(--chalk-dim)} .rs-sug-mid small b{display:inline;font-size:10.5px;color:var(--chalk)}
+  .rs-sug-acoes{display:flex;gap:6px}
   @media(max-width:560px){.rs-kpis{grid-template-columns:repeat(2,1fr);row-gap:14px}}
 </style>
 </head>
@@ -1172,6 +1179,7 @@
 
     <div class="tabela-scroll"><table class="comp" style="font-size:13px">
       <tr><th style="text-align:center;white-space:nowrap">Versão</th><th style="text-align:left">O que mudou</th></tr>
+      <tr><td class="valor" style="text-align:center"><b>v4.95</b></td><td>A aba <b>Resumo</b> ganhou o bloco <b>Sugestões de aposta para este jogo</b>: as melhores entradas ranqueadas (Under/Over 2.5, Lay 1x0, Lay 0x1, Lay zebra, Ambas marcam) com nota, odd justa, % de valor contra a odd salva e botões 💾/✅ que gravam direto no Histórico de sugestões — mesmo fluxo e green/red automático do funil.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.94</b></td><td>Nova aba <b>📋 Resumo</b> na ficha do jogo (agora a primeira): mercado sugerido com Projeção, % Bateu, Score e Matchup em medidores, faixas de contexto, gráfico dos últimos 10 jogos de cada time contra a linha 2.5, régua Tend/L5/L10/Casa/Fora/H2H, nota do sinal em 5 pilares (incluindo valor na odd) e o "jogo inteiro numa tela só" com os mercados de exchange. Tudo calculado do Poisson e do histórico já carregados — nenhuma requisição extra.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.77</b></td><td>As <b>Sugestões do dia, TOP do dia e demais funis</b> passam a usar a mesma fonte completa de histórico das fichas (Edge + banco + busca direta na API) — antes ainda liam só a Edge e podiam sugerir com dados velhos. Cache de estatísticas encurtado (24h/2h) para acompanhar.</td></tr>
       <tr><td class="valor" style="text-align:center"><b>v4.76</b></td><td><b>Busca direta na API-Football</b> (solução definitiva para históricos desatualizados): salvando sua chave da API no botão 🔑 (aba Histórico ou no aviso da ficha), o site busca os últimos 15 jogos de cada time direto na API — sem depender da Edge nem de grades carregadas. Cache de 30 min por time, e o resultado ainda é gravado no banco para as outras telas. Se a ficha detectar histórico parado há 4+ dias, ela completa sozinha pela API.</td></tr>
@@ -1798,7 +1806,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v4.94";
+const APP_VERSAO = "v4.95";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -3138,7 +3146,46 @@ function renderJogoResumo(){
     `<div class="rs-gm rs-gm-link" onclick="trocaJogoSub('cartoes')"><div class="rs-gt"><span>Cartões</span><b>→</b></div><span class="rs-gl">linhas e médias na aba Cartões</span></div>`,
   ].join('');
 
+  // ---- sugestões de aposta salváveis (mesmo formato do funil Sugestões do dia) ----
   const esc = s => (s||'').replace(/'/g, String.fromCharCode(92,39));
+  const sugs = [];
+  const addSug = (mercado, rotulo, prob, motivo) => sugs.push({ mercado, rotulo, prob, motivo });
+  if ((1-pOver) >= 0.58) addSug('UNDER 2.5', 'Under 2.5 gols', 1-pOver, `Expectativa de ${(lC+lF).toFixed(1)} gols. Under bateu em ${em.n?100-em.pctOver[2.5]:'-'}% (${nm}) e ${ev.n?100-ev.pctOver[2.5]:'-'}% (${nv}) dos ultimos 10.`);
+  if (pOver >= 0.60) addSug('OVER 2.5', 'Over 2.5 gols', pOver, `Expectativa de ${(lC+lF).toFixed(1)} gols. Over bateu em ${em.pctOver[2.5]}% (${nm}) e ${ev.pctOver[2.5]}% (${nv}).`);
+  if (p10 <= 0.13) addSug('LAY 1x0', 'Lay 1x0', 1-p10, `Placar exato 1x0 com apenas ${pct(p10)}% no modelo (expectativa ${lC.toFixed(2)} x ${lF.toFixed(2)}).`);
+  if (p01 <= 0.11) addSug('LAY 0x1', 'Lay 0x1', 1-p01, `Placar exato 0x1 com apenas ${pct(p01)}% no modelo.`);
+  if (pZebra <= 0.20) addSug('LAY ZEBRA', `Lay zebra (${nZebra})`, 1-pZebra, `Vitoria da zebra com so ${pct(pZebra)}%. Aproveitamento ${zebraEhVis?(ef.aprov||'-'):(ec.aprov||'-')}% no recorte do mando.`);
+  if (btts >= 62 && em.pctBtts >= 55 && ev.pctBtts >= 55) addSug('BTTS', 'Ambas marcam', btts/100, `BTTS em ${em.pctBtts}% (${nm}) e ${ev.pctBtts}% (${nv}) dos ultimos 10.`);
+  sugs.sort((a,b)=>b.prob-a.prob);
+  const oddDe = (mercado) => mercado==='UNDER 2.5' ? oddU : mercado==='OVER 2.5' ? oddO : 0;
+  const sugsHtml = sugs.length ? `
+    <div class="rs-card">
+      <div class="rs-h2">Sugestões de aposta para este jogo</div>
+      ${sugs.slice(0,4).map(sg => {
+        const notaS = Math.min(9.9, sg.prob*10).toFixed(1);
+        const oj = sg.prob>0 ? (1/sg.prob).toFixed(2) : '—';
+        const om = oddDe(sg.mercado);
+        const valorS = om ? Math.round((sg.prob*om-1)*100) : null;
+        const corN = sg.prob>=0.75?'var(--green)':sg.prob>=0.6?'var(--amber)':'var(--red)';
+        return `<div class="rs-sug">
+          <div class="rs-sug-nota" style="color:${corN}">${notaS}</div>
+          <div class="rs-sug-mid">
+            <b>${sg.rotulo}</b>
+            <span>${sg.motivo}</span>
+            <small>odd justa <b>${oj}</b>${om?` · mercado <b>${om.toFixed(2)}</b>${valorS!=null?` · <b style="color:${valorS>=3?'var(--green)':valorS>=-3?'var(--amber)':'var(--red)'}">${valorS>=0?'+':''}${valorS}% valor</b>`:''}`:''}</small>
+          </div>
+          <div class="rs-sug-acoes">
+            <button class="mini" onclick="salvarSugestao('${esc(nm)}','${esc(nv)}','${esc(j.liga)}','${sg.mercado}', ${notaS}, '${esc(sg.motivo)}', this, '${j.hora||''}', '${j.data_jogo||''}', ${j.fixture_id||'null'}, false)" title="Salva no Histórico de sugestões">💾</button>
+            <button class="mini" onclick="salvarSugestao('${esc(nm)}','${esc(nv)}','${esc(j.liga)}','${sg.mercado}', ${notaS}, '${esc(sg.motivo)}', this, '${j.hora||''}', '${j.data_jogo||''}', ${j.fixture_id||'null'}, true)" title="Salva já marcada como aposta que peguei" style="border-color:var(--green);color:var(--green)">✅</button>
+          </div>
+        </div>`;
+      }).join('')}
+      <div class="rs-nota-pe">Nota = probabilidade do modelo ×10 · 💾 salva no Histórico de sugestões · ✅ salva já como "peguei". Mesmo destino do funil Sugestões do dia, com green/red automático.</div>
+    </div>` : `
+    <div class="rs-card">
+      <div class="rs-h2">Sugestões de aposta para este jogo</div>
+      <p class="msg-vazia" style="padding:4px 0">Nenhum mercado atingiu o corte de confiança neste confronto — jogo equilibrado demais para sinal automático. Veja a Análise I.A. e o Placares e Modelo antes de decidir.</p>
+    </div>`;
   return `
     <div class="rs-card rs-destaque">
       <div class="rs-h2">Mercado sugerido</div>
@@ -3167,6 +3214,8 @@ function renderJogoResumo(){
       </div>
       <div class="rs-pilares">${pilares.map(p=>p.html(p)).join('')}</div>
     </div>
+
+    ${sugsHtml}
 
     <div class="rs-card">
       <div class="rs-h2">O jogo inteiro numa tela só</div>
