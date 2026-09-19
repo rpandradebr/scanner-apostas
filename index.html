@@ -886,6 +886,17 @@
     </div>
     <div id="mt-aviso"></div>
     <div id="mt-resultado"></div>
+    <div style="margin-top:20px;border-top:1px solid var(--linha);padding-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h3 style="margin:0">💾 Minhas múltiplas salvas</h3>
+        <div style="display:flex;gap:8px">
+          <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="conferirMultiplas()">✅ Conferir resultados</button>
+          <span id="mt-salvas-status" style="align-self:center;font-size:12px;color:var(--chalk-dim)"></span>
+        </div>
+      </div>
+      <p style="font-size:12.5px;color:var(--chalk-dim);margin:6px 0">As múltiplas que você salvar ficam aqui para conferir depois. A múltipla só é <b>green</b> se <b>todas</b> as pernas baterem.</p>
+      <div id="mt-salvas"></div>
+    </div>
   </section>
 
   <section id="aba-punter-rodada">
@@ -1996,7 +2007,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.07";
+const APP_VERSAO = "v5.08";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -2230,6 +2241,7 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
   if (b.dataset.aba === 'lembretes' && typeof renderLembretes === 'function'){ renderLembretes(); }
   // inicializa a data das Múltiplas ao abrir
   if (b.dataset.aba === 'multiplas' && $('mt-data') && !$('mt-data').value){ $('mt-data').value = hojeISO(); }
+  if (b.dataset.aba === 'multiplas' && typeof renderMultiplasSalvas === 'function'){ renderMultiplasSalvas(); }
   // marca a visão escolhida em Favoritos
   if (b.dataset.aba === 'favoritos' && typeof marcaBotoesVisaoFav === 'function'){ marcaBotoesVisaoFav(); }
   atualizarBtnVoltar();
@@ -6132,6 +6144,16 @@ function montarMultipla(tipo, cands, pernas){
     </div>`;
   }).join('');
 
+  // dados da múltipla para salvar (pernas com fixture_id e mercado)
+  const pernasSalvar = pool.map(x => ({
+    mandante: x.c.j.mandante, visitante: x.c.j.visitante,
+    fixture_id: x.c.j.fixture_id || null, data_jogo: x.c.j.data_jogo || $('mt-data')?.value || '',
+    hora: x.c.j.hora || '', liga: (x.c.j.pais?x.c.j.pais+' — ':'')+(x.c.j.liga||''),
+    mercado: x.rot, tipo, odd: x.odd, prob: x.prob,
+  }));
+  const dadosMult = { tipo, nome: cfg.nome, ico: cfg.ico, oddComb: +oddComb.toFixed(2), probComb: +(probComb).toFixed(4), pernas: pernasSalvar };
+  const dadosB64 = btoa(unescape(encodeURIComponent(JSON.stringify(dadosMult))));
+
   return `<div class="mt-card">
     <div class="mt-cab"><span>${cfg.ico} Múltipla de ${cfg.nome}</span><span class="mt-qtd">${pool.length} seleções</span></div>
     ${pernasHtml}
@@ -6141,12 +6163,138 @@ function montarMultipla(tipo, cands, pernas){
       <div><span>Odd justa</span><b>${oddJusta.toFixed(2)}</b></div>
       <div><span>Valor</span><b style="color:${corV}">${valor>=0?'+':''}${valor.toFixed(1)}%</b></div>
     </div>
+    <div style="text-align:center;margin-top:8px"><button class="mini" style="border-color:var(--green);color:var(--green)" onclick="salvarMultipla('${dadosB64}', this)">💾 Salvar múltipla para conferir depois</button></div>
     <div class="mt-leitura" style="border-left-color:${corV}">
       ${valor >= 0
         ? `✅ A múltipla paga <b>${oddComb.toFixed(2)}</b> e a chance real é de <b>${(probComb*100).toFixed(1)}%</b> — o mercado está pagando acima do justo (${oddJusta.toFixed(2)}). R$ 10 retornam R$ ${retorno.toFixed(2)} se todas entrarem.`
         : `⚠️ A múltipla paga <b>${oddComb.toFixed(2)}</b>, mas pela chance real de <b>${(probComb*100).toFixed(1)}%</b> deveria pagar <b>${oddJusta.toFixed(2)}</b>. Você perde ${Math.abs(valor).toFixed(1)}% de valor a cada aposta dessas. As mesmas seleções em <b>apostas simples</b> mantêm o retorno e reduzem muito o risco de zerar tudo por causa de uma perna.`}
     </div>
   </div>`;
+}
+
+
+// ===================== MÚLTIPLAS SALVAS =====================
+function getMultiplasSalvas(){ try{ return JSON.parse(localStorage.getItem('multiplas_salvas')||'[]'); }catch(_){ return []; } }
+function setMultiplasSalvas(arr){ localStorage.setItem('multiplas_salvas', JSON.stringify(arr)); }
+
+function salvarMultipla(dadosB64, botao){
+  try{
+    const d = JSON.parse(decodeURIComponent(escape(atob(dadosB64))));
+    const lista = getMultiplasSalvas();
+    // evita duplicar (mesmas pernas no mesmo dia)
+    const chave = d.pernas.map(p => `${p.mandante}-${p.visitante}-${p.mercado}`).sort().join('|');
+    if (lista.some(m => m.chave === chave)){ if(botao){ botao.textContent='já salva'; } return; }
+    d.chave = chave;
+    d.salvaEm = new Date().toISOString();
+    d.data_dia = d.pernas[0]?.data_jogo || new Date().toISOString().slice(0,10);
+    d.resultado = null; // pendente
+    lista.unshift(d);
+    setMultiplasSalvas(lista);
+    if (botao){ botao.textContent='✅ salva!'; botao.disabled=true; }
+    renderMultiplasSalvas();
+  }catch(e){ if(botao) botao.textContent='❌ erro'; }
+}
+window.salvarMultipla = salvarMultipla;
+
+function renderMultiplasSalvas(){
+  const alvo = $('mt-salvas');
+  if (!alvo) return;
+  const lista = getMultiplasSalvas();
+  if (!lista.length){ alvo.innerHTML = '<p class="msg-vazia">Nenhuma múltipla salva ainda. Monte as múltiplas e clique em 💾 Salvar.</p>'; return; }
+  alvo.innerHTML = lista.map((m, idx) => {
+    const seloM = m.resultado === 'GREEN' ? '<span class="pill g">GREEN ✅</span>'
+      : m.resultado === 'RED' ? '<span class="pill r">RED ❌</span>'
+      : '<span class="pill n">aguardando</span>';
+    const pernas = m.pernas.map(p => {
+      const r = p.resultado;
+      const cor = r==='GREEN'?'var(--green)':r==='RED'?'var(--red)':'var(--chalk-dim)';
+      const ic = r==='GREEN'?'✅':r==='RED'?'❌':'⏳';
+      const placar = p.placar ? ` <b>(${p.placar})</b>` : '';
+      return `<div style="display:flex;gap:8px;padding:3px 8px;font-size:12.5px;border-bottom:1px solid rgba(237,234,224,.05)">
+        <span>${ic}</span>
+        <span style="flex:1">${p.mandante} x ${p.visitante} · <span style="color:var(--amber)">${p.mercado}</span>${placar}</span>
+        <span style="color:var(--chalk-dim);font-size:11px">${p.hora||''}</span>
+      </div>`;
+    }).join('');
+    return `<div class="mt-card" style="margin-bottom:10px">
+      <div class="mt-cab"><span>${m.ico||'🎰'} ${m.nome} · ${m.data_dia?.split('-').reverse().join('/')||''} ${seloM}</span>
+        <button class="mini" style="border-color:var(--red);color:var(--red)" onclick="excluirMultipla(${idx})">🗑️</button></div>
+      ${pernas}
+      <div style="font-size:12px;color:var(--chalk-dim);margin-top:6px">Odd combinada: <b style="color:var(--amber)">${m.oddComb}</b> · chance real ${(m.probComb*100).toFixed(1)}%</div>
+    </div>`;
+  }).join('');
+}
+window.renderMultiplasSalvas = renderMultiplasSalvas;
+
+function excluirMultipla(idx){
+  if (!confirm('Excluir esta múltipla salva?')) return;
+  const lista = getMultiplasSalvas();
+  lista.splice(idx,1); setMultiplasSalvas(lista); renderMultiplasSalvas();
+}
+window.excluirMultipla = excluirMultipla;
+
+// confere o resultado de cada perna e o resultado final da múltipla
+async function conferirMultiplas(){
+  const st = $('mt-salvas-status'); if (st) st.textContent = '⏳ Conferindo...';
+  const lista = getMultiplasSalvas();
+  const pend = lista.filter(m => m.resultado !== 'GREEN' && m.resultado !== 'RED');
+  if (!pend.length){ if (st) st.textContent = 'Nada pendente.'; return; }
+
+  // agrupa todos os dias das pernas para recarregar a grade uma vez cada
+  const dias = [...new Set(pend.flatMap(m => m.pernas.map(p => p.data_jogo).filter(Boolean)))];
+  const jogosPorDia = {};
+  for (let i=0;i<dias.length;i++){
+    if (st) st.textContent = `⏳ Buscando resultados ${i+1}/${dias.length}...`;
+    try{ const rg = await chamarEdge({ acao:'grade', data: dias[i], forcar: 1 }); jogosPorDia[dias[i]] = rg.jogos || []; }catch(_){ jogosPorDia[dias[i]] = []; }
+  }
+  const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const tk = s => norm(s).split(/\s+/).filter(p=>p.length>=4);
+  const encerrado = s => ['FT','AET','PEN'].includes(s);
+
+  for (const m of pend){
+    let todasResolvidas = true, algumaRed = false;
+    for (const p of m.pernas){
+      if (p.resultado === 'GREEN' || p.resultado === 'RED') { if (p.resultado==='RED') algumaRed=true; continue; }
+      const doDia = jogosPorDia[p.data_jogo] || [];
+      let jg = null;
+      if (p.fixture_id) jg = doDia.find(x => String(x.fixture_id)===String(p.fixture_id));
+      if (!jg){ const tA=tk(p.mandante), tB=tk(p.visitante);
+        jg = doDia.find(x => { const nm=norm(x.mandante),nv=norm(x.visitante);
+          return (tA.some(t=>nm.includes(t))||tB.some(t=>nm.includes(t))) && (tA.some(t=>nv.includes(t))||tB.some(t=>nv.includes(t))); }); }
+      if (jg && encerrado(jg.status)){
+        let gm=jg.gols_mandante, gv=jg.gols_visitante;
+        if(gm==null||gv==null){ const q=(jg.placar||'').split('x').map(Number); gm=q[0]; gv=q[1]; }
+        if(gm!=null&&gv!=null&&!isNaN(gm)&&!isNaN(gv)){
+          p.placar = `${gm}x${gv}`;
+          p.resultado = confereMercadoMultipla(p, gm, gv);
+          if (p.resultado==='RED') algumaRed=true;
+        } else todasResolvidas = false;
+      } else todasResolvidas = false;
+    }
+    if (algumaRed) m.resultado = 'RED'; // uma perna red já derruba a múltipla
+    else if (todasResolvidas) m.resultado = 'GREEN'; // todas resolvidas e nenhuma red
+    // senão continua pendente
+  }
+  setMultiplasSalvas(lista);
+  if (st) st.textContent = '✅ Conferido.';
+  renderMultiplasSalvas();
+}
+window.conferirMultiplas = conferirMultiplas;
+
+// apura uma perna da múltipla conforme o tipo (vencedor / over / under)
+function confereMercadoMultipla(p, gm, gv){
+  const tipo = p.tipo;
+  if (tipo === 'over') return (gm+gv) >= 3 ? 'GREEN' : 'RED';
+  if (tipo === 'under') return (gm+gv) <= 2 ? 'GREEN' : 'RED';
+  if (tipo === 'vencedor'){
+    // o rótulo diz "Time vence"; descobre se era o mandante ou visitante
+    const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const rot = norm(p.mercado);
+    const ehMand = rot.includes(norm(p.mandante));
+    if (ehMand) return gm > gv ? 'GREEN' : 'RED';
+    return gv > gm ? 'GREEN' : 'RED';
+  }
+  return null;
 }
 
 async function gerarSugestoes(){
