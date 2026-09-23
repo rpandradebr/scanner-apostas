@@ -546,6 +546,7 @@
         <button data-aba="topdia" title="Os 10 melhores jogos do dia pontuados por mercado (Back favorito, Under 3.5, lays).">🏆 TOP do dia</button>
         <button data-aba="metodo0x0" title="Times que vêm de 0x0 (1 ou 2 seguidos) — tendência de estourar e voltar a marcar gols.">🎯 Método 0x0</button>
         <button data-aba="gols" title="Jogos com tendência de gols — probabilidade de sair gol no 1º tempo (HT) e no jogo todo (FT).">⚽ Tendência de gols</button>
+        <button data-aba="alavancagem" title="Só as entradas de altíssima confiança (85%+) para Lay 0x1, Lay 1x0 e Under 3.5 — projeto de alavancagem.">🚀 Alavancagem</button>
         <button data-aba="hist0x0" title="Histórico dos jogos salvos pelo Método 0x0 — para validar se a estratégia bate.">🎯 Histórico 0x0</button>
       </div>
     </div>
@@ -1159,6 +1160,40 @@
     <div id="gl-aviso"></div>
     <div id="gl-lista"></div>
   </section>
+
+  <!-- ================= ALAVANCAGEM ================= -->
+  <section id="aba-alavancagem">
+    <h2>🚀 Alavancagem</h2>
+    <p style="font-size:14px;color:var(--chalk-dim);margin-bottom:12px">
+      Só as entradas de <b>altíssima confiança</b> para o projeto de alavancagem, nos mercados mais seguros: <b>Lay 0x1</b>, <b>Lay 1x0</b> e <b>Under 3.5</b>. Usa o desempenho por mando (mandante em casa, visitante fora) e só mostra o que passar do corte que você escolher.
+    </p>
+    <div style="background:rgba(255,107,87,.12);border:1px solid var(--red);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px">
+      ⚠️ <b>Alavancagem tem risco alto.</b> Um único red interrompe a sequência. Os filtros aqui são rigorosos, mas nenhuma aposta é garantida — confira desfalques e a odd antes de entrar.
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <input type="date" id="al-data" style="width:auto;padding:7px 10px" title="Dia dos jogos (em branco = hoje)">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Assertividade mínima:
+        <select id="al-corte" style="width:auto;padding:7px 10px">
+          <option value="85">85%</option>
+          <option value="90" selected>90%</option>
+          <option value="95">95%</option>
+        </select>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--chalk-dim)">
+        Ligas:
+        <select id="al-ligas" style="width:auto;padding:7px 10px">
+          <option value="fav">Só minhas favoritas</option>
+          <option value="todas">Todas (mais lento)</option>
+        </select>
+      </label>
+      <button class="acao" id="btn-al-buscar">🚀 Buscar entradas</button>
+    </div>
+    <div id="al-status" style="font-size:13px;color:var(--chalk-dim);margin-bottom:8px"></div>
+    <div id="al-aviso"></div>
+    <div id="al-lista"></div>
+  </section>
+
 
   <!-- ================= HISTÓRICO MÉTODO 0x0 ================= -->
   <section id="aba-hist0x0">
@@ -2007,7 +2042,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.10";
+const APP_VERSAO = "v5.11";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -11041,6 +11076,123 @@ async function gerarTendenciaGols(){
   finally{ btn.disabled = false; }
 }
 window.gerarTendenciaGols = gerarTendenciaGols;
+// ===================== ALAVANCAGEM =====================
+// só entradas de altíssima confiança para Lay 0x1, Lay 1x0 e Under 3.5,
+// usando o desempenho por mando (mandante em casa, visitante fora).
+async function gerarAlavancagem(){
+  const btn = $('btn-al-buscar'); btn.disabled = true;
+  const data = $('al-data').value;
+  const corte = Number($('al-corte').value);
+  const soFav = $('al-ligas').value === 'fav';
+  aviso($('al-aviso'),''); $('al-lista').innerHTML='';
+  $('al-status').textContent = '⏳ Buscando a grade do dia...';
+
+  // médias por mando a partir do histórico
+  function medias(jogos, nome, id, filtro){
+    const norm = s => (s||'').toLowerCase();
+    const ehM = g => (id && String(g.mandante_id)===String(id)) || norm(g.mandante)===norm(nome);
+    let base = (jogos||[]).filter(g => g.gols_mandante!=null);
+    if (filtro==='casa') base = base.filter(g=>ehM(g));
+    else if (filtro==='fora') base = base.filter(g=>!ehM(g));
+    base = base.slice(0,20);
+    const n = base.length;
+    if (!n) return null;
+    let marcou=0, sofreu=0, under35=0;
+    base.forEach(g => {
+      const m = ehM(g);
+      const pro = m?g.gols_mandante:g.gols_visitante, con = m?g.gols_visitante:g.gols_mandante;
+      if (pro>0) marcou++; if (con>0) sofreu++;
+      if (pro+con<=3) under35++;
+    });
+    return { n, pctMarcou: Math.round(marcou/n*100), pctSofreu: Math.round(sofreu/n*100), pctUnder35: Math.round(under35/n*100) };
+  }
+
+  try{
+    const rg = await chamarEdge(data ? { acao:'grade', data } : { acao:'grade' });
+    let jogos = (rg.jogos ?? []).filter(j => jogoValido(j) && j.mandante_id && j.visitante_id);
+    if (soFav && typeof getLigasFav === 'function'){
+      const fav = getLigasFav();
+      if (fav.length){
+        const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        jogos = jogos.filter(j => { const nome = norm(`${j.pais} — ${j.liga}`); return fav.some(f => { const [p,l]=f.split('—').map(x=>norm(x)); return nome.includes(p.trim()) && (!l||nome.includes(l.trim())); }); });
+      }
+    }
+    jogos = filtraSituacao(jogos, null);
+    if (!jogos.length){ $('al-status').textContent=''; aviso($('al-aviso'), soFav?'Nenhum jogo das suas favoritas hoje.':'Nenhum jogo hoje.', 'erro'); btn.disabled=false; return; }
+
+    $('al-status').textContent = `⏳ Analisando ${jogos.length} jogos (corte ${corte}%)...`;
+    const achados = [];
+    const LOTE = 5;
+    let proc = 0;
+    for (let i=0;i<jogos.length;i+=LOTE){
+      const lote = jogos.slice(i, i+LOTE);
+      const res = await Promise.all(lote.map(async j => {
+        try{
+          const [rm, rv] = await Promise.all([
+            historicoCompleto(j.mandante, j.mandante_id),
+            historicoCompleto(j.visitante, j.visitante_id),
+          ]);
+          const mCasa = medias(rm.jogos, j.mandante, j.mandante_id, 'casa') || medias(rm.jogos, j.mandante, j.mandante_id, 'geral');
+          const vFora = medias(rv.jogos, j.visitante, j.visitante_id, 'fora') || medias(rv.jogos, j.visitante, j.visitante_id, 'geral');
+          const mGeral = medias(rm.jogos, j.mandante, j.mandante_id, 'geral');
+          const vGeral = medias(rv.jogos, j.visitante, j.visitante_id, 'geral');
+          if (!mCasa || !vFora || !mGeral || !vGeral) return null;
+          const entradas = [];
+
+          // LAY 0x1: mandante marca muito em casa E no geral, visitante sofre muito fora
+          if (mCasa.pctMarcou >= corte && mGeral.pctMarcou >= corte && vFora.pctSofreu >= corte){
+            entradas.push({ mercado:'LAY 0x1', conf: Math.round((mCasa.pctMarcou + vFora.pctSofreu)/2),
+              detalhe:`${j.mandante} marca ${mCasa.pctMarcou}% em casa 🏠 · ${j.visitante} sofre ${vFora.pctSofreu}% fora ✈️` });
+          }
+          // LAY 1x0: visitante marca muito fora E no geral, mandante sofre muito em casa
+          if (vFora.pctMarcou >= corte && vGeral.pctMarcou >= corte && mCasa.pctSofreu >= corte){
+            entradas.push({ mercado:'LAY 1x0', conf: Math.round((vFora.pctMarcou + mCasa.pctSofreu)/2),
+              detalhe:`${j.visitante} marca ${vFora.pctMarcou}% fora ✈️ · ${j.mandante} sofre ${mCasa.pctSofreu}% em casa 🏠` });
+          }
+          // UNDER 3.5: os dois com under 3.5 alto (casa/fora e geral)
+          if (mCasa.pctUnder35 >= corte && vFora.pctUnder35 >= corte && mGeral.pctUnder35 >= corte && vGeral.pctUnder35 >= corte){
+            entradas.push({ mercado:'UNDER 3.5', conf: Math.round((mCasa.pctUnder35 + vFora.pctUnder35)/2),
+              detalhe:`${j.mandante} ${mCasa.pctUnder35}% under 3.5 em casa 🏠 · ${j.visitante} ${vFora.pctUnder35}% fora ✈️` });
+          }
+          if (!entradas.length) return null;
+          return { j, entradas };
+        }catch(_){ return null; }
+      }));
+      res.forEach(r => { if (r) achados.push(r); });
+      proc += lote.length;
+      $('al-status').textContent = `⏳ Analisando ${proc}/${jogos.length}...`;
+    }
+
+    // ordena os jogos pela melhor confiança
+    achados.sort((a,b) => Math.max(...b.entradas.map(e=>e.conf)) - Math.max(...a.entradas.map(e=>e.conf)));
+    const totalEntradas = achados.reduce((s,a)=>s+a.entradas.length,0);
+    $('al-status').textContent = `✅ ${totalEntradas} entrada(s) de alta confiança em ${achados.length} jogo(s) (corte ${corte}%).`;
+    if (!achados.length){ aviso($('al-aviso'), `Nenhum jogo passou no corte de ${corte}% hoje. Tente baixar o corte ou ampliar as ligas — é normal ter poucos ou nenhum, o filtro é rigoroso de propósito.`, ''); btn.disabled=false; return; }
+
+    $('al-lista').innerHTML = achados.map(a => {
+      const idx = gradeJogos.indexOf(a.j) >= 0 ? gradeJogos.indexOf(a.j) : (gradeJogos.push(a.j)-1);
+      const linhas = a.entradas.map(e => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:var(--pitch);border-radius:6px;margin-top:6px">
+          <span style="font-family:'Saira Condensed',sans-serif;font-size:22px;font-weight:800;color:var(--green);min-width:52px">${e.conf}%</span>
+          <div style="flex:1"><b style="color:var(--amber)">${e.mercado}</b><br><span style="font-size:11.5px;color:var(--chalk-dim)">${e.detalhe}</span></div>
+          <button class="mini" style="border-color:var(--green);color:var(--green)" onclick="event.stopPropagation();salvarSugestao('${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${((a.j.pais?a.j.pais+' — ':'')+(a.j.liga||'')).replace(/'/g,String.fromCharCode(92,39))}','${e.mercado}',${(e.conf/10).toFixed(1)},'Alavancagem ${e.mercado}: ${e.conf}%', this, '${a.j.hora||''}', '${a.j.data_jogo||data||''}', ${a.j.fixture_id||'null'}, true)">✅ Peguei</button>
+        </div>`).join('');
+      return `<div class="mercado" style="border-left-color:var(--green)">
+        <div class="nome" style="cursor:pointer" onclick="fichaJogo(${idx})">🚀 ${a.j.mandante} x ${a.j.visitante}</div>
+        <div class="porque">${a.j.hora||''} · ${a.j.pais} — ${a.j.liga}</div>
+        ${linhas}
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mini" onclick="fichaJogo(${idx})">🔎 Ficha</button>
+          <button class="mini" style="border-color:var(--amber);color:var(--amber)" onclick="toggleJogosAnteriores('','${a.j.mandante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.mandante_id||''}','${a.j.visitante.replace(/'/g,String.fromCharCode(92,39))}','${a.j.visitante_id||''}','')">📋 Jogos anteriores</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){ aviso($('al-aviso'), 'Erro: '+e.message, 'erro'); $('al-status').textContent=''; }
+  finally{ btn.disabled = false; }
+}
+window.gerarAlavancagem = gerarAlavancagem;
+if ($('btn-al-buscar')) $('btn-al-buscar').addEventListener('click', gerarAlavancagem);
+
 if ($('btn-gl-buscar')) $('btn-gl-buscar').addEventListener('click', gerarTendenciaGols);
 
 
