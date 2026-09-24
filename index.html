@@ -2042,7 +2042,7 @@ function filtraPrincipais(jogos, checkboxId){
 // ==========================================================
 // CONFIGURAÇÃO — preencha com os dados do SEU projeto Supabase
 // ==========================================================
-const APP_VERSAO = "v5.11";
+const APP_VERSAO = "v5.12";
 const SUPABASE_URL = "https://numdfazhxvykfemnvtxf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bGpo0XBNosRx9H4vwvPvvA_uPQL6Nph";
 const EDGE_URL = SUPABASE_URL + "/functions/v1/scanner";
@@ -5948,11 +5948,19 @@ function desenharRankingsSug(){
   mercadosRank.forEach((m,i) => {
     const ehLay = ['lay01','lay01mf','lay10','lay10mf','lay20','lay02','laygm','laygv','layz'].includes(m.id);
     const campoLay = { lay01:'_lay01', lay01mf:'_lay01mf', lay10:'_lay10', lay10mf:'_lay10mf', lay20:'_lay20', lay02:'_lay02', laygm:'_laygm', laygv:'_laygv', layz:'_layz' }[m.id];
-    const lista = analisadosSug.map(c => ({ c, v: ehLay ? c[campoLay] : mediaPct(c, m.campo) }))
-      .sort((a,b) => b.v - a.v).slice(0, 15);
+    const ehMF = (m.id === 'lay01mf' || m.id === 'lay10mf');
+    let lista = analisadosSug.map(c => ({ c, v: ehLay ? c[campoLay] : mediaPct(c, m.campo) }))
+      .sort((a,b) => b.v - a.v);
+    // lays "muito favorito" só fazem sentido com nota > 0 (jogo que se qualificou pelas odds)
+    if (ehMF) lista = lista.filter(x => x.v > 0);
+    lista = lista.slice(0, 15);
+    const avisoMF = ehMF && !lista.length
+      ? '<p class="msg-vazia">Nenhum jogo se qualifica agora. Este mercado exige <b>odds carregadas</b> (aba Favoritos → Buscar odds do dia) e um favorito muito claro. Sem odds ou sem favorito forte, fica vazio.</p>'
+      : '';
     corpo += `<div class="rk-corpo" id="rkc-${m.id}" style="display:${i===0?'block':'none'}">
       <p style="font-size:12.5px;color:var(--chalk-dim);margin:6px 0">${m.dica} · média dos últimos 20 jogos de cada equipe.</p>
-      <div class="tabela-scroll"><table>
+      ${avisoMF}
+      <div class="tabela-scroll" style="${ehMF && !lista.length ? 'display:none' : ''}"><table>
       <tr><th>Hora</th><th>Ao vivo</th><th>Liga</th><th>Confronto</th><th>${ehLay?'Nota':m.titulo.replace(/^[^ ]+ /,'')}</th><th>Detalhe</th><th>Salvar</th></tr>
       ${lista.map(x => {
         const idx = gradeJogos.indexOf(x.c.j) >= 0 ? gradeJogos.indexOf(x.c.j) : (gradeJogos.push(x.c.j)-1);
